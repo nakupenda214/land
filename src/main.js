@@ -3,7 +3,7 @@
 
 import { createApp } from 'vue'
 import App from './App.vue'
-
+import zhCn from 'element-plus/dist/locale/zh-cn.mjs' 
 // 1. 引入路由
 import router from './router'
 

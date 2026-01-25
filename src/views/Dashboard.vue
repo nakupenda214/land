@@ -8,35 +8,53 @@
       </div>
       <div class="filter-area">
         <span class="label">选择归档年份：</span>
-        <el-select v-model="selectedYear" placeholder="请选择年份" size="large" style="width: 160px" @change="handleYearChange">
-          <el-option label="2026 年度" value="2026" />
-          <el-option label="2025 年度" value="2025" />
-          <el-option label="2024 年度" value="2024" />
+        <el-select 
+          v-model="selectedYear" 
+          placeholder="全部年份" 
+          size="large" 
+          style="width: 160px" 
+          clearable 
+          @change="handleYearChange"
+        >
+          <el-option label="全部年份" value="" />
+          <el-option 
+            v-for="year in yearOptions" 
+            :key="year" 
+            :label="year + ' 年度'" 
+            :value="year" 
+          />
         </el-select>
       </div>
     </div>
 
     <div class="content-area">
-      <el-empty v-if="!selectedYear" description="请先在右上方选择一个年份" image-size="200" />
-      <el-card v-else class="project-list-card" shadow="never">
+      <el-card class="project-list-card" shadow="never" v-loading="loading">
         <template #header>
           <div class="card-header">
-            <span class="title">{{ selectedYear }} 年度测绘项目清单</span>
+            <span class="title">
+              {{ selectedYear ? selectedYear + ' 年度' : '历年所有' }}测绘项目清单
+            </span>
             <el-tag type="info" effect="plain">共 {{ currentProjectList.length }} 个项目</el-tag>
           </div>
         </template>
-        <el-table :data="currentProjectList" border stripe style="width: 100%">
-          <el-table-column prop="id" label="序号" width="80" align="center" />
-          <el-table-column prop="name" label="项目名称" min-width="200">
-            <template #default="{ row }"><span style="font-weight: bold; color: #333">{{ row.name }}</span></template>
-          </el-table-column>
-          <el-table-column prop="code" label="项目内部编号" width="180" />
-          <el-table-column prop="developer" label="开发建设单位" width="250" show-overflow-tooltip />
-          <el-table-column prop="status" label="归档状态" width="120" align="center">
+        
+        <el-empty v-if="currentProjectList.length === 0 && !loading" description="暂无项目数据" />
+        
+        <el-table v-else :data="currentProjectList" border stripe style="width: 100%">
+          <el-table-column prop="id" label="ID" width="80" align="center" />
+          <el-table-column prop="projectName" label="项目名称" min-width="200">
             <template #default="{ row }">
-              <el-tag :type="row.status === '已归档' ? 'success' : 'warning'" effect="dark">{{ row.status }}</el-tag>
+              <span style="font-weight: bold; color: #333">{{ row.projectName }}</span>
             </template>
           </el-table-column>
+          <el-table-column prop="projectCode" label="项目内部编号" width="180">
+             <template #default="{ row }">{{ row.projectCode || '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="projectTime" label="项目时间" width="150" align="center" />
+          <el-table-column prop="createTime" label="创建时间" width="180" align="center">
+             <template #default="{ row }">{{ formatTime(row.createTime) }}</template>
+          </el-table-column>
+          
           <el-table-column label="操作" width="180" align="center">
             <template #default="{ row }">
               <el-button type="primary" round icon="Right" @click="enterProject(row)">进入项目档案</el-button>
@@ -49,44 +67,98 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { DataBoard, Right } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import axios from 'axios'
 
 const router = useRouter()
-const selectedYear = ref('2026') // 默认值
+const selectedYear = ref('') // 默认为空，表示“全部”
+const loading = ref(false)
+const allProjectsDatabase = ref([]) // 存储从后端拿到的原始数据
 
-const allProjectsDatabase = [
-  { id: '1', year: '2026', name: '锦园雅境府（2026新）', code: 'XM-2026-001', developer: '长沙中建地产有限公司', status: '进行中' },
-  { id: '2', year: '2025', name: '滨江壹号院二期', code: 'XM-2025-088', developer: '滨江置业集团', status: '已归档' },
-  { id: '3', year: '2025', name: '梅溪湖国际研发中心', code: 'XM-2025-042', developer: '梅溪湖投资发展有限公司', status: '已归档' },
-  { id: '4', year: '2024', name: '高铁新城·未来之光', code: 'XM-2024-112', developer: '高铁新城建设局', status: '已归档' }
-]
+// 1. 获取后端数据
+const fetchProjects = async () => {
+  loading.value = true
+  try {
+    const res = await axios.get('/api/project/list')
+    if (res.data.code === 200) {
+      allProjectsDatabase.value = res.data.data || []
+    } else {
+      ElMessage.error(res.data.msg || '获取项目列表失败')
+    }
+  } catch (error) {
+    console.error(error)
+    ElMessage.error('无法连接到服务器')
+  } finally {
+    loading.value = false
+  }
+}
 
+// 2. 动态计算所有可用的年份 (从 projectTime 中提取)
+// 假设 projectTime 格式如 "2025年11月"
+const yearOptions = computed(() => {
+  const years = new Set()
+  allProjectsDatabase.value.forEach(p => {
+    if (p.projectTime) {
+      // 提取前4位作为年份
+      const y = p.projectTime.substring(0, 4)
+      if (!isNaN(y)) {
+        years.add(y)
+      }
+    }
+  })
+  // 转为数组并降序排列 (2026, 2025...)
+  return Array.from(years).sort().reverse()
+})
+
+// 3. 根据所选年份筛选项目
 const currentProjectList = computed(() => {
-  return allProjectsDatabase.filter(p => p.year === selectedYear.value)
+  if (!selectedYear.value) {
+    return allProjectsDatabase.value
+  }
+  return allProjectsDatabase.value.filter(p => {
+    return p.projectTime && p.projectTime.startsWith(selectedYear.value)
+  })
 })
 
 const handleYearChange = () => {
-  ElMessage.success(`已切换至 ${selectedYear.value} 年度数据`)
+  if (selectedYear.value) {
+    ElMessage.success(`已切换至 ${selectedYear.value} 年度数据`)
+  } else {
+    ElMessage.info('已显示所有年份数据')
+  }
 }
 
-// 【关键修改】跳转时带上年份和ID，供ProjectList页面自动回填
+// 进入详情
 const enterProject = (row) => {
+  // 提取年份，如果没有就默认为 '2026'
+  const year = row.projectTime ? row.projectTime.substring(0, 4) : '2026'
+  
   router.push({ 
     path: '/projects', 
     query: { 
-      year: row.year,
-      projectId: row.id 
+      year: year,
+      projectId: String(row.id) // 确保传的是字符串
     } 
   }) 
-  ElMessage.info(`正在打开：${row.name}`)
+  ElMessage.info(`正在打开：${row.projectName}`)
 }
+
+// 工具函数：格式化时间 (去掉T后面的毫秒等)
+const formatTime = (timeStr) => {
+  if (!timeStr) return '-'
+  return timeStr.replace('T', ' ').split('.')[0]
+}
+
+// 页面加载时自动拉取
+onMounted(() => {
+  fetchProjects()
+})
 </script>
 
 <style scoped>
-/* 样式保持不变，略 */
 .dashboard-container { padding: 20px; background-color: #f5f7fa; min-height: 90vh; }
 .search-header-card { background: white; padding: 30px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .welcome-text h2 { margin: 0 0 8px 0; color: #303133; font-size: 22px; display: flex; align-items: center; gap: 8px; }

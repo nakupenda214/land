@@ -1,6 +1,6 @@
 <template>
   <el-container class="layout-container">
-    <el-aside width="220px" class="aside">
+    <el-aside width="220px" class="aside no-print">
       <div class="logo">
         
         <span>国土测绘系统</span>
@@ -28,30 +28,19 @@
           <el-icon><DataAnalysis /></el-icon>
           <span>项目信息</span>
         </el-menu-item>
-        
-        
-
+    
         <el-menu-item index="/users">
           <el-icon><UserFilled /></el-icon>
           <span>用户权限管理</span>
         </el-menu-item>
-
-
         <el-menu-item index="/fields">
           <el-icon><MapLocation /></el-icon>
           <span>土地类型管理</span>
         </el-menu-item>
-
-
-
-
-
       </el-menu>
-
     </el-aside>
-
     <el-container>
-      <el-header class="header">
+      <el-header class="header no-print">
         <div class="header-left">
           <el-breadcrumb separator="/">
             <el-breadcrumb-item :to="{ path: '/' }">国土测绘系统</el-breadcrumb-item>
@@ -73,7 +62,12 @@
       </el-header>
 
       <el-main class="main-content">
-        <router-view />
+          <!-- 缓存标记了 keepAlive: true 的组件 -->
+          <keep-alive>
+            <router-view v-if="$route.meta.keepAlive" />
+          </keep-alive>
+          <!-- 不缓存的组件（比如首页、项目信息等） -->
+          <router-view v-if="!$route.meta.keepAlive" />
       </el-main>
     </el-container>
   </el-container>

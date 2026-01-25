@@ -22,13 +22,13 @@ const routes = [
         path: 'projects',
         name: 'ProjectList',
         component: () => import('../views/ProjectList.vue'),
-        meta: { title: '项目信息' }
+        meta: { title: '项目信息', keepAlive: true }
       },
       {
         path: 'upload',
         name: 'FileUpload',
         component: () => import('../views/FileUpload.vue'),
-        meta: { title: '项目/文件上传' }
+        meta: { title: '项目/文件上传' ,keepAlive: true}
       },
       {
         path: 'users',
