@@ -51,168 +51,234 @@
       
       <div >
     
-        <div style="margin-bottom: 15px; display: flex; gap: 10px;">
-            <el-button 
-            type="danger" 
-            icon="Delete" 
-            @click="batchDelete" 
-            :disabled="selectedRows.length === 0"
-            :loading="batchLoading"
-          >
-            批量删除
-          </el-button>
-          <el-button 
-            type="primary" 
-            icon="Search" 
-            @click="batchParse" 
-            :disabled="!canBatchParse"
-            :loading="batchLoading"
-          >
-            批量解析
-          </el-button>
-        </div>
-        <div style="display: flex; gap: 20px;margin-bottom: 20px; align-items: center">
-          <el-select 
-            v-model="filterStatus" 
-            placeholder="筛选状态" 
-            clearable 
-            style="width: 140px" 
-            @change="refreshData"
-          >
-            <el-option label="解析失败" value="PARSE_FAIL" />
-            <el-option label="解析中" value="PARSING" />
-            <el-option label="待解析" value="WAITING_PARSE" />
-            <el-option label="解析完成" value="PARSE_COMPLETE" />
-            <el-option label="待审核" value="UNPARSEABLE" />
-          </el-select>
-        </div>
+                    <div style="margin-bottom: 15px; display: flex; gap: 10px;justify-content: space-between;">
+                      <div style="display: flex; gap: 10px;">
+                        <el-button 
+                        type="danger" 
+                        icon="Delete" 
+                        @click="batchDelete" 
+                        :disabled="selectedRows.length === 0"
+                        :loading="batchLoading"
+                        >
+                        批量删除
+                        </el-button>
+                        <el-button 
+                          type="primary" 
+                          icon="Search" 
+                          @click="batchParse" 
+                          :disabled="!canBatchParse"
+                          :loading="batchLoading"
+                        >
+                          批量解析
+                        </el-button>
+                      </div>
+                      <div style="display: flex; align-items: center; gap: 25px;">
+                          <!-- 文件名模糊筛选 -->
+                          <el-input
+                            v-model="filterFileName"
+                            placeholder="请输入文件名关键词"
+                            style="width: 220px;"
+                            @keyup.enter="refreshData" 
+                            clearable 
+                          >
+                            <template #prefix><el-icon><Search /></el-icon></template>
+                          </el-input>
+
+                          <!-- 文件类型筛选 -->
+                          <el-select 
+                            v-model="filterFileType" 
+                            placeholder="文件类型" 
+                            clearable 
+                            style="width: 150px"
+                          >
+                            <el-option label="合同文件" value="CONTRACT" />
+                            <el-option label="实测报告" value="SURVEY_REPORT" />
+                            <el-option label="其他文件" value="OTHER" />
+                          </el-select>
+
+                          <!-- 文件状态筛选（原有，移除@change） -->
+                          <el-select 
+                            v-model="filterStatus" 
+                            placeholder="文件状态" 
+                            clearable 
+                            style="width: 150px"
+                          >
+                            <el-option label="解析失败" value="PARSE_FAIL" />
+                            <el-option label="解析中" value="PARSING" />
+                            <el-option label="待解析" value="WAITING_PARSE" />
+                            <el-option label="解析完成" value="PARSE_COMPLETE" />
+                            <el-option label="待审核" value="UNPARSEABLE" />
+                          </el-select>
+
+                          <!-- 查询按钮 -->
+                          <el-button 
+                            type="primary" 
+                            icon="Search" 
+                            @click="refreshData"
+                            style="width: 90px"
+                          >
+                            查询
+                          </el-button>
+
+                          <!-- 重置按钮 -->
+                          <el-button 
+                            icon="Refresh" 
+                            @click="resetFilter"
+                            style="width: 80px"
+                          >
+                            重置
+                          </el-button>
+                        </div>
+                    </div>
       
+                    <el-table 
+                    :data="fileTableData" 
+                    style="width: 100%" 
+                    class="custom-table"
+                    :header-cell-style="{background:'#F5F7FA', color:'#606266', height: '50px'}"
+                    :row-class-name="() => 'no-hover-highlight'"
+                    @selection-change="handleSelectionChange"
+                    highlight-current-row="false"
+                    max-height="800px"
+                  > 
+                    <el-table-column type="selection" width="120" align="center" />
+                    <el-table-column label="预览" width="120" align="center">
+                      <template #default="{ row }">
+                        <el-image 
+                          style="width: 200px; height: 60px; border-radius: 6px; border: 1px solid #e4e7ed;z-index: 9999;"
+                          :src="row.thumbnailUrl" 
+                          :preview-src-list="[row.thumbnailUrl]"
+                          fit="cover"
+                          preview-z-index="99999"
+                        >
+                          <template #error>
+                            <div class="image-slot" style="display:flex; justify-content:center; align-items:center; height:100%; color:#909399;">
+                              <el-icon><Picture/></el-icon>
+                            </div>
+                          </template>
+                        </el-image>
+                      </template>
+                    </el-table-column>
 
-        <el-table 
-        
-        :data="fileTableData" 
-        style="width: 100%" 
-        class="custom-table"
-        :header-cell-style="{background:'#F5F7FA', color:'#606266', height: '50px'}"
-        :row-class-name="() => 'no-hover-highlight'"
-        @selection-change="handleSelectionChange"
-        highlight-current-row="false"
-      > 
-        <el-table-column type="selection" width="120" align="center" />
-        <el-table-column label="预览" width="120" align="center">
-          <template #default="{ row }">
-            <el-image 
-              style="width: 200px; height: 60px; border-radius: 6px; border: 1px solid #e4e7ed;z-index: 9999;"
-              :src="row.thumbnailUrl" 
-              :preview-src-list="[row.thumbnailUrl]"
-              fit="cover"
-              preview-z-index="99999"
-            >
-              <template #error>
-                <div class="image-slot" style="display:flex; justify-content:center; align-items:center; height:100%; color:#909399;">
-                  <el-icon><Picture/></el-icon>
-                </div>
-              </template>
-            </el-image>
-          </template>
-        </el-table-column>
+                    <el-table-column prop="name" label="文件名/编号" min-width="200">
+                      <template #default="{ row }">
+                        <div class="file-name-cell">
+                          <span style="font-weight: 600; font-size: 15px; color: #303133;">{{ row.name }}</span>
+                          <span v-if="row.phase" style="font-size: 12px; color: #999; margin-top: 4px;">第 {{ row.phase }} 期</span>
+                        </div>
+                      </template>
+                    </el-table-column>
 
-        <el-table-column prop="name" label="文件名/编号" min-width="200">
-           <template #default="{ row }">
-             <div class="file-name-cell">
-               <span style="font-weight: 600; font-size: 15px; color: #303133;">{{ row.name }}</span>
-               <span v-if="row.phase" style="font-size: 12px; color: #999; margin-top: 4px;">第 {{ row.phase }} 期</span>
-             </div>
-           </template>
-        </el-table-column>
-        
-        <el-table-column prop="type" label="文件类型" width="400">
-           <template #default="{ row }">
-             <el-tag :color="row.type === 'contract' ? '#FFF0F0' : '#F0F9EB'" 
-                     :style="{ color: row.type === 'contract' ? '#F56C6C' : '#67C23A', border: '1px solid ' + (row.type === 'contract' ? '#FAB6B6' : '#b3e19d') }"
-                     effect="light">
-               {{ row.type === 'contract' ? '合同文件' : '实测报告' }}
-             </el-tag>
-           </template>
-        </el-table-column>
-        
-        <el-table-column prop="status" label="状态" width="400">
-          <template #default="{ row }">
-            <div class="status-badge">
-               <el-tooltip 
-                 v-if="row.status === 'PARSE_FAIL'" 
-                 :content="row.errorMessage || '解析发生未知错误'" 
-                 placement="top"
-               >
-                 <div style="display:flex; align-items:center; cursor:pointer;">
-                   <span class="dot" :style="{ background: statusMap[row.status]?.color }"></span>
-                   <span :style="{ color: statusMap[row.status]?.color, fontWeight: 'bold' }">{{ statusMap[row.status]?.text }}</span>
-                   <el-icon style="margin-left:4px; color:#F56C6C"><Warning /></el-icon>
-                 </div>
-               </el-tooltip>
+                    <el-table-column prop="uploadTime" label="上传时间" width="180" align="center">
+                      <template #default="{ row }">
+                        <span style="color: #606266; font-size: 13px;">{{ row.uploadTime }}</span>
+                      </template>
+                    </el-table-column>
 
-               <div v-else style="display:flex; align-items:center;">
-                 <span class="dot" :style="{ background: statusMap[row.status]?.color || '#909399' }"></span>
-                 <span :style="{ color: statusMap[row.status]?.color || '#606266' }">
-                   {{ statusMap[row.status]?.text || '未知状态' }}
-                 </span>
-               </div>
-            </div>
-          </template>
-        </el-table-column>
+                    
+                    <el-table-column prop="type" label="文件类型" width="400">
+                      <template #default="{ row }">
+                        <el-tag :color="row.type === 'contract' ? '#FFF0F0' : '#F0F9EB'" 
+                                :style="{ color: row.type === 'contract' ? '#F56C6C' : '#67C23A', border: '1px solid ' + (row.type === 'contract' ? '#FAB6B6' : '#b3e19d') }"
+                                effect="light">
+                          {{ row.type === 'contract' ? '合同文件' : '实测报告' }}
+                        </el-tag>
+                      </template>
+                    </el-table-column>
+                    
+                    <el-table-column prop="status" label="状态" width="400">
+                      <template #default="{ row }">
+                        <div class="status-badge">
+                          <el-tooltip 
+                            v-if="row.status === 'PARSE_FAIL'" 
+                            :content="row.errorMessage || '解析发生未知错误'" 
+                            placement="top"
+                          >
+                            <div style="display:flex; align-items:center; cursor:pointer;">
+                              <span class="dot" :style="{ background: statusMap[row.status]?.color }"></span>
+                              <span :style="{ color: statusMap[row.status]?.color, fontWeight: 'bold' }">{{ statusMap[row.status]?.text }}</span>
+                              <el-icon style="margin-left:4px; color:#F56C6C"><Warning /></el-icon>
+                            </div>
+                          </el-tooltip>
 
-        <el-table-column label="操作" width="400" align="right" header-align="center">
-          <template #default="{ row }">
-            <el-space :size="75">
-              <el-button 
-                v-if="['WAITING_PARSE', 'PARSE_FAIL'].includes(row.status)" 
-                link 
-                type="primary" 
-                @click="startProcessing(row)"
-              >
-                {{ row.status === 'PARSE_FAIL' ? '重试解析' : '开始解析' }}
-              </el-button>
+                          <div v-else style="display:flex; align-items:center;">
+                            <span class="dot" :style="{ background: statusMap[row.status]?.color || '#909399' }"></span>
+                            <span :style="{ color: statusMap[row.status]?.color || '#606266' }">
+                              {{ statusMap[row.status]?.text || '未知状态' }}
+                            </span>
+                          </div>
+                        </div>
+                      </template>
+                    </el-table-column>
 
+                  <el-table-column label="操作" width="400" align="right" header-align="center">
+                    <template #default="{ row }">
+                      <el-space :size="75">
+                        <el-button 
+                          v-if="['PENDING', 'PARSING'].includes(row.status)" 
+                          link 
+                          type="warning" 
+                          @click="cancelProcessing(row)"
+                        >
+                          取消解析
+                        </el-button>
+                        <el-button 
+                          v-if="['WAITING_PARSE', 'PARSE_FAIL'].includes(row.status)" 
+                          link 
+                          type="primary" 
+                          @click="startProcessing(row)"
+                        >
+                          {{ row.status === 'PARSE_FAIL' ? '重试解析' : '开始解析' }}
+                        </el-button>
+                        <el-button 
+                          v-if="row.status === 'PARSE_COMPLETE'" 
+                          link 
+                          type="primary" 
+                          @click="startProcessing(row)"
+                        >
+                          重新解析
+                        </el-button>
+                        <el-button 
+                          v-if="['PARSE_COMPLETE', 'UNPARSEABLE', 'AUDITING', 'AUDIT_FAIL'].includes(row.status)" 
+                          color="#A0C4FF" 
+                          size="small" 
+                          round 
+                          style="color:white" 
+                          @click="openCalibration(row)"
+                        >
+                          <el-icon style="margin-right:4px"><EditPen /></el-icon> 
+                          {{ row.status === 'UNPARSEABLE' ? '人工校对' : '审核' }}
+                        </el-button>
+                        <el-button 
+                          v-if="row.status === 'AUDIT_PASS'" 
+                          link 
+                          type="success" 
+                          @click="openCalibration(row)"
+                        >
+                          查看详情
+                        </el-button>
+                        <el-popconfirm title="确定删除该文件吗?" @confirm="deleteFile(row)" confirm-button-type="danger">
+                          <template #reference><el-button link type="danger" icon="Delete"></el-button></template>
+                        </el-popconfirm>
+                      </el-space>
+                    </template>
+                  </el-table-column>
+                </el-table>
 
-              <el-button 
-                v-if="row.status === 'PARSE_COMPLETE'" 
-                link 
-                type="primary" 
-                @click="startProcessing(row)"
-              >
-                重新解析
-              </el-button>
+                  <div style="margin-top: 20px; text-align: right;">
+                    <el-pagination
+                      @size-change="handleSizeChange"   
+                      @current-change="handleCurrentChange" 
+                      :current-page="currentPage"      
+                      :page-sizes="[10, 20, 50, 100]"  
+                      :page-size="pageSize"           
+                      layout="total, sizes, prev, pager, next, jumper"
+                      :total="total"                  
+                      background                     
+                    >
+                    </el-pagination>
+                  </div>
 
-              <el-button 
-                v-if="['PARSE_COMPLETE', 'UNPARSEABLE', 'AUDITING', 'AUDIT_FAIL'].includes(row.status)" 
-                color="#A0C4FF" 
-                size="small" 
-                round 
-                style="color:white" 
-                @click="openCalibration(row)"
-              >
-                <el-icon style="margin-right:4px"><EditPen /></el-icon> 
-                {{ row.status === 'UNPARSEABLE' ? '人工校对' : '审核' }}
-              </el-button>
-
-              <el-button 
-                v-if="row.status === 'AUDIT_PASS'" 
-                link 
-                type="success" 
-                @click="openCalibration(row)"
-              >
-                查看详情
-              </el-button>
-
-              
-
-              <el-popconfirm title="确定删除该文件吗?" @confirm="deleteFile(row)" confirm-button-type="danger">
-                <template #reference><el-button link type="danger" icon="Delete"></el-button></template>
-              </el-popconfirm>
-             </el-space>
-            </template>
-           </el-table-column>
-        </el-table>
       </div>
     </el-card>
 
@@ -275,7 +341,11 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="showCalibration" fullscreen class="calibration-dialog" :show-close="false">
+    <el-dialog v-model="showCalibration" 
+              fullscreen class="calibration-dialog" 
+              :show-close="false" 
+              style="overflow: hidden;"
+              @closed="() => { if(calibrationPdfUrl.value) URL.revokeObjectURL(calibrationPdfUrl.value) }">
       <template #header="{ close }">
         <div class="cali-header">
            <div class="header-left">
@@ -294,18 +364,79 @@
         </div>
       </template>
 
-      <div class="split-view" v-loading="calibrationLoading">
-        <div class="left-panel">
-          <div class="pdf-canvas">
-             <iframe v-if="calibrationPdfUrl" :src="calibrationPdfUrl" style="width:100%; height:100%; border:none;"></iframe>
-             <el-empty v-else description="PDF 加载中..." />
+      <div class="split-view" v-loading="calibrationLoading" style="height: 100%;">
+        <div class="left-panel" style="height: 100%;">
+          <div class="pdf-canvas" style="height: 100%;" >
+             <iframe 
+              v-if="calibrationPdfUrl" 
+              :src="calibrationPdfUrl" 
+              style="width:100%; height:100%; border:none;"
+              @load="pdfLoaded"
+              @error="pdfLoadError"
+             ></iframe>
+            
           </div>
         </div>
-        <div class="right-panel">
-           <div style="padding: 20px; width: 100%;">
-             <el-empty description="暂无解析数据" />
-           </div>
-        </div>
+        <div class="right-panel" style = "height: 100%; overflow-y: auto;" >
+           <!-- 替换原有右侧面板的<div>内容 -->
+            
+              <!-- 面积汇总区域 -->
+              <!-- <div class="sum-info-section" style="margin-bottom: 16px; padding: 12px; background: #f5f7fa; border-radius: 6px;">
+                <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                  <div>
+                    <span style="font-weight: bold; color: #606266;">建筑面积总和：</span>
+                    <span style="color: #409EFF;">{{ roomSumInfo.buildingAreaSum }}</span> ㎡
+                  </div>
+                  <div>
+                    <span style="font-weight: bold; color: #606266;">套内面积总和：</span>
+                    <span style="color: #409EFF;">{{ roomSumInfo.innerAreaSum }}</span> ㎡
+                  </div>
+                  <div>
+                    <span style="font-weight: bold; color: #606266;">阳台面积总和：</span>
+                    <span style="color: #409EFF;">{{ roomSumInfo.balconyAreaSum }}</span> ㎡
+                  </div>
+                  <div>
+                    <span style="font-weight: bold; color: #606266;">公摊面积总和：</span>
+                    <span style="color: #409EFF;">{{ roomSumInfo.sharedAreaSum }}</span> ㎡
+                  </div>
+                </div>
+              </div> -->
+
+              <!-- 户室面积表格 -->
+              <el-table 
+                :data="roomInfoData" 
+                border 
+                size="small"
+                v-loading="roomInfoLoading"
+                element-loading-text="加载户室数据中..."
+                style="width: 100%;"
+                :max-height="`calc(100vh - 120px)`" 
+              >
+                <el-table-column label="序号" type="index" width="60" align="center" :index="index => index + 1" />
+                <el-table-column prop="roomLevel" label="楼层" width="80" align="center" />
+                <el-table-column prop="roomNumber" label="房号" width="100" align="center" />
+                <el-table-column prop="buildingArea" label="建筑面积(㎡)" width="120" align="center" />
+                <el-table-column prop="innerArea" label="套内面积(㎡)" width="120" align="center" />
+                <el-table-column prop="balconyArea" label="阳台面积(㎡)" width="120" align="center" />
+                <el-table-column prop="sharedArea" label="公摊面积(㎡)" width="120" align="center" />
+                <el-table-column prop="isCalculate" label="是否计算" width="100" align="center">
+                  <template #default="{ row }">
+                    <span>{{ row.isCalculate === 1 ? '是' : '否' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="usageCategory" label="用途类别" width="120" align="center" />
+                <el-table-column prop="roomUsage" label="用途" min-width="100" show-overflow-tooltip align="center"  />
+                <el-table-column prop="floorAreaType" label="面积类型" width="80" align="center">
+                  <template #default="{ row }">
+                    <el-tag :type="row.floorAreaType === '计容' ? 'success' : 'info'" size="small">
+                      {{ row.floorAreaType }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <el-empty v-if="!roomInfoLoading && roomInfoData.length === 0" description="暂无户室面积数据" />
+            </div>
+        
       </div>
     </el-dialog>
   </div>
@@ -313,7 +444,9 @@
 
 <script setup>
 import { ref, computed, reactive, onMounted ,watch,onUnmounted } from 'vue'
-import { UploadFilled, Upload, Document, EditPen, Back, Check, Warning, Picture, Delete, Plus, ArrowLeft, ArrowRight, ZoomIn, ZoomOut, List, DocumentChecked, Stamp, CircleCheck, Loading } from '@element-plus/icons-vue'
+import { UploadFilled, Upload, Document, EditPen, Back, Check, Warning, Picture, Delete, 
+         Plus, ArrowLeft, ArrowRight, ZoomIn, ZoomOut, List, DocumentChecked, Stamp, CircleCheck, Loading, Search, // 新增
+         Refresh} from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
@@ -420,15 +553,47 @@ const fetchProjectList = async () => {
   }
 }
 
-onMounted(() => {
-  fetchProjectList()
-})
+
 
 // --- 2. 文件数据 ---
 const fileTableData = ref([])
 const tableLoading = ref(false)
 let pollingTimer = null // 轮询定时器
+
+
 const filterStatus = ref('')
+const filterFileName = ref('')        // 新增：文件名称（模糊）
+const filterFileType = ref('')  
+const resetFilter = () => {
+  filterFileName.value = ''
+  filterFileType.value = ''
+  filterStatus.value = ''
+  refreshData() // 清空后刷新
+}
+
+
+const currentPage = ref(1) // 当前页码（默认第1页）
+const pageSize = ref(20)    // 每页条数（默认10条）
+const total = ref(0)
+// --- 分页事件：切换每页条数/页码 ---
+const handleSizeChange = (val) => {
+  pageSize.value = val       // 更新每页条数
+  currentPage.value = 1      // 切换条数后重置到第1页
+  refreshData()              // 重新请求数据
+}
+
+const handleCurrentChange = (val) => {
+  currentPage.value = val    // 更新当前页码
+  refreshData()              // 重新请求数据
+}
+
+// 格式化上传时间：2026-01-26T00:34:35.046 → 2026-01-26 00:34:35
+const formatUploadTime = (timeStr) => {
+  if (!timeStr) return '未知时间'
+  // 替换T为空格，截取掉毫秒部分
+  return timeStr.replace('T', ' ').split('.')[0]
+}
+
 const refreshData = async () => {
   if (!currentProject.value) { fileTableData.value = []; return }
   tableLoading.value = true
@@ -436,22 +601,22 @@ const refreshData = async () => {
   try {
     // 构造请求体 FileQueryDTO
     const queryParams = {
+
       projectId: pid,
+      // 新增：文件名模糊查询（有值才传）
+      originalName: filterFileName.value || null,
+      // 新增：文件类型筛选（有值才传）
+      fileContextType: filterFileType.value || null,
+      // 原有：文件状态筛选（有值才传）
       // 如果有筛选状态就传，没有就不传(或传null)
       fileState: filterStatus.value || null, 
-      
-      
-      // fileContextType: 'SURVEY_REPORT', 
-      pageNum: 1,
-      pageSize: 9999 // 暂时不分页，
+      pageNum: currentPage.value, // 动态当前页
+      pageSize: pageSize.value  // 动态每页条数
       // 拉取全部匹配项
     }
-
     const res = await axios.post('/api/file/query', queryParams)
 
     //const res = await axios.get(`/api/file/project/${pid}`)
-    
-
    
     // 👉👉👉 【调试重点】在这里打印！ 👈👈👈
     console.log('🔥 1. 接口完整响应:', res)
@@ -459,6 +624,7 @@ const refreshData = async () => {
     console.log('🔥 3. 真正的数据内容 (res.data.data):', res.data.data)
 
     const list = []
+    let pageTotal = 0 
     
     // 【修复3】智能判断是“数组”还是“分页对象”
     // 如果 res.data.data 本身是数组，就用它；
@@ -471,14 +637,21 @@ const refreshData = async () => {
     } 
     // 【关键修复】这里加上对 records 的判断
     else if (res.data.data && Array.isArray(res.data.data.records)) {
+      console.log('✅ 发现分页对象，提取 records 数组')
         rawList = res.data.data.records
+        pageTotal = res.data.data.total || 0
     }
     // 兼容其他情况
     else if (res.data.data && Array.isArray(res.data.data.rows)) {
         rawList = res.data.data.rows 
+        pageTotal = res.data.data.total || 0 
     } else if (res.data.data && Array.isArray(res.data.data.list)) {
         rawList = res.data.data.list 
+        pageTotal = res.data.data.total || 0 
     }
+    total.value = pageTotal
+    console.log('✅ 最终提取到的列表数组:', rawList)
+    console.log('✅ 总记录数:', total.value)
 
     console.log('✅ 最终提取到的列表数组:', rawList)
     if (res.data.code === 200 ) {
@@ -497,6 +670,7 @@ const refreshData = async () => {
           rawId: item.id, // 后端文件主键ID（用于删除、解析等接口调用）
           fileId: item.gridfsId, // 文件存储的gridfsId（用于下载、预览）
           name: item.originalName || '未命名文件', // 文件名
+          uploadTime: item.uploadTime ? formatUploadTime(item.uploadTime) : '未知时间',
           type: fileType, // 区分合同/实测报告
           phase: null, // 新接口返回中无phase字段，暂时设为null（如需展示可后续补充）
           status: item.fileState || 'WAITING_PARSE', // 文件状态（匹配statusMap的key）
@@ -517,7 +691,7 @@ const refreshData = async () => {
 
 // 轮询检查
 const checkPolling = (list) => {
-  const hasPending = list.some(item => ['PENDING', 'PARSING'].includes(item.status))
+  const hasPending = list.some(item => ['UPLOADING','PENDING', 'PARSING'].includes(item.status))
   if (hasPending && !pollingTimer) {
     pollingTimer = setInterval(() => {
       // 静默刷新，不显示 loading
@@ -535,29 +709,78 @@ const refreshDataSilent = async () => {
   const pid = currentProject.value
   try {
     // 请求新的统一接口
-    const res = await axios.get(`/api/file/project/${pid}`)
-    if (res.data.code === 200 && Array.isArray(res.data.data)) {
-      // 优化：只更新状态字段，避免整个表格闪烁
-      res.data.data.forEach(newItem => {
-        // 找到前端列表中对应的行
+    
+    const queryParams = {
+      projectId: pid,
+      originalName: filterFileName.value || null,
+      fileContextType: filterFileType.value || null,
+      fileState: filterStatus.value || null, 
+      pageNum: currentPage.value,
+      pageSize: pageSize.value
+    }
+    const res = await axios.post('/api/file/query', queryParams)
+    // if (res.data.code === 200 && Array.isArray(res.data.data)) {
+    //   // 优化：只更新状态字段，避免整个表格闪烁
+    //   res.data.data.forEach(newItem => {
+    //     // 找到前端列表中对应的行
+    //     const oldItem = fileTableData.value.find(item => item.rawId === newItem.id)
+    //     if (oldItem) {
+    //       // 只更新状态和错误信息，其他字段不变
+    //       oldItem.status = newItem.fileState || oldItem.status
+    //       oldItem.errorMessage = newItem.parseMessage || oldItem.errorMessage
+    //     }
+    //   })
+    // }
+    if (res.data.code === 200 && res.data.data?.records) {
+      const newList = res.data.data.records
+      total.value = res.data.data.total || 0 
+      // 只更新状态字段，避免表格闪烁
+      newList.forEach(newItem => {
         const oldItem = fileTableData.value.find(item => item.rawId === newItem.id)
         if (oldItem) {
-          // 只更新状态和错误信息，其他字段不变
+           // ========== 新增打印：重点看状态对比 ==========
+          if (oldItem.status !== (newItem.fileState || oldItem.status)) {
+            console.log('===== 轮询更新状态 =====', {
+              时间: new Date().toLocaleTimeString(),
+              文件ID: oldItem.rawId,
+              文件名: oldItem.name,
+              前端原有状态: oldItem.status,
+              后端返回状态: newItem.fileState,
+              后端返回的错误信息: newItem.parseMessage || '无', // 新增：看失败原因
+              最终状态: newItem.fileState || oldItem.status,
+              结论: oldItem.status === 'WAITING_PARSE' && newItem.fileState === 'PARSE_FAIL' 
+                ? '【后端问题】前端改了WAITING_PARSE，但后端返回PARSE_FAIL' 
+                : '正常状态更新'
+            })
+          }
+          // ========== 打印结束 ==========
           oldItem.status = newItem.fileState || oldItem.status
           oldItem.errorMessage = newItem.parseMessage || oldItem.errorMessage
         }
       })
     }
+
   } catch(e) {
     console.error('静默刷新文件状态失败：', e)
   }
 }
+// onMounted(() => {
+//   fetchProjectList()
+// })
 
-onMounted(() => {
+// onMounted(() => {
+//   const savedProjectId = localStorage.getItem('savedCurrentProject')
+//   if (savedProjectId) {
+//     currentProject.value = savedProjectId
+//     refreshData() // 自动请求该项目的文件列表
+//   }
+// })
+onMounted(async () => {
+  await fetchProjectList() // 等待项目列表加载完成
   const savedProjectId = localStorage.getItem('savedCurrentProject')
   if (savedProjectId) {
     currentProject.value = savedProjectId
-    refreshData() // 自动请求该项目的文件列表
+    refreshData()
   }
 })
 
@@ -565,6 +788,7 @@ onMounted(() => {
 watch(currentProject, (newProjectId) => {
   if (newProjectId) {
     localStorage.setItem('savedCurrentProject', newProjectId)
+    resetFilter()
     refreshData()
   } else {
     localStorage.removeItem('savedCurrentProject')
@@ -575,11 +799,14 @@ watch(currentProject, (newProjectId) => {
 // 销毁组件时清除轮询
 onUnmounted(() => {
   if (pollingTimer) clearInterval(pollingTimer)
+  if (calibrationPdfUrl.value) {
+    URL.revokeObjectURL(calibrationPdfUrl.value)
+  }
+  tempFiles.value = []
+  if (uploadRef.value) {
+    uploadRef.value.clearFiles()
+  }
 })
-
-
-
-
 
 // --- 3. 核心逻辑 ---
 
@@ -699,7 +926,7 @@ const confirmUpload = () => {
       <ul style="list-style: none; padding-left: 10px; background: #f5f7fa; padding: 10px; border-radius: 4px;">
         <li><strong>文件数量：</strong> <span style="color: #409EFF; font-weight: bold; font-size: 16px;">${tempFiles.value.length}</span> 份</li>
         <li><strong>归属项目：</strong> ${projectOptions.value.find(p => p.id === currentProject.value)?.name || '未知项目'}</li>
-        ${ tempUploadType.value === 'survey' ? `<li><strong>所属期数：</strong> <span style="color: #E6A23C; font-weight: bold;">第 ${uploadPhase.value} 期</span></li>` : '' }
+        ${ tempUploadType.value ===  'SURVEY_REPORT'  ? `<li><strong>所属期数：</strong> <span style="color: #E6A23C; font-weight: bold;">第 ${uploadPhase.value} 期</span></li>` : '' }
         <li><strong>文件类型：</strong> <span style="color: #F56C6C; font-weight: bold;">${typeName}</span></li>
       </ul>
       <p style="margin-top: 10px; color: #909399; font-size: 12px;">确认无误后系统将自动开始解析数据。</p>
@@ -791,8 +1018,92 @@ const startProcessing = (row) => {
   }).catch(() => {})
 }
 
+// 取消解析（仅针对排队中/正在解析的文件）
+const cancelProcessing = (row) => {
+  // 1. 打印文件编号（满足你的需求，打印rawId（后端主键）和name（文件名））
+
+  console.log('===== 开始取消解析 =====', {
+    文件ID: row.rawId,
+    文件名: row.name,
+    取消前状态: row.status,
+    时间: new Date().toLocaleTimeString()
+  })
+
+ 
+
+  // 2. 确认弹窗
+  ElMessageBox.confirm(
+    `确认取消文件 "${row.name}" 的解析任务吗？取消后可重新发起解析。`,
+    '取消解析',
+    {
+      confirmButtonText: '确认取消',
+      cancelButtonText: '再等等',
+      type: 'warning'
+    }
+  ).then(async () => {
+    try {
+
+      console.log(`[${new Date().toLocaleTimeString()}] 调用取消接口: /api/file/cancel/${row.rawId}`)
+      // 3. 调用取消解析接口
+      // 接口：POST /api/file/cancel/{fileId}
+      // query参数：reason（可选，传入"用户主动取消"）
+      const cancelRes = await axios.post(`/api/file/cancel/${row.rawId}`, null, {
+        params: {
+          reason: '用户主动取消' // 可选参数，符合接口要求
+        }
+      })
+
+      console.log('===== 取消接口响应 =====', {
+        文件ID: row.rawId,
+        后端响应码: cancelRes.data.code,
+        后端响应信息: cancelRes.data.msg,
+        后端返回的文件状态: cancelRes.data?.data?.fileState || '无',
+        时间: new Date().toLocaleTimeString()
+      })
+
+
+      // 4. 成功提示，更新前端状态，停止对应轮询（如果没有其他解析任务）
+      ElMessage.success(`已取消文件 "${row.name}" 的解析任务`)
+      row.status = 'WAITING_PARSE' // 取消后重置为「待解析」状态
+
+      console.log(`[${new Date().toLocaleTimeString()}] 前端修改状态完成：`, {
+        文件ID: row.rawId,
+        修改后状态: row.status,
+        注意: '如果后续变回解析失败，就是轮询从后端拿到了新状态'
+      })
+
+      checkPolling(fileTableData.value) // 检查轮询是否需要继续
+
+    } catch (err) {
+      console.error('取消解析失败：', err)
+      ElMessage.error(err.response?.data?.msg || '取消解析任务失败，请重试')
+    }
+  }).catch(() => {
+    // 取消弹窗的回调（无需处理）
+  })
+}
 
 // --- 4. 校对与审核 ---
+
+// ========== 新增：用途类别映射（放在statusMap下方） ==========
+const usageCategoryMap = {
+  'RESIDENTIAL': '住宅',
+  'COMMERCIAL': '商业',
+  'INDUSTRIAL': '工业',
+  'PUBLIC': '公共配套',
+  'OTHER': '其他'
+}
+
+// ========== 新增：户室面积相关变量（放在calibrationPdfUrl下方） ==========
+const roomInfoLoading = ref(false) // 户室数据加载状态
+const roomInfoData = ref([])       // 户室面积表格数据
+const roomSumInfo = reactive({     // 面积汇总信息
+  buildingAreaSum: '0.00',
+  innerAreaSum: '0.00',
+  balconyAreaSum: '0.00',
+  sharedAreaSum: '0.00'
+})
+
 
 
 const showCalibration = ref(false)
@@ -800,6 +1111,7 @@ const calibrationLoading = ref(false)
 const currentFile = ref(null)
 const calibrationPdfUrl = ref('')
 
+// 替换原有openCalibration函数
 const openCalibration = async (row) => {
   currentFile.value = row
   showCalibration.value = true
@@ -807,27 +1119,62 @@ const openCalibration = async (row) => {
   calibrationPdfUrl.value = ''
 
   try {
-    // 1. 恢复/补全文件详情请求（或注释掉相关逻辑）
-    const infoRes = await axios.get(`/api/file/info/${row.rawId}`) // 取消注释
-    if (infoRes.data.code === 200) {
-      const gridfsId = infoRes.data.data.gridfsId
-      calibrationPdfUrl.value = `/api/file/download/gridfs/${gridfsId}`
+   
+    const pdfRes = await axios.get(`/api/file/download/gridfs/${row.fileId}`, {
+      responseType: 'blob'  // 强制后端返回Blob（二进制文件）
+    })
+    // 生成本地Blob URL（浏览器本地临时URL，可直接渲染）
+    const blob = new Blob([pdfRes.data], { type: 'application/pdf' })
+    calibrationPdfUrl.value = URL.createObjectURL(blob)
+
+    // 2. 调用户室面积接口（去掉 rawTableData 汇总逻辑，直接初始化汇总为 0.00）
+    if (!currentProject.value || !row.rawId) { // 用 currentProject 直接替代（你已定义）
+      ElMessage.warning('缺少项目/报告ID，无法加载户室数据')
+      return
     }
-    // 若暂时不实现，直接注释掉if逻辑：
-    // calibrationPdfUrl.value = `/api/file/download/gridfs/${row.fileId}` // 用row里的fileId
+    // 初始化汇总数据（无 rawTableData，直接设为 0.00）
+    roomSumInfo.buildingAreaSum = '0.00'
+    roomSumInfo.innerAreaSum = '0.00'
+    roomSumInfo.balconyAreaSum = '0.00'
+    roomSumInfo.sharedAreaSum = '0.00'
+
+    // 3. 请求户室面积数据（保留核心逻辑）
+    const res = await axios.get(`/api/project/${currentProject.value}/survey-reports/${row.rawId}/room-info`)
+    if (res.data.code === 200 && Array.isArray(res.data.data)) {
+      roomInfoData.value = res.data.data.map(item => ({
+        id: item.id,
+        roomLevel: item.roomLevel || '-',
+        roomNumber: item.roomNumber || '-',
+        buildingArea: (item.buildingArea || 0).toFixed(2),
+        innerArea: (item.innerArea || 0).toFixed(2),
+        balconyArea: (item.balconyArea || 0).toFixed(2),
+        sharedArea: (item.sharedArea || 0).toFixed(2),
+        isCalculate: item.isCalculate || 0,
+        usageCategory: usageCategoryMap[item.usageCategory] || '未知',
+        roomUsage: item.roomUsage || '-',
+        floorAreaType: item.floorAreaType === 'BUILDABLE' ? '计容' : '不计容'
+      }));
+    } else {
+      roomInfoData.value = []
+      ElMessage.warning('暂无户室面积数据')
+    }
   } catch (error) {
     ElMessage.error('文件详情加载失败')
   } finally {
     calibrationLoading.value = false
   }
 }
+const pdfLoaded = () => {
+  console.log('PDF加载成功')
+}
+const pdfLoadError = () => {
+  ElMessage.warning('PDF预览失败，可通过下载接口查看文件')
+  calibrationPdfUrl.value = '' // 清空无效地址
+}
 
 const handleSaveData = () => { ElMessage.success('保存成功') }
 const handleAuditPass = () => { ElMessage.success('审核通过'); showCalibration.value = false; refreshData() }
 
-// 分页等
-const pdfPage = ref(1)
-const extractedTables = ref([])
 
 </script>
 
@@ -917,6 +1264,26 @@ const extractedTables = ref([])
 :deep(.custom-table .el-table__column--selection .el-table__cell) {
   padding: 0 !important;
   text-align: center;
+}
+:deep(.calibration-dialog .el-dialog__body) {
+  padding: 0 !important; /* 去掉对话框默认内边距，避免高度溢出 */
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
+.split-view {
+  display: flex;
+  height: 100% !important; /* 强制占满父容器 */
+  background: #f0f2f5;
+}
+
+.left-panel, .right-panel {
+  height: 100% !important; /* 左右面板占满split-view高度 */
+  overflow: hidden !important; /* 左面板（PDF）不需要滚动，右面板单独控制 */
+}
+
+.right-panel {
+  overflow-y: auto !important; /* 右面板内容多了才会出现滚动条，不影响整体 */
 }
 
 

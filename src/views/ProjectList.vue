@@ -23,13 +23,13 @@
       <div class="project-meta" v-if="currentProjectInfo.id">
           当前查看：<el-tag effect="dark" size="large">{{ currentProjectInfo.name }}</el-tag>
           <span class="meta-info">
-            项目编号: {{ currentProjectInfo.code }} | 
-            状态: <span style="color: #67C23A; font-weight: bold;">{{ currentProjectInfo.status }}</span>
+            <!-- 项目编号: {{ currentProjectInfo.code }} | -->
+            <!--状态: <span style="color: #67C23A; font-weight: bold;">{{ currentProjectInfo.status }}</span> -->
           </span>
       </div>
     </div>
 
-    <div class="content-tabs-wrapper">
+    <div class="content-tabs-wrapper no-print">
       <el-tabs v-model="activeTab" type="border-card" class="archive-tabs no-print">
         
         <el-tab-pane name="summary">
@@ -37,7 +37,7 @@
           
           <div class="tab-content">
             <div class="tab-actions no-print">
-              <el-alert title="提示：系统已根据您的选择自动核算汇总数据。" type="info" show-icon :closable="false" style="padding: 8px 16px;" />
+              
               <div class="action-btns">
                 <el-button icon="Printer" @click="handlePrint" style="margin-right: 15px;">打印报表</el-button>
                 <el-button type="success" color="#CAFFBF" style="color: #555" icon="Download" @click="handleExportExcel">导出 Excel</el-button>
@@ -87,11 +87,17 @@
               <template #header>
                 <div class="card-header">
                   <span class="main-report-title">{{ currentProjectInfo.name || '项目' }}房产实测信息汇总表</span>
-                </div>
-              </template>
-
-              
-              
+                  <span style="font-weight: normal; color: #606266;">
+                        (
+                        已上传实测报告：<strong style="color: #409EFF">{{ surveyStats.total }}</strong> 份，
+                        解析成功：<strong style="color: #67C23A">{{ surveyStats.success }}</strong> 份,
+                        <el-divider direction="vertical" />
+                        校验通过：<strong style="color: #67C23A">{{ surveyStats.verified }}</strong> 份，
+                        校验不同：<strong style="color: #F56C6C">{{ surveyStats.unverified }}</strong> 份
+                        )
+                      </span>
+                </div>              
+              </template>              
                 <el-table 
                   :data="displayTableData" 
                   border 
@@ -244,138 +250,244 @@
       </el-tabs>
     </div>
 
-    <div id="print-area">
-      <div class="print-info-section">
-        <div class="print-title">{{ currentProjectName || '项目' }}房产实测信息汇总表</div>
-        <div class="print-meta-row">
-          <span>打印日期：{{ currentPrintDate }}</span>
-          <span>单位：平方米</span>
+
+
+    <!-- <div id="print-area"> -->
+    <Teleport to="#print-target" v-if="isPrinting">
+        <div class="print-info-section">
+          <div class="print-title">{{ currentProjectInfo.name || '项目' }}房产实测信息汇总表</div>
+          <div class="print-meta-row">
+            <span>打印日期：{{ currentPrintDate }}</span>
+            <span>单位：平方米</span>
+          </div>
         </div>
-      </div>
 
-      <!-- 修改#print-area内的data-table表格 -->
-          <table class="print-table data-table">
-            <thead>
-              <!-- 第一行：合并列 -->
-              <tr>
-                <th rowspan="2">序号</th> <!-- 🔴 关键修改4：打印表格替换编号为序号 -->
-                <th rowspan="2">工程名称</th>
-                <th rowspan="2">实测总面积</th>
-                <th colspan="4">计容建筑面积</th>
-                <th colspan="2">不计容建筑面积</th>
-                <th rowspan="2">报告书编号</th>
-              </tr>
-              <!-- 第二行：子列 -->
-              <tr>
-                <th>商业</th>
-                <th>住宅</th>
-                <th>物管</th>
-                <th>其他</th>
-                <th>社区</th>
-                <th>公用</th>
-              </tr>
-            </thead>
-            <tbody>
-              <!-- 🔴 关键修改5：打印表格添加index，显示自增序号 -->
-              <tr v-for="(row, index) in displayTableData" :key="row.id">
-                <td>{{ index + 1 }}</td>
-                <td>{{ row.projectName }}</td>
-                <td>{{ row.totalArea }}</td>
-                <td>{{ row.calcCommercial }}</td>
-                <td>{{ row.calcResidential }}</td>
-                <td>{{ row.calcPropMgmt }}</td>
-                <td>{{ row.calcOther }}</td>
-                <td>{{ row.nonCalcCommunity }}</td>
-                <td>{{ row.nonCalcOther }}</td>
-                <td>{{ row.reportNo }}</td>
-              </tr>
-            </tbody>
-          </table>
+        <!-- 关键修改：class 改为 native-print-table -->
+        <table class="native-print-table data-table">
+          <thead>
+            <tr>
+              <th rowspan="2">序号</th>
+              <th rowspan="2">工程名称</th>
+              <th rowspan="2">不动产权证编号</th> 
+              <th rowspan="2">合同/批文编号</th>   
+              <th rowspan="2">期数</th>          
+              <th rowspan="2">实测总面积</th>
+              <th colspan="4">计容建筑面积</th>
+              <th colspan="2">不计容建筑面积</th>
+              <th rowspan="2">报告书编号</th>
+            </tr>
+            <tr>
+              <th>商业</th>
+              <th>住宅</th>
+              <th>物管</th>
+              <th>其他</th>
+              <th>社区</th>
+              <th>公用</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(row, index) in displayTableData" :key="row.id">
+              <td>{{ index + 1 }}</td>
+              <td>{{ row.projectName }}</td>
+              <td>{{ row.certNo }}</td>    <!-- 绑定“不动产权证编号” -->
+              <td>{{ row.contractNo }}</td> <!-- 绑定“合同/批文编号” -->
+              <td>{{ row.phase }}</td>     <!-- 绑定“期数” -->
+              <td>{{ row.totalArea }}</td>
+              <td>{{ row.calcCommercial }}</td>
+              <td>{{ row.calcResidential }}</td>
+              <td>{{ row.calcPropMgmt }}</td>
+              <td>{{ row.calcOther }}</td>
+              <td>{{ row.nonCalcCommunity }}</td>
+              <td>{{ row.nonCalcOther }}</td>
+              <td>{{ row.reportNo }}</td>
+            </tr>
+          </tbody>
+        </table>
 
+        <!-- 关键修改：class 改为 native-print-table -->
+        <table class="native-print-table info-table" style="margin-top: 20px;">
+          <thead>
+            <tr>
+              <th style="width: 150px;">核算指标</th>
+              <th style="width: 180px;">合同约定值</th>
+              <th style="width: 180px;">实测值</th>
+              <th style="width: 120px;">差值 (A - B)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in tableTotalData" :key="row.label">
+              <td>{{ row.label }}</td>
+              <td>{{ row.contract }}</td>
+              <td>{{ row.measured }}</td>
+              <td style="font-weight: bold;">
+                <span v-if="row.isArea" :style="{ color: Number(row.diff) >= 0 ? '#67C23A' : '#F56C6C' }">
+                  {{ row.diff }}
+                </span>
+                <span v-else>-</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
 
-
-      <table class="print-table info-table">
-        <!-- 表头（模拟el-table的表头样式） -->
-        <thead>
-          <tr>
-            <th style="width: 150px; background: #f0f2f5; color: #333; font-weight: bold; text-align: center; border: 1px solid #000; padding: 8px;">核算指标</th>
-            <th style="width: 180px; background: #f0f2f5; color: #333; font-weight: bold; text-align: center; border: 1px solid #000; padding: 8px;">合同约定值</th>
-            <th style="width: 180px; background: #f0f2f5; color: #333; font-weight: bold; text-align: center; border: 1px solid #000; padding: 8px;">实测值</th>
-            <th style="width: 120px; background: #f0f2f5; color: #333; font-weight: bold; text-align: center; border: 1px solid #000; padding: 8px;">差值 (A - B)</th>
-          </tr>
-        </thead>
-        <!-- 表格内容（用tableTotalData作为数据源，匹配页面逻辑） -->
-        <tbody>
-          <tr v-for="row in tableTotalData" :key="row.label">
-            <td style="text-align: center; border: 1px solid #000; padding: 8px;">{{ row.label }}</td>
-            <td style="text-align: center; border: 1px solid #000; padding: 8px;">{{ row.contract }}</td>
-            <td style="text-align: center; border: 1px solid #000; padding: 8px;">{{ row.measured }}</td>
-            <td style="text-align: center; border: 1px solid #000; padding: 8px; font-weight: bold;">
-              <span v-if="row.isArea" :style="{ color: Number(row.diff) >= 0 ? '#67C23A' : '#F56C6C' }">
-                {{ row.diff }}
-              </span>
-              <span v-else>-</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div class="print-footer">
-        <div class="print-signatures">
-          <div>制表人：__________</div>
-          <div>审核人：__________</div>
-          <div>日期：__________</div>
+        <div class="print-footer">
+          <div class="print-signatures">
+            <div>制表人：__________</div>
+            <div>审核人：__________</div>
+            <div>日期：__________</div>
+          </div>
         </div>
-      </div>
-    </div>
+    </Teleport>
+
+
+
 
       <el-dialog 
         v-model="detailDialogVisible" 
         title="楼栋实测明细 (只读)" 
-        width="900px" 
+        :width="auto"  
+        min-width="1000px"  
         class="no-print"
+        style="max-width: 90vw;"  
       >
-        <div class="detail-table-container" style="width: 100%;">
-        <!-- 增加加载状态 -->
+
+              <!-- 新增：面积总和展示区域（优先用汇总接口的sum，简单高效） -->
+        <div class="sum-info-section" style="margin-bottom: 16px; padding: 12px; background: #f5f7fa; border-radius: 6px;">
+          <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+            <div>
+              <span style="font-weight: bold; color: #606266;">建筑面积总和：</span>
+              <span style="color: #409EFF;">{{ roomSumInfo.buildingAreaSum }}</span> ㎡
+            </div>
+            <div>
+              <span style="font-weight: bold; color: #606266;">套内面积总和：</span>
+              <span style="color: #409EFF;">{{ roomSumInfo.innerAreaSum }}</span> ㎡
+            </div>
+            <div>
+              <span style="font-weight: bold; color: #606266;">阳台面积总和：</span>
+              <span style="color: #409EFF;">{{ roomSumInfo.balconyAreaSum }}</span> ㎡
+            </div>
+            <div>
+              <span style="font-weight: bold; color: #606266;">公摊面积总和：</span>
+              <span style="color: #409EFF;">{{ roomSumInfo.sharedAreaSum }}</span> ㎡
+            </div>
+          </div>
+        </div>
+
+
+        <!-- <div class="detail-table-container" style="width: 100%;">
+       
         <el-table 
           :data="roomInfoData" 
           border 
           size="small"
           v-loading="detailLoading"
           element-loading-text="加载户室数据中..."
-        >
+          max-height="500"
+        > -->
+        <div class="resizable-table-container" ref="resizableContainer">
+          <!-- 表格容器：可拉伸的核心容器 -->
+          <div class="detail-table-container" ref="tableContainer" style="width: 100%; height: 500px;">
+              <el-table 
+                :data="roomInfoData" 
+                border 
+                size="small"
+                v-loading="detailLoading"
+                element-loading-text="加载户室数据中..."
+                :style="{ height: '100%' }"
+                max-height="none"
+              >
 
-          <el-table-column label="序号" type="index" width="60" align="center" :index="index => index + 1" />
-          <el-table-column prop="roomLevel" label="楼层" width="80" align="center" />
-          <el-table-column prop="roomNumber" label="房号" width="100" align="center" />
-          <el-table-column prop="buildingArea" label="建筑面积(㎡)" width="120" align="right" />
-          <el-table-column prop="innerArea" label="套内面积(㎡)" width="120" align="right" />
-          <el-table-column prop="sharedArea" label="公摊面积(㎡)" width="120" align="right" />
-          <el-table-column prop="roomUsage" label="用途" min-width="100" show-overflow-tooltip />
-          <el-table-column prop="floorAreaType" label="面积类型" width="80" align="center">
-            <template #default="{ row }">
-              <el-tag :type="row.floorAreaType === '计容' ? 'success' : 'info'" size="small">
-                {{ row.floorAreaType }}
-              </el-tag>
-            </template>
-          </el-table-column>
-        </el-table>
+                <el-table-column label="序号" type="index" width="60" align="center" :index="index => index + 1" />
+                <el-table-column prop="roomLevel" label="楼层" width="80" align="center" />
+                <el-table-column prop="roomNumber" label="房号" width="100" align="center" />
+                <el-table-column prop="buildingArea" label="建筑面积(㎡)" width="120" align="center" />
+                <el-table-column prop="innerArea" label="套内面积(㎡)" width="120" align="center" />
+                <el-table-column prop="balconyArea" label="阳台面积(㎡)" width="120" align="center" />
+                <el-table-column prop="sharedArea" label="公摊面积(㎡)" width="120" align="center" />
+                <el-table-column prop="isCalculate" label="是否计算" width="100" align="center">
+                  <template #default="{ row }">
+                    <span :class="row.isCalculate === 1 ? 'red-text' : ''">
+                      {{ row.isCalculate === 1 ? '是' : '否' }}
+                    </span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="usageCategory" label="用途类别" width="120" align="center" />
+                <el-table-column prop="roomUsage" label="用途" min-width="100" show-overflow-tooltip align="center"  />
+                <el-table-column prop="floorAreaType" label="面积类型" width="80" align="center">
+                  <template #default="{ row }">
+                    <el-tag :type="row.floorAreaType === '计容' ? 'success' : 'info'" size="small">
+                      {{ row.floorAreaType }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
+          </div>
+          
+          <!-- 底部拉伸手柄 -->
+          <div class="resize-handle resize-handle-bottom" @mousedown="(e) => startResize('height', e)"></div>
         </div>
+        
       </el-dialog>
 
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { ref, reactive, onMounted, computed, watch , onUnmounted} from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Search, Download, DataAnalysis, Setting, View, List, Printer, Document, Collection, WarningFilled, Check } from '@element-plus/icons-vue'
 import { ElMessage, ElLoading } from 'element-plus'
 import * as XLSX from 'xlsx' 
 import axios from 'axios'
+import { usePrint } from '@/hooks/usePrint.ts'
+// const handlePrint = () => window.print()
+const { isPrinting, triggerPrint } = usePrint()
+const handlePrint = () => {
+  triggerPrint() // 调用 Teleport 打印逻辑
+}
+
 
 const route = useRoute()
 const router = useRouter()
+
+const resizableContainer = ref(null) // 拉伸外层容器ref
+const tableContainer = ref(null) // 表格容器ref
+const isResizing = ref(false) // 是否正在拉伸
+const resizeType = ref('') // 拉伸类型：width/height/both
+
+// 开始拉伸
+const startResize = (type, e) => {
+  isResizing.value = true
+  resizeType.value = type
+  e.preventDefault()
+  
+  const container = tableContainer.value
+  const startY = e.clientY
+  const startHeight = container.offsetHeight
+  
+  const handleMouseMove = (e) => {
+    if (!isResizing.value) return
+    // 高度调整：最小300px，最大为视口高度的90%
+    if (resizeType.value === 'height') {
+      const newHeight = Math.max(300, startHeight + (e.clientY - startY))
+      // 限制最大高度为视口的90%
+      container.style.height = `${Math.min(newHeight, window.innerHeight * 0.9)}px`
+    }
+  }
+  
+  const handleMouseUp = () => {
+    isResizing.value = false
+    document.removeEventListener('mousemove', handleMouseMove)
+    document.removeEventListener('mouseup', handleMouseUp)
+  }
+  
+  document.addEventListener('mousemove', handleMouseMove)
+  document.addEventListener('mouseup', handleMouseUp)
+}
+// 组件卸载时清理事件（避免内存泄漏）
+onUnmounted(() => {
+  document.removeEventListener('mousemove', () => {})
+  document.removeEventListener('mouseup', () => {})
+})
 
 // --- 页面状态 ---
 const activeTab = ref('summary')
@@ -390,6 +502,25 @@ const currentProjectInfo = reactive({
   code: '-',        
   status: '-'    
 })
+
+const surveyStats = computed(() => {
+  // 无项目选中时，直接返回 0
+  if (!filterProject.value) {
+    return { total: 0, success: 0, verified: 0, unverified: 0 }
+  }
+  const verifiedCount = rawTableData.value.filter(item => item.isVerified === 1).length;
+  const unverifiedCount = rawTableData.value.filter(item => item.isVerified === 0).length;
+  // 有项目时：
+  // total = tab3 实测报告列表长度（所有已上传的）
+  // success = tab1 汇总表长度（解析成功的，因为汇总表只返回解析成功的数据）
+  return {
+    total: reportList.value.length,
+    success: rawTableData.value.length,
+    verified: verifiedCount, // 新增：校验通过数
+    unverified: unverifiedCount 
+  }
+})
+
 
 // --- 对比表数据 ---
 const businessResidentialRatio = reactive({ contractRatio: "≥2:8", measuredRatio: "-" })
@@ -420,6 +551,24 @@ const categoryMap = {
   'nonCalcCommunity': { usageCategory: 'COMMUNITY', floorAreaType: 'NON_BUILDABLE' },
   'nonCalcOther':     { usageCategory: 'OTHER_PUBLIC', floorAreaType: 'NON_BUILDABLE' }
 }
+
+const usageCategoryMap = {
+  'RESIDENTIAL': '住宅',
+  'COMMERCIAL': '商业/办公',
+  'MANAGEMENT': '物管用房',
+  'COMMUNITY': '社区用房',
+  'OTHER_BUILDABLE': '其他计容',
+  'OTHER_PUBLIC': '其他公用',
+  'UNKNOWN': '未知'
+}
+
+// --- 新增：面积总和存储（响应式） ---
+const roomSumInfo = reactive({
+  buildingAreaSum: '0.00',
+  innerAreaSum: '0.00',
+  balconyAreaSum: '0.00',
+  sharedAreaSum: '0.00'
+})
 
 
 // --- 核心 API 逻辑 ---
@@ -513,6 +662,7 @@ const fetchProjectData = async (projectId) => {
 
       // ③ 拆分报告列表
       reportList.value = fileList
+      
       .filter(file => file.fileContextType === 'SURVEY_REPORT' || (file.originalName && (file.originalName.includes('报告') || file.originalName.includes('实测'))))
       .map(file => ({
         // 🔴 隐藏内部ID，仅保留业务字段
@@ -539,6 +689,7 @@ const fetchSurveyReports = async (projectId) => {
     const res = await axios.get(`/api/project/${projectId}/survey-reports/parsed`); // 注意接口前缀是否需要 /api，根据你的后端调整
     if (res.data.code === 200 && Array.isArray(res.data.data)) {
       const surveyData = res.data.data;
+      
       // 映射接口返回字段到 tab1 汇总表的列（按你的接口返回字段调整）
       rawTableData.value = surveyData.map(item => ({
         // 🔴 保留内部ID但不展示，仅用于key绑定
@@ -565,7 +716,12 @@ const fetchSurveyReports = async (projectId) => {
         unknownUsageCount: item.unknownUsageCount || 0, // 未知用途数量
         isVerified: item.isVerified || 0, // 验证状态
         hasUnknownUsage: item.hasUnknownUsage || 0, // 标记是否有未知用途
-        verificationErrorReason: item.verificationErrorReason || '-' // 验证失败原因
+        verificationErrorReason: item.verificationErrorReason || '-' ,// 验证失败原因
+
+        roomInfoBuildingAreaSum: item.roomInfoBuildingAreaSum || 0,
+        roomInfoInnerAreaSum: item.roomInfoInnerAreaSum || 0,
+        roomInfoBalconyAreaSum: item.roomInfoBalconyAreaSum || 0,
+        roomInfoSharedAreaSum: item.roomInfoSharedAreaSum || 0
 
 
       }));
@@ -692,30 +848,51 @@ const handleDownload = (row) => {
   }
 }
 
-const handleExportExcel = () => { 
-  const mainData = displayTableData.value.map((item, index) => ({
-    // 🔴 导出Excel时也显示自增序号，隐藏内部ID
-    '序号': index + 1,
-    '工程名称': item.projectName, 
-    '实测总面积': item.totalArea,
-    '计容-商业': item.calcCommercial, 
-    '计容-住宅': item.calcResidential,
-    '计容-物管': item.calcPropMgmt, 
-    '计容-其他': item.calcOther,
-    '不计容-社区': item.nonCalcCommunity, 
-    '不计容-公用': item.nonCalcOther
-  }))
-  const worksheet = XLSX.utils.json_to_sheet(mainData)
-  const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, worksheet, "汇总")
-  XLSX.writeFile(workbook, `${currentProjectInfo.name || '项目'}房产实测汇总表.xlsx`)
+const handleExportExcel = () => {
+  // 1. 构建多级表头的二维数组（第一行主表头，第二行子表头）
+  const headerAOA = [
+    ['序号', '工程名称', '实测总面积', '计容建筑面积', '计容建筑面积', '计容建筑面积', '计容建筑面积', '不计容建筑面积', '不计容建筑面积', '报告书编号'],
+    ['', '', '', '商业', '住宅', '物管', '其他', '社区', '公用', '']
+  ];
+
+  // 2. 构建数据行（对应表头的列顺序）
+  const dataRows = displayTableData.value.map((item, index) => [
+    index + 1, // 序号
+    item.projectName, // 工程名称
+    item.totalArea, // 实测总面积
+    item.calcCommercial, // 计容-商业
+    item.calcResidential, // 计容-住宅
+    item.calcPropMgmt, // 计容-物管
+    item.calcOther, // 计容-其他
+    item.nonCalcCommunity, // 不计容-社区
+    item.nonCalcOther, // 不计容-公用
+    item.reportNo // 报告书编号
+  ]);
+
+  // 3. 创建工作表并写入表头
+  const worksheet = XLSX.utils.aoa_to_sheet(headerAOA);
+  // 4. 追加数据行（从第2行开始，因为表头占了2行）
+  XLSX.utils.sheet_add_aoa(worksheet, dataRows, { origin: 2 });
+
+  // 5. 设置合并单元格规则（对应表头的合并范围）
+  worksheet['!merges'] = [
+    // 合并“计容建筑面积”：第1行（索引0）第3列到第6列
+    { s: { r: 0, c: 3 }, e: { r: 0, c: 6 } },
+    // 合并“不计容建筑面积”：第1行第7列到第8列
+    { s: { r: 0, c: 7 }, e: { r: 0, c: 8 } }
+  ];
+
+  // 6. 生成Excel文件
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "房产实测汇总表");
+  XLSX.writeFile(workbook, `${currentProjectInfo.name || '项目'}房产实测汇总表.xlsx`);
   ElMessage.success('导出成功') 
 }
-const handlePrint = () => window.print()
-const recalculateTable = () => {}
+
+
 
 const detailDialogVisible = ref(false)
-const currentDetailRow = ref(null)
+
 const roomInfoData = ref([]) // 存储户室面积数据
 const detailLoading = ref(false) // 详情加载状态
 
@@ -729,6 +906,21 @@ const viewDetail = async (row) => {
   detailDialogVisible.value = true // 先打开弹窗，避免用户等待
   
   try {
+    const summaryRow = rawTableData.value.find(item => item.id === row.id)
+    console.log(rawTableData.value)
+    if (summaryRow) {
+      roomSumInfo.buildingAreaSum = summaryRow.roomInfoBuildingAreaSum?.toFixed(2) || '0.00'
+      roomSumInfo.innerAreaSum = summaryRow.roomInfoInnerAreaSum?.toFixed(2) || '0.00'
+      roomSumInfo.balconyAreaSum = summaryRow.roomInfoBalconyAreaSum?.toFixed(2) || '0.00'
+      roomSumInfo.sharedAreaSum = summaryRow.roomInfoSharedAreaSum?.toFixed(2) || '0.00'
+    } else {
+      // 兜底：初始化为0
+      roomSumInfo.buildingAreaSum = '0.00'
+      roomSumInfo.innerAreaSum = '0.00'
+      roomSumInfo.balconyAreaSum = '0.00'
+      roomSumInfo.sharedAreaSum = '0.00'
+    }
+
     // 调用户室面积接口
     const res = await axios.get(`/api/project/${currentProjectInfo.id}/survey-reports/${row.id}/room-info`)
     if (res.data.code === 200 && Array.isArray(res.data.data)) {
@@ -739,10 +931,14 @@ const viewDetail = async (row) => {
         roomNumber: item.roomNumber || '-', // 房号
         buildingArea: (item.buildingArea || 0).toFixed(2), // 建筑面积
         innerArea: (item.innerArea || 0).toFixed(2), // 套内面积
+        balconyArea: (item.balconyArea || 0).toFixed(2), // 阳台面积
         sharedArea: (item.sharedArea || 0).toFixed(2), // 公摊面积
+        isCalculate: item.isCalculate || 0,
+        usageCategory: usageCategoryMap[item.usageCategory] || '未知', // 新增：用途类别（转中文）
         roomUsage: item.roomUsage || '-', // 用途
         floorAreaType: item.floorAreaType === 'BUILDABLE' ? '计容' : '不计容' // 面积类型
-      }))
+      }));
+      
     } else {
       roomInfoData.value = []
       ElMessage.warning('暂无户室面积数据')
@@ -763,6 +959,8 @@ watch(filterProject, (newVal) => {
     localStorage.setItem('projectFilterStatus', newVal)
   } else {
     localStorage.removeItem('projectFilterStatus')
+    reportList.value = []
+    rawTableData.value = []
   }
 })
 
@@ -791,6 +989,8 @@ onMounted(async () => {
     }
   }
 })
+
+
 
 
 
@@ -878,70 +1078,68 @@ onMounted(async () => {
   border-radius: 3px;
 }
 
-/* 打印样式 */
-
-#print-area { display: none; }
-@media print {
-   /* 1. 彻底隐藏所有非打印元素（包括左侧菜单、顶部导航） */
-  .no-print, .sidebar, .header, .global-filter-card, .content-tabs-wrapper {
-    display: none !important;
-  }
-  /* 2. 强制隐藏所有层级的滚动条 */
-  html, body, #print-area {
-    overflow: visible !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-  /* 3. 让 #print-area 固定定位，完全覆盖打印页面 */
-  #print-area {
-    display: block !important;
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-    height: auto !important;
-    background: white !important;
-    z-index: 999999 !important;
-  }
-
-   .print-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 20px;
-    font-size: 11px; /* 缩小字体，容纳更多列 */
-    page-break-inside: auto; /* 允许表格内分页 */
-  }
-
-  .print-table th, .print-table td {
-    border: 1px solid #000;
-    padding: 6px 4px; /* 缩小内边距，适配更多内容 */
-    text-align: center;
-  }
-  .print-table tr {
-    page-break-inside: avoid; /* 避免行被拆分到两页 */
-  }
-  .print-table.data-table {
-    page-break-after: always !important;
-  }
-    .print-table.info-table {
-    page-break-after: always !important; /* 对比表后强制分页 */
-  }
-
-  /* 确保info-table和footer不被隐藏 */
-  .print-table.info-table, .print-footer {
-    display: block !important;
-    page-break-inside: avoid;
-  }
-  .print-title { font-size: 20px; font-weight: bold; text-align: center; margin-bottom: 15px; margin-top: 20px; }
-  .print-meta-row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 12px; color: #666; }
-  .print-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
-  .print-table th, .print-table td { border: 1px solid #000; padding: 8px 5px; text-align: center; }
-  .print-table th { background-color: #f0f0f0; font-weight: bold; }
-  .info-table td { text-align: left; padding: 10px; }
-  .print-footer { margin-top: 30px; display: block; justify-content: space-between; align-items: flex-end; }
-  .print-summary { font-size: 14px; }
-  .print-signatures { display: flex; gap: 40px; font-size: 14px; }
-  @page { size: landscape; margin: 15mm; }
-
+/* 单个字段标红（默认） */
+.red-text {
+  color: #F56C6C !important;
+  font-weight: bold !important;
 }
+
+/* 可选：整行标红（如果用户需要） */
+.red-row {
+  background-color: #fff2f2 !important;
+}
+.red-row td {
+  color: #F56C6C !important;
+  font-weight: bold !important;
+}
+
+.resizable-table-container {
+  position: relative;  /* 给手柄定位 */
+  width: 100%;
+  height: 100%;
+  min-width: 600px;    /* 表格最小宽度 */
+  min-height: 300px;   /* 表格最小高度 */
+}
+
+/* ========== 修改：原表格容器样式（解除固定高度限制） ========== */
+.detail-table-container {
+  width: 100%;
+  height: 500px;       /* 初始高度 */
+  overflow-y: auto;
+  overflow-x: hidden;
+  transition: all 0.1s ease; /* 拉伸平滑过渡 */
+}
+
+/* ========== 新增：拉伸手柄样式 ========== */
+.resize-handle {
+  position: absolute;
+  background-color: #e5e9dd;
+  opacity: 0.5;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  z-index: 10;
+}
+/* 鼠标悬浮高亮 */
+.resize-handle:hover {
+  opacity: 1;
+}
+
+/* 底部手柄（上下拉伸） */
+.resize-handle-bottom {
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 6px;
+  cursor: ns-resize; /* 上下拉伸光标 */
+}
+
+/* ========== 新增：弹窗内容样式（解除溢出限制） ========== */
+:deep(.el-dialog__body) {
+  padding: 20px !important;
+  overflow: visible !important; /* 让弹窗随表格拉伸 */
+}
+
+
+
+
 </style>
