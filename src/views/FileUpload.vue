@@ -128,6 +128,14 @@
                           >
                             重置
                           </el-button>
+                          <el-button 
+                            icon="Refresh" 
+                            @click="handleRefresh"
+                            style="width: 80px; margin-left: 10px;" 
+                            :loading="tableLoading"
+                          >
+                            刷新
+                          </el-button>
                         </div>
                     </div>
       
@@ -136,7 +144,7 @@
                     style="width: 100%" 
                     class="custom-table"
                     :header-cell-style="{background:'#F5F7FA', color:'#606266', height: '50px'}"
-                    :row-class-name="() => 'no-hover-highlight'"
+                    :row-class-name="tableRowClassName"
                     @selection-change="handleSelectionChange"
                     highlight-current-row="false"
                     max-height="800px"
@@ -144,19 +152,23 @@
                     <el-table-column type="selection" width="120" align="center" />
                     <el-table-column label="预览" width="120" align="center">
                       <template #default="{ row }">
-                        <el-image 
-                          style="width: 200px; height: 60px; border-radius: 6px; border: 1px solid #e4e7ed;z-index: 9999;"
-                          :src="row.thumbnailUrl" 
-                          :preview-src-list="[row.thumbnailUrl]"
-                          fit="cover"
-                          preview-z-index="99999"
-                        >
-                          <template #error>
-                            <div class="image-slot" style="display:flex; justify-content:center; align-items:center; height:100%; color:#909399;">
-                              <el-icon><Picture/></el-icon>
-                            </div>
-                          </template>
-                        </el-image>
+                        <div @click.stop style="display: flex; justify-content: center;">
+                          <el-image 
+                            style="width: 200px; height: 60px; border-radius: 6px; border: 1px solid #e4e7ed;"
+                            :src="row.thumbnailUrl" 
+                            :preview-src-list="[row.thumbnailUrl]"
+                            fit="cover"
+                            :preview-teleported="true" 
+                            :hide-on-click-modal="true"
+                            preview-z-index="99999" 
+                          >
+                            <template #error>
+                              <div class="image-slot" style="display:flex; justify-content:center; align-items:center; height:100%; color:#909399;">
+                                <el-icon><Picture/></el-icon>
+                              </div>
+                            </template>
+                          </el-image>
+                        </div>
                       </template>
                     </el-table-column>
 
@@ -345,7 +357,9 @@
               fullscreen class="calibration-dialog" 
               :show-close="false" 
               style="overflow: hidden;"
-              @closed="() => { if(calibrationPdfUrl.value) URL.revokeObjectURL(calibrationPdfUrl.value) }">
+              @closed="resetCalibrationState"
+              >
+              <!-- @closed="() => { if(calibrationPdfUrl.value) URL.revokeObjectURL(calibrationPdfUrl.value) }" -->
       <template #header="{ close }">
         <div class="cali-header">
            <div class="header-left">
@@ -356,86 +370,384 @@
              </div>
            </div>
            <div class="header-right">
-             <el-tag v-if="currentFile?.status !== 'AUDIT_PASS'" type="warning" effect="dark" round size="large" style="margin-right: 15px;">AI 解析结果</el-tag>
-             <el-tag v-else type="success" effect="dark" round size="large" style="margin-right: 15px;"><el-icon><CircleCheck /></el-icon> 已审核通过</el-tag>
+            <!-- 新增：进入/退出编辑按钮 -->
+              <el-button 
+                v-if="!isEditing && currentFile?.status !== 'AUDIT_PASS'"
+                type="warning" 
+                plain 
+                round 
+                icon="EditPen" 
+                @click="enterEditMode"
+              >
+                进入编辑
+              </el-button>
+              <el-button 
+                v-if="isEditing"
+                type="danger" 
+                plain 
+                round 
+                icon="Close" 
+                @click="exitEditMode"
+              >
+                退出编辑（不保存）
+              </el-button>
+             <!-- <el-tag v-if="currentFile?.status !== 'AUDIT_PASS'" type="warning" effect="dark" round size="large" style="margin-right: 15px;">AI 解析结果</el-tag>
+             <el-tag v-else type="success" effect="dark" round size="large" style="margin-right: 15px;"><el-icon><CircleCheck /></el-icon> 已审核通过</el-tag> -->
              <el-button type="primary" plain round icon="DocumentChecked" @click="handleSaveData">保存修改</el-button>
-             <el-button type="success" round icon="Stamp" @click="handleAuditPass" :disabled="currentFile?.status === 'AUDIT_PASS'">{{ currentFile?.status === 'AUDIT_PASS' ? '已审核' : '审核通过' }}</el-button>
+             <!-- <el-button type="success" round icon="Stamp" @click="handleAuditPass" :disabled="currentFile?.status === 'AUDIT_PASS'">{{ currentFile?.status === 'AUDIT_PASS' ? '已审核' : '审核通过' }}</el-button> -->
            </div>
         </div>
       </template>
 
       <div class="split-view" v-loading="calibrationLoading" style="height: 100%;">
         <div class="left-panel" style="height: 100%;">
-          <div class="pdf-canvas" style="height: 100%;" >
-             <iframe 
-              v-if="calibrationPdfUrl" 
-              :src="calibrationPdfUrl" 
-              style="width:100%; height:100%; border:none;"
-              @load="pdfLoaded"
-              @error="pdfLoadError"
-             ></iframe>
+          <div class="pdf-toolbar" style="height: 48px; background: #fff; border-bottom: 1px solid #ccc; display: flex; align-items: center; justify-content: center; gap: 10px;">
+            <el-button 
+              :type="currentViewType === 'original' ? 'primary' : 'default'" 
+              plain 
+              @click="switchView('original')"
+            >
+              原始文件
+            </el-button>
             
+            <el-tooltip content="暂无预处理文件" placement="top" :disabled="isPreprocessAvailable">
+              <el-button 
+                :type="currentViewType === 'preprocess' ? 'primary' : 'default'" 
+                plain 
+                :disabled="!isPreprocessAvailable"
+                @click="switchView('preprocess')"
+              >
+                预处理文件
+              </el-button>
+            </el-tooltip>
+            <!-- 新增：识别文件（占位，禁用状态，待接口支持） -->
+            <el-tooltip content="MD文件" placement="top">
+              <el-button 
+                :type="currentViewType === 'recognition' ? 'primary' : 'default'" 
+                plain 
+                @click="switchView('recognition')"
+                title="识别文件（MD格式）"
+              >
+                识别文件（MD）
+              </el-button>
+            </el-tooltip>
+          </div>
+          <div class="pdf-canvas" style="height: calc(100% - 48px); overflow: hidden;">
+            <!-- 原有 PDF 相关区域（不变） -->
+            <div v-if="currentViewType !== 'recognition'" style="width: 100%; height: 100%;">
+              <div v-if="pdfLoading" style="display: flex; justify-content: center; align-items: center; height: 100%; color: #fff;">
+                <el-icon size="32" color="#fff"><Loading /></el-icon>
+                <span style="margin-left: 10px;">正在加载PDF文件...</span>
+              </div>
+              <iframe 
+                v-else-if="calibrationPdfUrl" 
+                :src="calibrationPdfUrl" 
+                style="width:100%; height:100%; border:none;"
+                @load="pdfLoaded"
+                @error="pdfLoadError"
+              ></iframe>
+              <div v-else style="display: flex; justify-content: center; align-items: center; height: 100%; color: #ccc;">
+                <span>PDF文件加载失败</span>
+              </div>
+            </div>
+
+            <!-- 新增 MD 内容展示区域（完整左面板区域） -->
+            <div v-if="currentViewType === 'recognition'" style="width: 100%; height: 100%; overflow-y: auto; padding: 20px; box-sizing: border-box; background: #fff;">
+              <!-- MD 加载提示 -->
+              <div v-if="recognitionMdLoading" style="display: flex; justify-content: center; align-items: center; height: 100%;">
+                <el-icon size="32" color="#409EFF"><Loading /></el-icon>
+                <span style="margin-left: 10px; color: #606266;">正在加载识别文件（MD）...</span>
+              </div>
+              <!-- 解析后的 MD 内容（用 v-html 渲染） -->
+              <div v-else class="md-content" style="width: 100%; min-height: 100%;" v-html="marked(recognitionMdContent)"></div>
+            </div>
           </div>
         </div>
-        <div class="right-panel" style = "height: 100%; overflow-y: auto;" >
-           <!-- 替换原有右侧面板的<div>内容 -->
-            
-              <!-- 面积汇总区域 -->
-              <!-- <div class="sum-info-section" style="margin-bottom: 16px; padding: 12px; background: #f5f7fa; border-radius: 6px;">
+            <div class="right-panel" style = "height: 100%; overflow-y: auto;" >
+              <div class="sum-info-section"  style="margin-bottom: 16px; padding: 12px; background: #fff; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
+                <!-- 原有面积汇总（补全其他面积字段） -->
+                <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px dashed #e4e7ed;">
+                    <div style="width: 45%; margin-bottom: 8px;">
+                      <span style="font-weight: bold; color: #606266;">建筑面积总和：</span>
+                      <span style="color: #409EFF;">{{ auditSummaryData.roomInfoBuildingAreaSum }}</span> ㎡
+                    </div>
+                    <div style="width: 45%; margin-bottom: 8px;">
+                      <span style="font-weight: bold; color: #606266;">【机器识别（OCR）】建筑面积总和：</span>
+                      <span style="color: #F56C6C;">{{ auditSummaryData.roomInfoBuildingAreaSumFromOcr }}</span> ㎡
+                    </div>
+                    <div style="width: 45%; margin-bottom: 8px;">
+                      <span style="font-weight: bold; color: #606266;">套内面积总和：</span>
+                      <span style="color: #409EFF;">{{ auditSummaryData.roomInfoInnerAreaSum }}</span> ㎡
+                    </div>
+                    <div style="width: 45%; margin-bottom: 8px;">
+                      <span style="font-weight: bold; color: #606266;">【机器识别（OCR）】套内面积总和：</span>
+                      <span style="color: #F56C6C;">{{ auditSummaryData.roomInfoInnerAreaSumFromOcr }}</span> ㎡
+                    </div>
+                    <div style="width: 45%; margin-bottom: 8px;">
+                      <span style="font-weight: bold; color: #606266;">阳台面积总和：</span>
+                      <span style="color: #409EFF;">{{ auditSummaryData.roomInfoBalconyAreaSum }}</span> ㎡
+                    </div>
+                    <div style="width: 45%; margin-bottom: 8px;">
+                      <span style="font-weight: bold; color: #606266;">【机器识别（OCR）】阳台面积总和：</span>
+                      <span style="color: #F56C6C;">{{ auditSummaryData.roomInfoBalconyAreaSumFromOcr }}</span> ㎡
+                    </div>
+                    <div style="width: 45%; margin-bottom: 8px;">
+                      <span style="font-weight: bold; color: #606266;">分摊面积总和：</span>
+                      <span style="color: #409EFF;">{{ auditSummaryData.roomInfoSharedAreaSum }}</span> ㎡
+                    </div>
+                    <div style="width: 45%; margin-bottom: 8px;">
+                      <span style="font-weight: bold; color: #606266;">【机器识别（OCR）】分摊面积总和：</span>
+                      <span style="color: #F56C6C;">{{ auditSummaryData.roomInfoSharedAreaSumFromOcr }}</span> ㎡
+                    </div>
+                </div>
+                <!-- 新增：补全所有需求字段，使用友好展示文本 -->
                 <div style="display: flex; gap: 20px; flex-wrap: wrap;">
                   <div>
-                    <span style="font-weight: bold; color: #606266;">建筑面积总和：</span>
-                    <span style="color: #409EFF;">{{ roomSumInfo.buildingAreaSum }}</span> ㎡
+                    <span style="font-weight: bold; color: #606266;">待确认面积：</span>
+                    <span style="color: #E6A23C;">{{ auditSummaryData.pendingConfirmArea }}</span> ㎡
+                  </div>
+                   <!-- 未知用途（正确写法） -->
+                  <div>
+                    <span style="font-weight: bold; color: #606266;">未知用途：</span>
+                    <span 
+                      :style="{ color: auditSummaryDisplay.hasUnknownUsageText === '有' ? '#F56C6C' : '#67C23A' }"
+                    >{{ auditSummaryDisplay.hasUnknownUsageText }}</span>
                   </div>
                   <div>
-                    <span style="font-weight: bold; color: #606266;">套内面积总和：</span>
-                    <span style="color: #409EFF;">{{ roomSumInfo.innerAreaSum }}</span> ㎡
+                    <span style="font-weight: bold; color: #606266;">未知用途数量：</span>
+                    <span style="color: #F56C6C;">{{ auditSummaryData.unknownUsageCount }}</span> 条
                   </div>
                   <div>
-                    <span style="font-weight: bold; color: #606266;">阳台面积总和：</span>
-                    <span style="color: #409EFF;">{{ roomSumInfo.balconyAreaSum }}</span> ㎡
+                    <span style="font-weight: bold; color: #606266;">验证状态：</span>
+                    <span 
+                      :style="{ color: auditSummaryDisplay.isVerifiedText === '已验证' ? '#67C23A' : '#909399' }"
+                    >{{ auditSummaryDisplay.isVerifiedText }}</span>
                   </div>
                   <div>
-                    <span style="font-weight: bold; color: #606266;">公摊面积总和：</span>
-                    <span style="color: #409EFF;">{{ roomSumInfo.sharedAreaSum }}</span> ㎡
+                    <span style="font-weight: bold; color: #606266;">未知用途详情：</span>
+                    <span style="color: #E6A23C;">{{ auditSummaryData.unknownUsages }}</span> ㎡
+                  </div>
+                  <div style="width: 100%; margin-top: 10px;">
+                    <span style="font-weight: bold; color: #606266;">验证失败原因：</span>
+                    <span style="color: #F56C6C;">{{ auditSummaryData.verificationErrorReason }}</span>
                   </div>
                 </div>
-              </div> -->
+              </div>
 
               <!-- 户室面积表格 -->
-              <el-table 
-                :data="roomInfoData" 
-                border 
-                size="small"
-                v-loading="roomInfoLoading"
-                element-loading-text="加载户室数据中..."
-                style="width: 100%;"
-                :max-height="`calc(100vh - 120px)`" 
-              >
-                <el-table-column label="序号" type="index" width="60" align="center" :index="index => index + 1" />
-                <el-table-column prop="roomLevel" label="楼层" width="80" align="center" />
-                <el-table-column prop="roomNumber" label="房号" width="100" align="center" />
-                <el-table-column prop="buildingArea" label="建筑面积(㎡)" width="120" align="center" />
-                <el-table-column prop="innerArea" label="套内面积(㎡)" width="120" align="center" />
-                <el-table-column prop="balconyArea" label="阳台面积(㎡)" width="120" align="center" />
-                <el-table-column prop="sharedArea" label="公摊面积(㎡)" width="120" align="center" />
-                <el-table-column prop="isCalculate" label="是否计算" width="100" align="center">
-                  <template #default="{ row }">
-                    <span>{{ row.isCalculate === 1 ? '是' : '否' }}</span>
-                  </template>
-                </el-table-column>
-                <el-table-column prop="usageCategory" label="用途类别" width="120" align="center" />
-                <el-table-column prop="roomUsage" label="用途" min-width="100" show-overflow-tooltip align="center"  />
-                <el-table-column prop="floorAreaType" label="面积类型" width="80" align="center">
-                  <template #default="{ row }">
-                    <el-tag :type="row.floorAreaType === '计容' ? 'success' : 'info'" size="small">
-                      {{ row.floorAreaType }}
-                    </el-tag>
-                  </template>
-                </el-table-column>
-              </el-table>
-              <el-empty v-if="!roomInfoLoading && roomInfoData.length === 0" description="暂无户室面积数据" />
-            </div>
+              <div style="flex: 1; overflow: auto; margin-top: 8px; padding-bottom: 70px;">
+                  <el-table 
+                    :data="roomInfoData" 
+                    border 
+                    size="small"
+                    v-loading="roomInfoLoading"
+                    element-loading-text="加载户室数据中..."
+                    style="width: 100%; height: 100%;"
+                  >
+                    <el-table-column label="序号" type="index" width="60" align="center" :index="index => index + 1" />
+                    
+                    <!-- 楼层：展示/编辑切换 -->
+                    <el-table-column prop="roomLevel" label="楼层" width="80" align="center">
+                      <template #default="{ row }">
+                        <template v-if="!isEditing">
+                          {{ row.roomLevel || '-' }}
+                        </template>
+                        <template v-else>
+                          <el-input 
+                            v-model="row.roomLevel" 
+                            size="small" 
+                            style="width: 70px;"
+                            placeholder="请输入楼层"
+                          />
+                        </template>
+                      </template>
+                    </el-table-column>
+                    
+                    <!-- 房号：展示/编辑切换 -->
+                    <el-table-column prop="roomNumber" label="房号" width="100" align="center">
+                      <template #default="{ row }">
+                        <template v-if="!isEditing">
+                          {{ row.roomNumber || '-' }}
+                        </template>
+                        <template v-else>
+                          <el-input 
+                            v-model="row.roomNumber" 
+                            size="small" 
+                            style="width: 90px;"
+                            placeholder="请输入房号"
+                          />
+                        </template>
+                      </template>
+                    </el-table-column>
+                    
+                    <!-- 建筑面积：展示/编辑切换（数字输入框，保留2位小数） -->
+                    <el-table-column prop="buildingArea" label="建筑面积(㎡)" width="120" align="center">
+                      <template #default="{ row }">
+                        <template v-if="!isEditing">
+                          {{ row.buildingArea || '0.00' }}
+                        </template>
+                        <template v-else>
+                          <el-input 
+                            v-model="row.buildingArea" 
+                            size="small" 
+                            style="width: 110px;"
+                            type="number"
+                            precision="2"
+                            min="0"
+                            placeholder="0.00"
+                          />
+                        </template>
+                      </template>
+                    </el-table-column>
+                    
+                    <!-- 套内面积：展示/编辑切换 -->
+                    <el-table-column prop="innerArea" label="套内面积(㎡)" width="120" align="center">
+                      <template #default="{ row }">
+                        <template v-if="!isEditing">
+                          {{ row.innerArea || '0.00' }}
+                        </template>
+                        <template v-else>
+                          <el-input 
+                            v-model="row.innerArea" 
+                            size="small" 
+                            style="width: 110px;"
+                            type="number"
+                            precision="2"
+                            min="0"
+                            placeholder="0.00"
+                          />
+                        </template>
+                      </template>
+                    </el-table-column>
+                    
+                    <!-- 阳台面积：展示/编辑切换 -->
+                    <el-table-column prop="balconyArea" label="阳台面积(㎡)" width="120" align="center">
+                      <template #default="{ row }">
+                        <template v-if="!isEditing">
+                          {{ row.balconyArea || '0.00' }}
+                        </template>
+                        <template v-else>
+                          <el-input 
+                            v-model="row.balconyArea" 
+                            size="small" 
+                            style="width: 110px;"
+                            type="number"
+                            precision="2"
+                            min="0"
+                            placeholder="0.00"
+                          />
+                        </template>
+                      </template>
+                    </el-table-column>
+                    
+                    <!-- 分摊面积：展示/编辑切换 -->
+                    <el-table-column prop="sharedArea" label="分摊面积(㎡)" width="120" align="center">
+                      <template #default="{ row }">
+                        <template v-if="!isEditing">
+                          {{ row.sharedArea || '0.00' }}
+                        </template>
+                        <template v-else>
+                          <el-input 
+                            v-model="row.sharedArea" 
+                            size="small" 
+                            style="width: 110px;"
+                            type="number"
+                            precision="2"
+                            min="0"
+                            placeholder="0.00"
+                          />
+                        </template>
+                      </template>
+                    </el-table-column>
+                    
+                    <!-- 是否计算：展示/编辑切换（下拉选择） -->
+                    <el-table-column prop="isCalculate" label="是否计算" width="100" align="center">
+                      <template #default="{ row }">
+                        <template v-if="!isEditing">
+                          {{ row.isCalculate === 1 ? '是' : '否' }}
+                        </template>
+                        <template v-else>
+                          <el-select 
+                            v-model="row.isCalculate" 
+                            size="small" 
+                            style="width: 90px;"
+                            placeholder="请选择"
+                          >
+                            <el-option label="是" value="1" />
+                            <el-option label="否" value="0" />
+                          </el-select>
+                        </template>
+                      </template>
+                    </el-table-column>
+                    
+                    <!-- 用途类别：展示/编辑切换（下拉选择） -->
+                    <el-table-column prop="usageCategory" label="用途类别" width="120" align="center">
+                      <template #default="{ row }">
+                        <template v-if="!isEditing">
+                          {{ row.usageCategory || '未知' }}
+                        </template>
+                        <template v-else>
+                          <el-select 
+                            v-model="row.usageCategory" 
+                            size="small" 
+                            style="width: 110px;"
+                            placeholder="请选择"
+                          >
+                            <el-option label="住宅" value="RESIDENTIAL" />
+                            <el-option label="商业" value="COMMERCIAL" />
+                            <el-option label="管理用房" value="MANAGEMENT" />
+                            <el-option label="其他可建设用房" value="OTHER_BUILDABLE" />
+                            <el-option label="社区配套" value="COMMUNITY" />
+                            <el-option label="其他公共配套" value="OTHER_PUBLIC" />
+                            <el-option label="未知" value="UNKNOWN" />
+                          </el-select>
+                        </template>
+                      </template>
+                    </el-table-column>
+                    
+                    <!-- 用途：展示/编辑切换 -->
+                    <el-table-column prop="roomUsage" label="用途" min-width="100" show-overflow-tooltip align="center">
+                      <template #default="{ row }">
+                        <template v-if="!isEditing">
+                          {{ row.roomUsage || '-' }}
+                        </template>
+                        <template v-else>
+                          <el-input 
+                            v-model="row.roomUsage" 
+                            size="small" 
+                            style="width: 100%;"
+                            placeholder="请输入用途"
+                          />
+                        </template>
+                      </template>
+                    </el-table-column>
+                    
+                    <!-- 面积类型：展示/编辑切换（下拉选择） -->
+                    <el-table-column prop="floorAreaType" label="面积类型" width="80" align="center">
+                      <template #default="{ row }">
+                        <template v-if="!isEditing">
+                          <el-tag :type="row.floorAreaType === '计容' ? 'success' : 'info'" size="small">
+                            {{ row.floorAreaType }}
+                          </el-tag>
+                        </template>
+                        <template v-else>
+                          <el-select 
+                            v-model="row.floorAreaType" 
+                            size="small" 
+                            style="width: 70px;"
+                            placeholder="请选择"
+                          >
+                            <el-option label="计容" value="BUILDABLE" />
+                            <el-option label="不计容" value="NON_BUILDABLE" />
+                            <el-option label="未知" value="UNKNOWN" />
+                          </el-select>
+                        </template>
+                      </template>
+                    </el-table-column>
+  </el-table>
+                <el-empty v-if="!roomInfoLoading && roomInfoData.length === 0" description="暂无户室面积数据" />
+              </div>
+          </div>
         
       </div>
     </el-dialog>
@@ -450,6 +762,13 @@ import { UploadFilled, Upload, Document, EditPen, Back, Check, Warning, Picture,
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
+// ===== 新增：导入 MD 解析相关依赖 =====
+import { marked } from 'marked';
+import hljs from 'highlight.js';
+// 导入 highlight.js 默认样式（可选，也可以选其他主题，比如 github-dark）
+import 'highlight.js/styles/default.css';
+import { useBatchPoller } from './useBatchPoller';
+
 
 
 const statusMap = {
@@ -464,6 +783,7 @@ const statusMap = {
   'AUDIT_PASS': { text: '已入库', color: '#67C23A' },
   'AUDIT_FAIL': { text: '审核驳回', color: '#F56C6C' }
 }
+const tableRowClassName = () => 'no-hover-highlight';
 
 // --- 1. 项目数据 ---
 const projectOptions = ref([])
@@ -474,7 +794,7 @@ const showCreateProject = ref(false)
 const selectedRows = ref([]) // 存储选中行
 const batchLoading = ref(false) // 批量操作加载状态
 const canBatchParse = computed(() => {
-  return selectedRows.value.some(row => ['WAITING_PARSE', 'PARSE_FAIL'].includes(row.status))
+  return selectedRows.value.some(row => ['WAITING_PARSE', 'PARSE_FAIL', 'PARSE_COMPLETE'].includes(row.status))
 })
 
 // 批量操作 - 监听表格选中行变化
@@ -512,20 +832,20 @@ const batchDelete = () => {
 const batchParse = () => {
   if (!canBatchParse.value) return
   ElMessageBox.confirm(
-    `确认解析选中的可解析文件（${selectedRows.value.filter(row => ['WAITING_PARSE', 'PARSE_FAIL'].includes(row.status)).length} 个）？`,
+    `确认解析选中的可解析文件（${selectedRows.value.filter(row => ['WAITING_PARSE', 'PARSE_FAIL', 'PARSE_COMPLETE'].includes(row.status)).length} 个）？`,
     '批量解析',
     { type: 'primary', confirmButtonText: '立即开始' }
   ).then(async () => {
     batchLoading.value = true
     try {
       // 仅处理可解析的行，同步更新前端状态
-      const parseRows = selectedRows.value.filter(row => ['WAITING_PARSE', 'PARSE_FAIL'].includes(row.status))
+      const parseRows = selectedRows.value.filter(row => ['WAITING_PARSE', 'PARSE_FAIL', 'PARSE_COMPLETE'].includes(row.status))
       await Promise.all(parseRows.map(row => {
         row.status = 'PENDING' // 前端先置为排队中
         return axios.post(`/api/file/parse/${row.rawId}`)
       }))
       ElMessage.success('批量解析任务已提交，后台处理中')
-      checkPolling(fileTableData.value) // 触发轮询
+      startPolling(); 
       selectedRows.value = [] // 清空选中
     } catch (err) {
       console.error('批量解析失败：', err)
@@ -558,7 +878,8 @@ const fetchProjectList = async () => {
 // --- 2. 文件数据 ---
 const fileTableData = ref([])
 const tableLoading = ref(false)
-let pollingTimer = null // 轮询定时器
+// 替换原来的 let pollingTimer = null
+// const pollingTimer = ref(null); // 用ref管理定时器，避免作用域问题
 
 
 const filterStatus = ref('')
@@ -586,6 +907,15 @@ const handleCurrentChange = (val) => {
   currentPage.value = val    // 更新当前页码
   refreshData()              // 重新请求数据
 }
+
+// 新增：刷新按钮事件（保留所有筛选状态，仅刷新数据）
+const handleRefresh = () => {
+  // 直接复用 refreshData()，无需额外处理筛选条件
+  // refreshData() 会自动读取当前的 filterFileName、filterFileType、filterStatus 等筛选条件
+  refreshData();
+  // 可选：添加轻量提示，提升用户体验
+  ElMessage.info('正在刷新数据...');
+};
 
 // 格式化上传时间：2026-01-26T00:34:35.046 → 2026-01-26 00:34:35
 const formatUploadTime = (timeStr) => {
@@ -669,6 +999,7 @@ const refreshData = async () => {
           id: item.id, // 前端表格行ID
           rawId: item.id, // 后端文件主键ID（用于删除、解析等接口调用）
           fileId: item.gridfsId, // 文件存储的gridfsId（用于下载、预览）
+          preprocessGridfsId: item.preprocessGridfsId || '',
           name: item.originalName || '未命名文件', // 文件名
           uploadTime: item.uploadTime ? formatUploadTime(item.uploadTime) : '未知时间',
           type: fileType, // 区分合同/实测报告
@@ -684,97 +1015,12 @@ const refreshData = async () => {
     fileTableData.value = list
     
     // 开启轮询：如果有文件处于 PENDING 或 PARSING 状态
-    checkPolling(list)
+    // checkPolling(list)
 
   } catch (error) { console.error(error) } finally { tableLoading.value = false }
 }
 
-// 轮询检查
-const checkPolling = (list) => {
-  const hasPending = list.some(item => ['UPLOADING','PENDING', 'PARSING'].includes(item.status))
-  if (hasPending && !pollingTimer) {
-    pollingTimer = setInterval(() => {
-      // 静默刷新，不显示 loading
-      refreshDataSilent()
-    }, 3000) // 每3秒查一次
-  } else if (!hasPending && pollingTimer) {
-    clearInterval(pollingTimer)
-    pollingTimer = null
-  }
-}
 
-// 静默刷新 (不转圈)
-const refreshDataSilent = async () => {
-  if (!currentProject.value) return
-  const pid = currentProject.value
-  try {
-    // 请求新的统一接口
-    
-    const queryParams = {
-      projectId: pid,
-      originalName: filterFileName.value || null,
-      fileContextType: filterFileType.value || null,
-      fileState: filterStatus.value || null, 
-      pageNum: currentPage.value,
-      pageSize: pageSize.value
-    }
-    const res = await axios.post('/api/file/query', queryParams)
-    // if (res.data.code === 200 && Array.isArray(res.data.data)) {
-    //   // 优化：只更新状态字段，避免整个表格闪烁
-    //   res.data.data.forEach(newItem => {
-    //     // 找到前端列表中对应的行
-    //     const oldItem = fileTableData.value.find(item => item.rawId === newItem.id)
-    //     if (oldItem) {
-    //       // 只更新状态和错误信息，其他字段不变
-    //       oldItem.status = newItem.fileState || oldItem.status
-    //       oldItem.errorMessage = newItem.parseMessage || oldItem.errorMessage
-    //     }
-    //   })
-    // }
-    if (res.data.code === 200 && res.data.data?.records) {
-      const newList = res.data.data.records
-      total.value = res.data.data.total || 0 
-      // 只更新状态字段，避免表格闪烁
-      newList.forEach(newItem => {
-        const oldItem = fileTableData.value.find(item => item.rawId === newItem.id)
-        if (oldItem) {
-           // ========== 新增打印：重点看状态对比 ==========
-          if (oldItem.status !== (newItem.fileState || oldItem.status)) {
-            console.log('===== 轮询更新状态 =====', {
-              时间: new Date().toLocaleTimeString(),
-              文件ID: oldItem.rawId,
-              文件名: oldItem.name,
-              前端原有状态: oldItem.status,
-              后端返回状态: newItem.fileState,
-              后端返回的错误信息: newItem.parseMessage || '无', // 新增：看失败原因
-              最终状态: newItem.fileState || oldItem.status,
-              结论: oldItem.status === 'WAITING_PARSE' && newItem.fileState === 'PARSE_FAIL' 
-                ? '【后端问题】前端改了WAITING_PARSE，但后端返回PARSE_FAIL' 
-                : '正常状态更新'
-            })
-          }
-          // ========== 打印结束 ==========
-          oldItem.status = newItem.fileState || oldItem.status
-          oldItem.errorMessage = newItem.parseMessage || oldItem.errorMessage
-        }
-      })
-    }
-
-  } catch(e) {
-    console.error('静默刷新文件状态失败：', e)
-  }
-}
-// onMounted(() => {
-//   fetchProjectList()
-// })
-
-// onMounted(() => {
-//   const savedProjectId = localStorage.getItem('savedCurrentProject')
-//   if (savedProjectId) {
-//     currentProject.value = savedProjectId
-//     refreshData() // 自动请求该项目的文件列表
-//   }
-// })
 onMounted(async () => {
   await fetchProjectList() // 等待项目列表加载完成
   const savedProjectId = localStorage.getItem('savedCurrentProject')
@@ -789,7 +1035,7 @@ watch(currentProject, (newProjectId) => {
   if (newProjectId) {
     localStorage.setItem('savedCurrentProject', newProjectId)
     resetFilter()
-    refreshData()
+    // refreshData()
   } else {
     localStorage.removeItem('savedCurrentProject')
     fileTableData.value = []
@@ -798,15 +1044,23 @@ watch(currentProject, (newProjectId) => {
 
 // 销毁组件时清除轮询
 onUnmounted(() => {
-  if (pollingTimer) clearInterval(pollingTimer)
+  // 1. 移除：旧轮询逻辑（已删除旧轮询变量，这行删除）
+  // if (pollingTimer) clearInterval(pollingTimer)
+  
+  // 2. 新增：清理新轮询器
+  stopPolling();
+  
+  // 3. 修正：calibrationPdfUrl 是 ref 变量，需要加 .value
   if (calibrationPdfUrl.value) {
-    URL.revokeObjectURL(calibrationPdfUrl.value)
+    URL.revokeObjectURL(calibrationPdfUrl.value);
   }
-  tempFiles.value = []
+  
+  // 4. 保留：清理临时文件列表
+  tempFiles.value = [];
   if (uploadRef.value) {
-    uploadRef.value.clearFiles()
+    uploadRef.value.clearFiles();
   }
-})
+});
 
 // --- 3. 核心逻辑 ---
 
@@ -944,24 +1198,54 @@ const confirmUpload = () => {
   }).catch(() => {})
 }
 
+// 定义“检查状态”的接口（无 batchId，查当前项目全量文件，适配后端返回格式）
+const checkBatchStatus = async (options) => {
+  return await axios.post('/api/file/query', {
+    projectId: currentProject.value,
+    originalName: null, // 去掉筛选，查全量文件
+    fileContextType: null,
+    fileState: null,
+    pageNum: 1,
+    pageSize: 9999 // 查全量，避免分页遗漏未完成文件
+  }, { signal: options.signal });
+};
+
+
+// 初始化轮询器：传入 refreshData 作为轮询终止后的回调
+const { startPolling, stopPolling, isPolling } = useBatchPoller(checkBatchStatus, refreshData);
+
 const handleRealUpload = () => {
   if (!currentProject.value) return ElMessage.warning('请先选择作业项目')
   if (tempFiles.value.length === 0) return ElMessage.warning('请至少选择一个文件')
 
-  const loadingInstance = ElMessage({
-    message: '正在上传文件，请稍候...',
-    type: 'info',
-    icon: Loading,
-    duration: 0,
-  })
+  // 1. 【核心】先缓存要上传的文件（复制一份，避免后续清空导致引用失效）
+  const uploadFiles = [...tempFiles.value]; // 浅拷贝，保存文件引用
 
-  const formData = new FormData()
-  tempFiles.value.forEach(file => {
-    formData.append('files', file.raw) 
-  })
+  // 2. 提交即走提示（流畅体验）
+  ElMessage.success(`上传任务已提交！${uploadFiles.length} 个文件正在后台处理，可继续上传其他文件~`);
 
+  // 3. 立即关闭弹窗、清空文件列表（释放用户操作）
+  uploadDialogVisible.value = false;
+  tempFiles.value = [];
+  if (uploadRef.value) uploadRef.value.clearFiles();
+
+  // 4. 构造 FormData（使用缓存的 uploadFiles，而非已清空的 tempFiles）
+  const formData = new FormData();
+  uploadFiles.forEach(file => {
+    // 验证：确保 file.raw 存在（Element Plus Upload 组件的原始文件对象）
+    if (file.raw) {
+      formData.append('files', file.raw); // 字段名 'files' 严格匹配后端要求
+      console.log(`已添加文件：${file.raw.name}，大小：${file.raw.size} bytes`);
+    } else {
+      console.error('无效文件，缺少 raw 属性：', file);
+    }
+  });
+
+  // 验证：打印 FormData 中的文件数量（确认构造成功）
+  console.log('构造完成的 FormData 中的文件数量：', formData.getAll('files').length);
+
+  // 5. 发送请求（不手动设置 Content-Type，让 Axios 自动处理）
   axios.post('/api/file/batch-upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
     params: {
       projectId: currentProject.value,
       fileContextType: tempUploadType.value, 
@@ -969,23 +1253,26 @@ const handleRealUpload = () => {
     }
   })
   .then(res => {
-    loadingInstance.close()
-
-    if (res.data.code === 200) {
-      ElMessage.success(`成功上传 ${tempFiles.value.length} 个文件！`)
-      refreshData()
-      uploadDialogVisible.value = false
-      // 关闭后会自动触发 @closed 事件清理文件列表
+    if (res.data && res.data.code === 200) {
+      ElMessage.success('✅ 文件上传成功！');
+      startPolling(); // 单例启动，不会重复
     } else {
-      ElMessage.error(res.data.msg || '上传失败，服务器返回错误')
+      const errorMsg = res.data?.msg || '服务器返回异常，上传失败';
+      ElMessage.error(`⚠️ 上传失败：${errorMsg}，可在文件列表重试~`);
     }
   })
   .catch(err => {
-    loadingInstance.close()
-    console.error('上传出错:', err)
-    ElMessage.error('上传超时或网络连接失败')
-  })
-}
+    console.error('上传出错详情:', err);
+    let errorMsg = '未知错误，上传失败';
+    if (err.response && err.response.data && err.response.data.msg) {
+      errorMsg = err.response.data.msg;
+    } else if (err.message) {
+      errorMsg = err.message;
+    }
+    ElMessage.error(`⚠️ 上传失败：${errorMsg}，请核对参数后重试~`);
+  });
+};
+
 
 const startProcessing = (row) => {
   ElMessageBox.confirm(`确认对文件 "${row.name}" 开始智能解析吗？`, '启动解析', {
@@ -1006,7 +1293,8 @@ const startProcessing = (row) => {
           
           // 2. 触发轮询机制 (复用之前的逻辑)
           // 如果轮询没开，这行代码会把它开起来；如果开着，就什么也不做
-          checkPolling(fileTableData.value)
+          // checkPolling(fileTableData.value)
+           startPolling();
         } else {
           ElMessage.error(res.data.msg || '解析请求被拒绝')
         }
@@ -1021,16 +1309,12 @@ const startProcessing = (row) => {
 // 取消解析（仅针对排队中/正在解析的文件）
 const cancelProcessing = (row) => {
   // 1. 打印文件编号（满足你的需求，打印rawId（后端主键）和name（文件名））
-
   console.log('===== 开始取消解析 =====', {
     文件ID: row.rawId,
     文件名: row.name,
     取消前状态: row.status,
     时间: new Date().toLocaleTimeString()
   })
-
- 
-
   // 2. 确认弹窗
   ElMessageBox.confirm(
     `确认取消文件 "${row.name}" 的解析任务吗？取消后可重新发起解析。`,
@@ -1072,7 +1356,7 @@ const cancelProcessing = (row) => {
         注意: '如果后续变回解析失败，就是轮询从后端拿到了新状态'
       })
 
-      checkPolling(fileTableData.value) // 检查轮询是否需要继续
+      // checkPolling(fileTableData.value) // 检查轮询是否需要继续
 
     } catch (err) {
       console.error('取消解析失败：', err)
@@ -1093,6 +1377,58 @@ const usageCategoryMap = {
   'PUBLIC': '公共配套',
   'OTHER': '其他'
 }
+// ===== 新增：编辑功能核心变量 =====
+const editRowId = ref(''); // 当前正在编辑的行ID（用于控制单行/单单元格编辑状态）
+const editField = ref(''); // 当前正在编辑的字段名（用于控制单单元格编辑）
+const updateLoading = ref(false); // 单个字段更新的加载状态
+// ===== 修正：存储户室面积对照表ID（整份报告ID，用于查询/刷新数据） =====
+
+
+// ===== 新增：整体编辑状态开关（核心，控制表格展示/编辑切换） =====
+const isEditing = ref(false); // 是否处于编辑状态（false：展示，true：可编辑）
+const batchUpdateLoading = ref(false); // 批量保存的加载状态
+
+// ===== 新增：完整的字段映射（对应接口枚举值，用于下拉选择） =====
+// 1. 是否参与计算 映射（接口要求 0/1）
+const isCalculateMap = [
+  { label: '是', value: 1 },
+  { label: '否', value: 0 }
+];
+
+// 2. 用途类别 完整映射（对应接口的枚举值，用于编辑下拉）
+const usageCategoryOptions = [
+  { label: '住宅', value: 'RESIDENTIAL' },
+  { label: '商业', value: 'COMMERCIAL' },
+  { label: '管理用房', value: 'MANAGEMENT' },
+  { label: '其他可建设用房', value: 'OTHER_BUILDABLE' },
+  { label: '社区配套', value: 'COMMUNITY' },
+  { label: '其他公共配套', value: 'OTHER_PUBLIC' },
+  { label: '未知', value: 'UNKNOWN' }
+];
+const usageCategoryReverseMap = {
+  '住宅': 'RESIDENTIAL',
+  '商业': 'COMMERCIAL',
+  '管理用房': 'MANAGEMENT',
+  '其他可建设用房': 'OTHER_BUILDABLE',
+  '社区配套': 'COMMUNITY',
+  '其他公共配套': 'OTHER_PUBLIC',
+  '未知': 'UNKNOWN'
+};
+// 3. 面积类型 映射（对应接口的枚举值，用于编辑下拉）
+const floorAreaTypeOptions = [
+  { label: '计容', value: 'BUILDABLE' },
+  { label: '不计容', value: 'NON_BUILDABLE' },
+  { label: '未知', value: 'UNKNOWN' }
+];
+
+// ===== 新增：数据格式化工具（避免编辑时传递字符串给接口） =====
+// 格式化数字（面积字段，保留2位小数，非数字转为0）
+const formatNumber = (value) => {
+  const num = Number(value);
+  return isNaN(num) ? 0 : Number(num.toFixed(2));
+};
+
+
 
 // ========== 新增：户室面积相关变量（放在calibrationPdfUrl下方） ==========
 const roomInfoLoading = ref(false) // 户室数据加载状态
@@ -1111,37 +1447,647 @@ const calibrationLoading = ref(false)
 const currentFile = ref(null)
 const calibrationPdfUrl = ref('')
 
+// 新增：审核合计信息（对应需求的所有字段）
+const auditSummaryData = reactive({
+  pendingConfirmArea: '0.00',
+  unknownUsages: '[]',
+  unknownUsageCount: 0,
+  isVerified: 0,
+  hasUnknownUsage: 0,
+  verificationErrorReason: '-',
+  roomInfoBuildingAreaSum: '0.00',
+  roomInfoInnerAreaSum: '0.00',
+  roomInfoBalconyAreaSum: '0.00',
+  roomInfoSharedAreaSum: '0.00',
+  // 新增OCR机器识别字段，初始化默认值
+  roomInfoBuildingAreaSumFromOcr: '0.00',
+  roomInfoInnerAreaSumFromOcr: '0.00',
+  roomInfoBalconyAreaSumFromOcr: '0.00',
+  roomInfoSharedAreaSumFromOcr: '0.00'
+})
+const auditSummaryDisplay = computed(() => {
+  return {
+    // 0→未验证，1→已验证
+    isVerifiedText: auditSummaryData.isVerified === 1 ? '已验证' : '未验证',
+    // 0→无，1→有
+    hasUnknownUsageText: auditSummaryData.hasUnknownUsage === 1 ? '有' : '无',
+  };
+});
+
+const currentViewType = ref('original'); // currentViewType：original（原始）/ preprocess（预处理）
+const preprocessGridfsId = ref(''); // 预处理文件gridfsId
+const isPreprocessAvailable = computed(() => !!preprocessGridfsId.value); // 判断是否有预处理文件
+
+// ===== MD 功能：响应式变量 =====
+const recognitionMdContent = ref(''); // 存储接口返回的 MD 原始内容
+const recognitionMdLoading = ref(false); // MD 加载状态（独立，不影响其他功能）
+
+// ===== MD 功能：配置 marked（结合 highlight.js 实现代码高亮） =====
+// ===== MD 功能：配置 marked（支持图片渲染 + 安全过滤） =====
+marked.setOptions({
+  highlight: (code, lang) => {
+    if (lang && hljs.getLanguage(lang)) {
+      try {
+        return hljs.highlight(code, { language: lang }).value;
+      } catch (err) {
+        console.error('代码高亮失败：', err);
+      }
+    }
+    return hljs.highlightAuto(code).value;
+  },
+  gfm: true,
+  breaks: true,
+  sanitize: false, // 关闭默认过滤，改用自定义安全规则
+  // 自定义安全过滤（允许图片+常用标签，同时补全图片路径）
+  sanitizer: (html) => {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    // 允许的标签（只保留业务需要的标签）
+    const allowedTags = ['h1', 'h2', 'h3', 'p', 'ul', 'ol', 'li', 'pre', 'code', 'div', 'img'];
+    // 允许的标签属性
+    const allowedAttrs = {
+      img: ['src', 'alt', 'width', 'style'],
+      div: ['style'],
+      pre: ['style'],
+    };
+
+    // 遍历所有元素，过滤危险内容
+    doc.body.querySelectorAll('*').forEach(el => {
+      const tag = el.tagName.toLowerCase();
+      // 移除不允许的标签
+      if (!allowedTags.includes(tag)) {
+        el.remove();
+        return;
+      }
+      // 移除不允许的属性
+      Array.from(el.attributes).forEach(attr => {
+        if (!allowedAttrs[tag]?.includes(attr.name)) {
+          el.removeAttribute(attr.name);
+        }
+      });
+
+      // 关键：补全图片路径（替换为后端图片接口地址）
+      if (tag === 'img') {
+        let src = el.getAttribute('src');
+        if (src) {
+          // 假设后端图片接口是 /api/file/download/imgs/[图片名]
+          // 把 "imgs/xxx.jpg" 替换为 "/api/file/download/imgs/xxx.jpg"
+          const imgName = src.split('/').pop(); // 提取图片文件名
+          el.setAttribute('src', `/api/file/download/imgs/${imgName}`);
+        }
+      }
+    });
+
+    return doc.body.innerHTML;
+  }
+});
+// ===== MD 功能：加载 MD 内容（调用你的 ocr-execution-results/query 接口） =====
+const loadRecognitionMd = async (fileRecordId) => {
+  if (!fileRecordId) {
+    recognitionMdContent.value = '# 缺少文件记录ID，无法加载识别内容';
+    return;
+  }
+
+  recognitionMdLoading.value = true;
+  try {
+    const res = await axios.post(
+      '/api/data-tables/ocr-execution-results/query',
+      {
+        fileRecordId: fileRecordId,
+        pageNum: 1,
+        pageSize: 20,
+        sortField: 'createTime',
+        sortDirection: 'desc'
+      }
+    );
+
+    if (res.data.code === 200 && Array.isArray(res.data.data.records) && res.data.data.records.length > 0) {
+      const ocrResult = res.data.data.records[0];
+      recognitionMdContent.value = ocrResult.markdownContent || '# 暂无识别内容（MD格式）';
+      
+      // ===== 仅打印：原始MD中的所有img标签语句 =====
+      const mdContent = ocrResult.markdownContent || '';
+      // 正则匹配所有 <img ...> 标签（包括带换行的情况）
+      const imgTagReg = /<img[^>]*>/gi;
+      const imgTags = mdContent.match(imgTagReg) || [];
+      
+      console.log('📷 原始MD中提取到的所有img标签：');
+      if (imgTags.length > 0) {
+        imgTags.forEach((imgTag, index) => {
+          console.log(`  第${index+1}个img：`, imgTag);
+          // 额外提取每个img的src地址，方便快速查看
+          const srcReg = /src=["']([^"']+)["']/i;
+          const srcMatch = imgTag.match(srcReg);
+          const imgSrc = srcMatch ? srcMatch[1] : '无src地址';
+          console.log(`  对应src地址：`, imgSrc);
+        });
+      } else {
+        console.log('  未提取到任何img标签');
+      }
+    } else {
+      recognitionMdContent.value = '# 未查询到OCR识别结果';
+    }
+  } catch (error) {
+    console.error('MD 内容加载失败：', error);
+    recognitionMdContent.value = `# 加载失败：${error.message || '网络异常'}`;
+  } finally {
+    recognitionMdLoading.value = false;
+  }
+};
+
+
+
+const getPdfBlobUrl = async (gridfsId) => {
+  if (!gridfsId) return '';
+  try {
+    const pdfRes = await axios.get(`/api/file/download/gridfs/${gridfsId}`, {
+      responseType: 'blob'
+    });
+    const blob = new Blob([pdfRes.data], { type: 'application/pdf' });
+    // 清理旧的Blob URL，避免内存泄漏
+    if (calibrationPdfUrl.value) URL.revokeObjectURL(calibrationPdfUrl.value);
+    return URL.createObjectURL(blob);
+  } catch (error) {
+    ElMessage.warning('PDF预览失败');
+    return '';
+  }
+};
+const switchView = async (viewType) => {
+  if (currentViewType.value === viewType) return; // 避免重复切换
+  calibrationLoading.value = true;
+  try {
+     // 👉 切换到 MD 视图：加载 MD 内容
+    if (viewType === 'recognition') {
+      await loadRecognitionMd(currentFile.value?.rawId); // 传入 row.rawId
+      currentViewType.value = viewType;
+
+      // ===== 仅打印：解析后HTML中的所有img标签 =====
+      const parsedHtml = marked(recognitionMdContent.value);
+      const imgTagReg = /<img[^>]*>/gi;
+      const parsedImgTags = parsedHtml.match(imgTagReg) || [];
+      
+      console.log('📷 marked解析后HTML中的所有img标签：');
+      if (parsedImgTags.length > 0) {
+        parsedImgTags.forEach((imgTag, index) => {
+          console.log(`  第${index+1}个img：`, imgTag);
+          const srcReg = /src=["']([^"']+)["']/i;
+          const srcMatch = imgTag.match(srcReg);
+          const imgSrc = srcMatch ? srcMatch[1] : '无src地址';
+          console.log(`  对应src地址：`, imgSrc);
+        });
+      } else {
+        console.log('  解析后未保留任何img标签');
+      }
+
+      calibrationLoading.value = false;
+      return;
+    }
+
+    let targetGridfsId = '';
+    if (viewType === 'original') {
+      targetGridfsId = currentFile.value?.fileId || '';
+    } else if (viewType === 'preprocess') {
+      targetGridfsId = preprocessGridfsId.value || '';
+    }
+    // 获取新的PDF Blob URL
+    const newPdfUrl = await getPdfBlobUrl(targetGridfsId);
+    if (newPdfUrl) {
+      calibrationPdfUrl.value = newPdfUrl;
+      currentViewType.value = viewType; // 更新当前预览类型
+    }
+  } finally {
+    calibrationLoading.value = false;
+  }
+};
+// 新增：重置审核弹窗状态（避免残留）
+const resetCalibrationState = () => {
+  currentViewType.value = 'original';
+  preprocessGridfsId.value = '';
+  calibrationPdfUrl.value = '';
+  // 新增：重置 MD 内容
+  recognitionMdContent.value = '';
+  // 重置合计数据为默认值
+  Object.assign(auditSummaryData, {
+    pendingConfirmArea: '0.00',
+    unknownUsages: '[]',
+    unknownUsageCount: 0,
+    isVerified: 0,
+    hasUnknownUsage: 0,
+    verificationErrorReason: '-',
+    roomInfoBuildingAreaSum: '0.00',
+    roomInfoInnerAreaSum: '0.00',
+    roomInfoBalconyAreaSum: '0.00',
+    roomInfoSharedAreaSum: '0.00',
+    roomInfoBuildingAreaSumFromOcr: '0.00',
+    roomInfoInnerAreaSumFromOcr: '0.00',
+    roomInfoBalconyAreaSumFromOcr: '0.00',
+    roomInfoSharedAreaSumFromOcr: '0.00'
+  });
+  // 重置户室数据
+  roomInfoData.value = [];
+};
+
+// 新增：PDF单独加载状态（用于左边PDF区域，不影响右边表格）
+const pdfLoading = ref(false);
+const realSurveyReportId = ref(null); // 关键：存储 currentSummary.id（如447）
+
 // 替换原有openCalibration函数
 const openCalibration = async (row) => {
   currentFile.value = row
   showCalibration.value = true
-  calibrationLoading.value = true
+  calibrationLoading.value = true // 整体loading（短暂，用于初始化）
+  pdfLoading.value = true // PDF单独loading
   calibrationPdfUrl.value = ''
+  preprocessGridfsId.value = row.preprocessGridfsId || '';
+  currentViewType.value = 'original';
 
   try {
-   
-    const pdfRes = await axios.get(`/api/file/download/gridfs/${row.fileId}`, {
-      responseType: 'blob'  // 强制后端返回Blob（二进制文件）
-    })
-    // 生成本地Blob URL（浏览器本地临时URL，可直接渲染）
-    const blob = new Blob([pdfRes.data], { type: 'application/pdf' })
-    calibrationPdfUrl.value = URL.createObjectURL(blob)
+    // 核心优化：并行执行两个任务，互不阻塞
+    // 任务1：加载PDF（异步，不阻塞后续接口请求）
+    const loadPdfTask = async () => {
+      try {
+        const initialPdfUrl = await getPdfBlobUrl(row.fileId);
+        if (initialPdfUrl) {
+          calibrationPdfUrl.value = initialPdfUrl;
+        } else {
+          ElMessage.warning('原始文件预览失败');
+        }
+      } catch (error) {
+        ElMessage.warning('原始文件预览失败');
+      } finally {
+        pdfLoading.value = false; // PDF加载完成（无论成败），关闭PDF loading
+      }
+    };
 
-    // 2. 调用户室面积接口（去掉 rawTableData 汇总逻辑，直接初始化汇总为 0.00）
-    if (!currentProject.value || !row.rawId) { // 用 currentProject 直接替代（你已定义）
-      ElMessage.warning('缺少项目/报告ID，无法加载户室数据')
-      return
+    // 任务2：加载户室数据 + 合计数据（核心业务数据，优先执行）
+    const loadBusinessDataTask = async () => {
+      if (!currentProject.value || !row.rawId) { // 校验基础参数
+        ElMessage.warning('缺少项目/报告ID，无法加载数据')
+        calibrationLoading.value = false;
+        pdfLoading.value = false;
+        return
+      }
+      // 初始化汇总数据
+      roomSumInfo.buildingAreaSum = '0.00'
+      roomSumInfo.innerAreaSum = '0.00'
+      roomSumInfo.balconyAreaSum = '0.00'
+      roomSumInfo.sharedAreaSum = '0.00'
+
+      
+
+      // 步骤1：先调用 POST /query 接口，获取真实报告ID + 汇总数据（核心：先拿 ID）
+      try {
+        const summaryRes = await axios.post(
+          `/api/project/survey-reports/query`, // 新接口地址
+          { fileRecordId: row.rawId } // POST 请求参数：fileRecordId = row.rawId
+        );
+        console.log(row.rawId, 'query 接口响应（获取真实ID + 汇总数据）：', summaryRes.data)
+        
+        if (summaryRes.data.code === 200 && Array.isArray(summaryRes.data.data.records) && summaryRes.data.data.records.length > 0) {
+          // 提取真实报告ID（如 447），后续用于请求户室数据
+          const currentSummary = summaryRes.data.data.records[0];
+          realSurveyReportId.value = currentSummary.id; // 关键：拿到真实 ID 447
+          console.log('已存储户室面积对照表ID：', realSurveyReportId.value);
+
+          // 直接赋值汇总数据（从 query 接口的 records[0] 提取，无需遍历）
+          auditSummaryData.pendingConfirmArea = (currentSummary.pendingConfirmArea || 0).toFixed(2);
+          auditSummaryData.unknownUsages = currentSummary.unknownUsages || '[]';
+          auditSummaryData.unknownUsageCount = currentSummary.unknownUsageCount || 0;
+          auditSummaryData.isVerified = currentSummary.isVerified || 0;
+          auditSummaryData.hasUnknownUsage = currentSummary.hasUnknownUsage || 0;
+          auditSummaryData.verificationErrorReason = currentSummary.verificationErrorReason || '-';
+          auditSummaryData.roomInfoBuildingAreaSum = (currentSummary.roomInfoBuildingAreaSum || 0).toFixed(2);
+          auditSummaryData.roomInfoInnerAreaSum = (currentSummary.roomInfoInnerAreaSum || 0).toFixed(2);
+          auditSummaryData.roomInfoBalconyAreaSum = (currentSummary.roomInfoBalconyAreaSum || 0).toFixed(2);
+          auditSummaryData.roomInfoSharedAreaSum = (currentSummary.roomInfoSharedAreaSum || 0).toFixed(2);
+          // OCR 字段赋值
+          auditSummaryData.roomInfoBuildingAreaSumFromOcr = (currentSummary.roomInfoBuildingAreaSumFromOcr || 0).toFixed(2);
+          auditSummaryData.roomInfoInnerAreaSumFromOcr = (currentSummary.roomInfoInnerAreaSumFromOcr || 0).toFixed(2);
+          auditSummaryData.roomInfoBalconyAreaSumFromOcr = (currentSummary.roomInfoBalconyAreaSumFromOcr || 0).toFixed(2);
+          auditSummaryData.roomInfoSharedAreaSumFromOcr = (currentSummary.roomInfoSharedAreaSumFromOcr || 0).toFixed(2);
+          
+        } else {
+          ElMessage.warning('query 接口返回格式异常，未获取到有效数据');
+          // 汇总数据兜底
+          Object.assign(auditSummaryData, {
+            pendingConfirmArea: '0.00',
+            unknownUsageCount: 0,
+            verificationErrorReason: '-',
+            roomInfoBuildingAreaSum: '0.00'
+          });
+          return; // 没拿到有效数据，直接终止后续请求
+        }
+      } catch (error) {
+        ElMessage.warning('query 接口请求失败，无法获取汇总数据和真实报告ID');
+        console.error('query 接口异常：', error);
+        // 汇总数据兜底
+        Object.assign(auditSummaryData, {
+          pendingConfirmArea: '0.00',
+          unknownUsageCount: 0,
+          verificationErrorReason: '-',
+          roomInfoBuildingAreaSum: '0.00'
+        });
+        return; // 请求失败，终止后续请求
+      }
+
+      // 步骤2：用真实报告ID（如 447）请求户室数据接口（核心：替换原有 row.rawId）
+      if (!realSurveyReportId.value) {
+        ElMessage.warning('未获取到真实报告ID，无法加载户室数据');
+        return;
+      }
+
+      roomInfoLoading.value = true;
+      try {
+        // 关键修改：户室接口传参改为 realSurveyReportId（447），而非 row.rawId
+        const roomRes = await axios.get(`/api/project/${currentProject.value}/survey-reports/${realSurveyReportId.value}/room-info`)
+        console.log(realSurveyReportId, '户室面积接口响应：', roomRes.data)
+        
+        if (roomRes.data.code === 200 && Array.isArray(roomRes.data.data)) {
+          
+          roomInfoData.value = roomRes.data.data.map(item => ({
+            id: item.id,
+            roomLevel: item.roomLevel || '-',
+            roomNumber: item.roomNumber || '-',
+            buildingArea: (item.buildingArea || 0).toFixed(2),
+            innerArea: (item.innerArea || 0).toFixed(2),
+            balconyArea: (item.balconyArea || 0).toFixed(2),
+            sharedArea: (item.sharedArea || 0).toFixed(2),
+            isCalculate: item.isCalculate || 0,
+            usageCategory: usageCategoryMap[item.usageCategory] || '未知',
+            roomUsage: item.roomUsage || '-',
+            floorAreaType: item.floorAreaType === 'BUILDABLE' ? '计容' : '不计容'
+          }));
+         
+
+          // 兜底逻辑：如果 query 接口汇总面积为空，用户室数据计算总和
+          if (!auditSummaryData.roomInfoBuildingAreaSum && roomInfoData.value.length > 0) {
+            const buildingAreaTotal = roomInfoData.value.reduce((sum, item) => sum + Number(item.buildingArea), 0);
+            auditSummaryData.roomInfoBuildingAreaSum = buildingAreaTotal.toFixed(2);
+          }
+        } else {
+          roomInfoData.value = []
+          ElMessage.warning('暂无户室面积数据')
+        }
+      } catch (error) {
+        roomInfoData.value = []
+        ElMessage.warning('户室数据加载失败')
+        console.error('户室数据接口异常：', error)
+      } finally {
+        roomInfoLoading.value = false;
+      }
+    };
+
+    // 并行执行两个任务，互不阻塞
+    await Promise.all([loadPdfTask(), loadBusinessDataTask()]);
+
+  } catch (error) {
+    ElMessage.error('文件详情加载失败')
+    pdfLoading.value = false;
+    roomInfoLoading.value = false;
+  } finally {
+    calibrationLoading.value = false; // 所有任务完成，关闭整体loading
+  }
+}
+
+
+const pdfLoaded = () => {
+  console.log('PDF加载成功')
+}
+const pdfLoadError = () => {
+  ElMessage.warning('PDF预览失败，可通过下载接口查看文件')
+  calibrationPdfUrl.value = '' // 清空无效地址
+}
+
+
+
+
+const handleAuditPass = () => {
+  ElMessage.success('审核通过');
+  showCalibration.value = false;
+  // ===== 新增：重置所有状态 =====
+  resetCalibrationState();
+  refreshData();
+};
+
+const originalRoomInfoData = ref([]);
+// ===== 新增：进入编辑模式 =====
+const enterEditMode = () => {
+  if (roomInfoData.value.length === 0) {
+    ElMessage.warning('暂无户室数据可编辑');
+    return;
+  }
+  originalRoomInfoData.value = JSON.parse(JSON.stringify(roomInfoData.value));
+  // 切换编辑状态，表格变为可编辑
+  isEditing.value = true;
+  ElMessage.info('已进入编辑模式，修改完成后请点击「保存修改」');
+};
+// 新增：对比原始数据和当前数据，返回修改过的户室列表
+const getModifiedRoomList = () => {
+  const modifiedList = [];
+  // 遍历当前数据，和原始数据对比
+  roomInfoData.value.forEach((currentRow, index) => {
+    const originalRow = originalRoomInfoData.value[index];
+    if (!originalRow) return;
+
+    // 对比核心字段（有任意一个字段不同，就是修改过的）
+    const isModified = 
+      currentRow.roomLevel !== originalRow.roomLevel ||
+      currentRow.roomNumber !== originalRow.roomNumber ||
+      currentRow.buildingArea !== originalRow.buildingArea ||
+      currentRow.innerArea !== originalRow.innerArea ||
+      currentRow.balconyArea !== originalRow.balconyArea ||
+      currentRow.sharedArea !== originalRow.sharedArea ||
+      currentRow.isCalculate !== originalRow.isCalculate ||
+      currentRow.usageCategory !== originalRow.usageCategory ||
+      currentRow.roomUsage !== originalRow.roomUsage ||
+      currentRow.floorAreaType !== originalRow.floorAreaType;
+
+    // 如果修改过，加入待保存列表
+    if (isModified) {
+      modifiedList.push(currentRow);
     }
-    // 初始化汇总数据（无 rawTableData，直接设为 0.00）
-    roomSumInfo.buildingAreaSum = '0.00'
-    roomSumInfo.innerAreaSum = '0.00'
-    roomSumInfo.balconyAreaSum = '0.00'
-    roomSumInfo.sharedAreaSum = '0.00'
+  });
+  return modifiedList;
+};
 
-    // 3. 请求户室面积数据（保留核心逻辑）
-    const res = await axios.get(`/api/project/${currentProject.value}/survey-reports/${row.rawId}/room-info`)
-    if (res.data.code === 200 && Array.isArray(res.data.data)) {
-      roomInfoData.value = res.data.data.map(item => ({
+// ===== 新增：退出编辑模式（不保存） =====
+const exitEditMode = () => {
+  ElMessageBox.confirm(
+    '确定退出编辑模式吗？未保存的修改将全部丢失。',
+    '提示',
+    {
+      confirmButtonText: '确定退出',
+      cancelButtonText: '继续编辑',
+      type: 'warning'
+    }
+  ).then(async () => {
+    // 切换回展示状态
+    isEditing.value = false;
+    // 重新加载户室数据，恢复原始数据（避免未保存修改残留）
+    if (currentProject.value && realSurveyReportId.value) {
+      roomInfoLoading.value = true;
+      try {
+        const roomRes = await axios.get(`/api/project/${currentProject.value}/survey-reports/${realSurveyReportId.value}/room-info`);
+        if (roomRes.data.code === 200 && Array.isArray(roomRes.data.data)) {
+          roomInfoData.value = roomRes.data.data.map(item => ({
+            id: item.id,
+            roomLevel: item.roomLevel || '-',
+            roomNumber: item.roomNumber || '-',
+            buildingArea: (item.buildingArea || 0).toFixed(2),
+            innerArea: (item.innerArea || 0).toFixed(2),
+            balconyArea: (item.balconyArea || 0).toFixed(2),
+            sharedArea: (item.sharedArea || 0).toFixed(2),
+            isCalculate: item.isCalculate || 0,
+            usageCategory: usageCategoryMap[item.usageCategory] || '未知',
+            roomUsage: item.roomUsage || '-',
+            floorAreaType: item.floorAreaType === 'BUILDABLE' ? '计容' : '不计容'
+          }));
+        }
+        ElMessage.success('已退出编辑模式，恢复原始数据');
+      } catch (error) {
+        console.error('重新加载户室数据失败：', error);
+        ElMessage.warning('退出编辑模式成功，但原始数据加载失败');
+      } finally {
+        roomInfoLoading.value = false;
+      }
+    }
+  }).catch(() => {
+    // 取消退出，继续编辑
+  });
+};
+
+// ===== 完善：批量保存修改（核心，调用 PUT /project/room-info/update 接口） =====
+const handleSaveData = async () => {
+  if (roomInfoData.value.length === 0) {
+    ElMessage.warning('暂无户室数据可保存');
+    return;
+  }
+  if (!realSurveyReportId.value) {
+    ElMessage.warning('缺少户室面积对照表ID，无法保存');
+    return;
+  }
+
+  // 第一步：获取修改过的户室列表（核心优化：只处理修改过的）
+  const modifiedRoomList = getModifiedRoomList();
+  if (modifiedRoomList.length === 0) {
+    ElMessage.info('暂无数据修改，无需保存');
+    isEditing.value = false;
+    return;
+  }
+
+  // 确认保存
+  ElMessageBox.confirm(
+    `确定保存 ${modifiedRoomList.length} 条修改后的户室数据吗？保存后将无法撤销。`,
+    '提示',
+    {
+      confirmButtonText: '确定保存',
+      cancelButtonText: '取消',
+      type: 'primary'
+    }
+  ).then(async () => {
+    batchUpdateLoading.value = true;
+    let successCount = 0; // 保存成功数量
+    let failCount = 0; // 保存失败数量
+
+    // 第二步：只遍历修改过的户室，发请求（不再遍历所有）
+    for (const row of modifiedRoomList) {
+      if (!row.id) {
+        failCount++;
+        continue;
+      }
+
+      // 数据预处理（适配接口要求：格式转换、空值兜底）
+      const roomInfoUpdateDTO = {
+        id: row.id, // 接口必填：户室唯一ID（row.id）
+        roomLevel: row.roomLevel || '',
+        roomNumber: row.roomNumber || '',
+        buildingArea: isNaN(Number(row.buildingArea)) ? 0 : Number(row.buildingArea),
+        innerArea: isNaN(Number(row.innerArea)) ? 0 : Number(row.innerArea),
+        balconyArea: isNaN(Number(row.balconyArea)) ? 0 : Number(row.balconyArea),
+        sharedArea: isNaN(Number(row.sharedArea)) ? 0 : Number(row.sharedArea),
+        roomUsage: row.roomUsage || '',
+        isCalculate: isNaN(Number(row.isCalculate)) ? 0 : Number(row.isCalculate),
+         usageCategory: usageCategoryReverseMap[row.usageCategory] || 'UNKNOWN',
+        floorAreaType: row.floorAreaType === '计容' ? 'BUILDABLE' : (row.floorAreaType === '不计容' ? 'NON_BUILDABLE' : 'UNKNOWN')
+      };
+      console.log(`保存户室ID ${row.id} 数据：`, roomInfoUpdateDTO);
+
+      try {
+        // 修正后的接口地址（带 /api 前缀）
+        const res = await axios.put(
+          '/api/project/room-info/update', // 已补充 /api 前缀
+          roomInfoUpdateDTO 
+        );
+
+        if (res.data.code === 200) {
+          successCount++;
+        } else {
+          failCount++;
+          console.error(`户室ID ${row.id} 保存失败：`, res.data.msg);
+        }
+      } catch (error) {
+        failCount++;
+        console.error(`户室ID ${row.id} 保存异常：`, error);
+      }
+    }
+
+    // 保存完成后处理
+    batchUpdateLoading.value = false;
+    isEditing.value = false; // 切换回展示状态
+
+    // 提示保存结果
+    if (failCount === 0) {
+      ElMessage.success(`全部 ${successCount} 条修改数据保存成功！`);
+    } else {
+      ElMessage.warning(`保存完成：成功 ${successCount} 条，失败 ${failCount} 条，请查看控制台日志`);
+    }
+
+    // 重新加载户室数据和汇总数据，保证数据一致性
+    await reloadRoomAndSummaryData();
+
+  }).catch(() => {
+    // 取消保存
+  });
+};
+
+// ===== 新增：重新加载户室数据和汇总数据（保存后刷新） =====
+const reloadRoomAndSummaryData = async () => {
+  if (!currentProject.value || !realSurveyReportId.value || !currentFile.value) {
+    return;
+  }
+
+  // 1. 重新加载汇总数据
+  try {
+    const summaryRes = await axios.post(
+      `/api/project/survey-reports/query`,
+      { fileRecordId: currentFile.value.rawId }
+    );
+    if (summaryRes.data.code === 200 && Array.isArray(summaryRes.data.data.records) && summaryRes.data.data.records.length > 0) {
+      const currentSummary = summaryRes.data.data.records[0];
+      auditSummaryData.pendingConfirmArea = (currentSummary.pendingConfirmArea || 0).toFixed(2);
+      auditSummaryData.unknownUsages = currentSummary.unknownUsages || '[]';
+      auditSummaryData.unknownUsageCount = currentSummary.unknownUsageCount || 0;
+      auditSummaryData.isVerified = currentSummary.isVerified || 0;
+      auditSummaryData.hasUnknownUsage = currentSummary.hasUnknownUsage || 0;
+      auditSummaryData.verificationErrorReason = currentSummary.verificationErrorReason || '-';
+      auditSummaryData.roomInfoBuildingAreaSum = (currentSummary.roomInfoBuildingAreaSum || 0).toFixed(2);
+      auditSummaryData.roomInfoInnerAreaSum = (currentSummary.roomInfoInnerAreaSum || 0).toFixed(2);
+      auditSummaryData.roomInfoBalconyAreaSum = (currentSummary.roomInfoBalconyAreaSum || 0).toFixed(2);
+      auditSummaryData.roomInfoSharedAreaSum = (currentSummary.roomInfoSharedAreaSum || 0).toFixed(2);
+      auditSummaryData.roomInfoBuildingAreaSumFromOcr = (currentSummary.roomInfoBuildingAreaSumFromOcr || 0).toFixed(2);
+      auditSummaryData.roomInfoInnerAreaSumFromOcr = (currentSummary.roomInfoInnerAreaSumFromOcr || 0).toFixed(2);
+      auditSummaryData.roomInfoBalconyAreaSumFromOcr = (currentSummary.roomInfoBalconyAreaSumFromOcr || 0).toFixed(2);
+      auditSummaryData.roomInfoSharedAreaSumFromOcr = (currentSummary.roomInfoSharedAreaSumFromOcr || 0).toFixed(2);
+    }
+  } catch (error) {
+    console.error('重新加载汇总数据失败：', error);
+  }
+
+  // 2. 重新加载户室数据
+  roomInfoLoading.value = true;
+  try {
+    const roomRes = await axios.get(`/api/project/${currentProject.value}/survey-reports/${realSurveyReportId.value}/room-info`);
+    if (roomRes.data.code === 200 && Array.isArray(roomRes.data.data)) {
+      roomInfoData.value = roomRes.data.data.map(item => ({
         id: item.id,
         roomLevel: item.roomLevel || '-',
         roomNumber: item.roomNumber || '-',
@@ -1154,26 +2100,15 @@ const openCalibration = async (row) => {
         roomUsage: item.roomUsage || '-',
         floorAreaType: item.floorAreaType === 'BUILDABLE' ? '计容' : '不计容'
       }));
-    } else {
-      roomInfoData.value = []
-      ElMessage.warning('暂无户室面积数据')
     }
   } catch (error) {
-    ElMessage.error('文件详情加载失败')
+    console.error('重新加载户室数据失败：', error);
   } finally {
-    calibrationLoading.value = false
+    roomInfoLoading.value = false;
   }
-}
-const pdfLoaded = () => {
-  console.log('PDF加载成功')
-}
-const pdfLoadError = () => {
-  ElMessage.warning('PDF预览失败，可通过下载接口查看文件')
-  calibrationPdfUrl.value = '' // 清空无效地址
-}
+};
 
-const handleSaveData = () => { ElMessage.success('保存成功') }
-const handleAuditPass = () => { ElMessage.success('审核通过'); showCalibration.value = false; refreshData() }
+
 
 
 </script>
@@ -1213,7 +2148,18 @@ const handleAuditPass = () => { ElMessage.success('审核通过'); showCalibrati
 .pdf-toolbar { height: 48px; background: #fff; border-bottom: 1px solid #ccc; display: flex; align-items: center; justify-content: center; }
 .divider { width: 1px; height: 20px; background: #ddd; margin: 0 15px; }
 .pdf-canvas { flex: 1; display: flex; justify-content: center; align-items: center; flex-direction: column; color: #ccc; }
-.right-panel { width: 50%; overflow-y: auto; padding: 0; background: #f2f4f7; }
+/* 找到你现有样式中的 .right-panel，修改/补充如下样式 */
+.right-panel {
+  width: 50%;
+  /* 核心修改：启用 flex 垂直布局 */
+  display: flex;
+  flex-direction: column;
+  /* 原有样式保留 */
+  overflow: hidden !important; /* 取消原有 overflow-y: auto，交给子元素处理 */
+  background: #f2f4f7;
+  padding: 16px; /* 加一点内边距，避免内容贴边 */
+  box-sizing: border-box;
+}
 .excel-sheet-card { background: white; margin: 20px; border: 1px solid #dcdfe6; border-radius: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); overflow: hidden; }
 .excel-header { background: #e8f4ff; padding: 10px 15px; border-bottom: 1px solid #dcdfe6; }
 .sheet-title { font-weight: bold; color: #409eff; font-size: 14px; display: flex; align-items: center; }
@@ -1284,6 +2230,50 @@ const handleAuditPass = () => { ElMessage.success('审核通过'); showCalibrati
 
 .right-panel {
   overflow-y: auto !important; /* 右面板内容多了才会出现滚动条，不影响整体 */
+}
+
+/* MD 内容样式优化 */
+:deep(.md-content) {
+  line-height: 1.8;
+  font-size: 14px;
+  color: #303133;
+}
+:deep(.md-content h1) {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 20px 0 16px;
+  color: #1f2329;
+  border-bottom: 1px solid #e4e7ed;
+  padding-bottom: 8px;
+}
+:deep(.md-content h2) {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 18px 0 14px;
+  color: #1f2329;
+}
+:deep(.md-content ul) {
+  margin: 10px 0 10px 24px;
+  list-style: disc;
+}
+:deep(.md-content pre) {
+  margin: 16px 0;
+  padding: 16px;
+  border-radius: 8px;
+  background: #f5f7fa;
+  overflow-x: auto;
+}
+:deep(.md-content code) {
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: #f5f7fa;
+  font-size: 13px;
+  color: #f56c6c;
+}
+:deep(.md-content pre code) {
+  padding: 0;
+  background: transparent;
+  color: #303133;
 }
 
 

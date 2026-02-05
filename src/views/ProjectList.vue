@@ -86,17 +86,35 @@
             <el-card class="table-card no-print" shadow="never">
               <template #header>
                 <div class="card-header">
-                  <span class="main-report-title">{{ currentProjectInfo.name || '项目' }}房产实测信息汇总表</span>
-                  <span style="font-weight: normal; color: #606266;">
-                        (
-                        已上传实测报告：<strong style="color: #409EFF">{{ surveyStats.total }}</strong> 份，
-                        解析成功：<strong style="color: #67C23A">{{ surveyStats.success }}</strong> 份,
-                        <el-divider direction="vertical" />
-                        校验通过：<strong style="color: #67C23A">{{ surveyStats.verified }}</strong> 份，
-                        校验不同：<strong style="color: #F56C6C">{{ surveyStats.unverified }}</strong> 份
-                        )
-                      </span>
-                </div>              
+                  <!-- 左侧：标题 + 统计信息 -->
+                  <div class="header-left">
+                    <span class="main-report-title">{{ currentProjectInfo.name || '项目' }}房产实测信息汇总表</span>
+                    <span style="font-weight: normal; color: #606266;">
+                      (
+                      已上传实测报告：<strong style="color: #409EFF">{{ surveyStats.total }}</strong> 份，
+                      解析成功：<strong style="color: #67C23A">{{ surveyStats.success }}</strong> 份,
+                      <el-divider direction="vertical" />
+                      校验通过：<strong style="color: #67C23A">{{ surveyStats.verified }}</strong> 份，
+                      校验不同：<strong style="color: #F56C6C">{{ surveyStats.unverified }}</strong> 份
+                      )
+                    </span>
+                  </div>
+                  
+                  <!-- 右侧：刷新按钮（新增） -->
+                  <el-button
+                    type="primary"
+                    size="default"
+                    icon="Refresh"
+                    :loading="refreshBtnLoading"
+                    :disabled="isRefreshCd || !currentProjectInfo.id"
+                    @click="handleRefreshSurveyData"
+                    class="refresh-btn"
+                  >
+                    <span v-if="!isRefreshCd">刷新实测报告数据</span>
+                    <span v-else>冷却中（{{ cdRemaining }}s）</span>
+                  </el-button>
+                </div>     
+
               </template>              
                 <el-table 
                   :data="displayTableData" 
@@ -245,6 +263,110 @@
                 <template #default="{ row }"><el-button link type="primary" icon="View" @click="handlePreview(row)">在线查看</el-button><el-button link type="primary" icon="Download" @click="handleDownload(row)">下载PDF</el-button></template>
               </el-table-column>
             </el-table>
+          </div>
+        </el-tab-pane>
+
+        <!-- 第四个tab：项目信息更新（文档信息栏） -->
+        <el-tab-pane name="projectEdit" class="no-print">
+          <template #label>
+            <span class="custom-tab-label">
+              <el-icon><Document /></el-icon> 项目信息更新
+            </span>
+          </template>
+          <div class="tab-content">
+            <!-- 项目更新表单（包裹栅格，优化布局） -->
+            <el-form
+              ref="projectEditRef"
+              :model="projectUpdateForm"
+              :rules="projectEditRules"
+              label-width="120px"
+              class="project-edit-form"
+            >
+              <!-- 隐藏ID（已修改） -->
+              <el-form-item prop="id" hidden>
+                <span v-text="projectUpdateForm.id" style="display: none;"></span>
+              </el-form-item>
+
+              <!-- 用栅格布局包裹表单项，2列布局，统一宽度 -->
+              <el-row :gutter="20" class="form-row">
+                <!-- 第一列：项目名称 -->
+                <el-col :span="12">
+                  <el-form-item label="项目名称" prop="projectName">
+                    <el-input v-model="projectUpdateForm.projectName" placeholder="请输入项目名称（如：XX住宅小区项目）" style="width: 100%;" />
+                  </el-form-item>
+                </el-col>
+                <!-- 第二列：项目编号 -->
+                <el-col :span="12">
+                  <el-form-item label="项目编号" prop="projectCode">
+                    <el-input v-model="projectUpdateForm.projectCode" placeholder="请输入项目编号（如：PRJ2025001）" style="width: 100%;" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
+              <el-row :gutter="20" class="form-row">
+                <!-- 第一列：项目位置（跨2列，因为长度较长） -->
+                <el-col :span="24">
+                  <el-form-item label="项目位置" prop="location">
+                    <el-input v-model="projectUpdateForm.location" placeholder="请输入行政区+详细地址" style="width: 100%;" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
+              <el-row :gutter="20" class="form-row">
+                <!-- 第一列：占地面积 -->
+                <el-col :span="12">
+                  <el-form-item label="占地面积（㎡）" prop="landArea">
+                    <el-input-number v-model="projectUpdateForm.landArea" placeholder="请输入占地面积" style="width: 100%;" :precision="2" :min="0" />
+                  </el-form-item>
+                </el-col>
+                <!-- 第二列：规划用途 -->
+                <el-col :span="12">
+                  <el-form-item label="规划用途" prop="plannedUse">
+                    <el-select v-model="projectUpdateForm.plannedUse" placeholder="请选择规划用途" style="width: 100%;" clearable>
+                      <el-option label="住宅" value="住宅" />
+                      <el-option label="商业" value="商业" />
+                      <el-option label="办公" value="办公" />
+                      <el-option label="商住混合" value="商住混合" />
+                      <el-option label="其他" value="其他" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
+              <el-row :gutter="20" class="form-row">
+                <!-- 第一列：项目时间 -->
+                <el-col :span="12">
+                  <el-form-item label="项目时间" prop="projectTime">
+                    <el-date-picker
+                      v-model="projectUpdateForm.projectTime"
+                      type="month"
+                      placeholder="请选择项目时间"
+                      format="YYYY年MM月"
+                      value-format="YYYY年MM月"
+                      style="width: 100%;"
+                      clearable
+                    />
+                  </el-form-item>
+                </el-col>
+                <!-- 第二列：留空（保持布局对称，可选） -->
+                <el-col :span="12"></el-col>
+              </el-row>
+
+              <el-row :gutter="20" class="form-row">
+                <!-- 备注（跨2列） -->
+                <el-col :span="24">
+                  <el-form-item label="备注" prop="remark">
+                    <el-input v-model="projectUpdateForm.remark" type="textarea" rows="3" placeholder="请输入备注信息" style="width: 100%;" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
+              <!-- 提交/重置按钮 -->
+              <el-form-item label="" class="form-btn-group">
+                <el-button type="primary" icon="Check" @click="submitProjectUpdate" :loading="projectEditLoading">提交更新</el-button>
+                <el-button icon="Refresh" @click="resetProjectForm" style="margin-left: 10px;">重置表单</el-button>
+              </el-form-item>
+            </el-form>
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -436,9 +558,16 @@ import { ref, reactive, onMounted, computed, watch , onUnmounted} from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Search, Download, DataAnalysis, Setting, View, List, Printer, Document, Collection, WarningFilled, Check } from '@element-plus/icons-vue'
 import { ElMessage, ElLoading } from 'element-plus'
-import * as XLSX from 'xlsx' 
+
 import axios from 'axios'
 import { usePrint } from '@/hooks/usePrint.ts'
+
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
+import { ElForm } from 'element-plus';
+
+
+
 // const handlePrint = () => window.print()
 const { isPrinting, triggerPrint } = usePrint()
 const handlePrint = () => {
@@ -485,6 +614,10 @@ const startResize = (type, e) => {
 }
 // 组件卸载时清理事件（避免内存泄漏）
 onUnmounted(() => {
+  if (cdTimer) {
+    clearInterval(cdTimer);
+  }
+
   document.removeEventListener('mousemove', () => {})
   document.removeEventListener('mouseup', () => {})
 })
@@ -811,8 +944,55 @@ const displayTableData = computed(() => {
   return rawTableData.value; // 直接返回，无需解构baseMap
 });
 
+// --- 新增：刷新按钮相关状态（冷却时间建议设60秒，可修改）---
+const REFRESH_CD_SECONDS = 15; // 刷新冷却时间，单位：秒
+const refreshBtnLoading = ref(false); // 刷新按钮加载状态
+const isRefreshCd = ref(false); // 是否处于冷却中
+const cdRemaining = ref(REFRESH_CD_SECONDS); // 剩余冷却时间
+let cdTimer = null; // 冷却倒计时定时器（非响应式，仅用于存储定时器ID）
 
+// --- 新增：核心刷新函数 ---
+// --- 核心刷新函数（修改：点击即冷却）---
+const handleRefreshSurveyData = async () => {
+  // 1. 校验：是否选中项目
+  if (!currentProjectInfo.id) {
+    ElMessage.warning('请先选择项目再进行刷新');
+    return;
+  }
 
+  // 2. 校验：是否已在冷却中（防止重复点击）
+  if (isRefreshCd.value) {
+    ElMessage.warning(`请等待 ${cdRemaining.value} 秒后再刷新`);
+    return;
+  }
+
+  // 3. 【关键修改：点击即冷却，提前启动倒计时】
+  startRefreshCd();
+
+  try {
+    // 4. 开始刷新：设置按钮加载状态
+    refreshBtnLoading.value = true;
+    ElMessage.info('正在刷新项目实测报告数据，请稍候...');
+
+    // 5. 调用刷新接口（POST 请求，对应你提供的接口地址）
+    await axios.post(`/api/project/${currentProjectInfo.id}/refresh-survey-reports`);
+
+    // 6. 刷新成功：重新拉取汇总表数据（核心：刷新后更新页面展示）
+    await fetchSurveyReports(currentProjectInfo.id);
+
+    // 7. 提示用户刷新成功
+    ElMessage.success('项目实测报告数据刷新完成，已重新加载汇总表');
+
+  } catch (error) {
+    // 8. 异常处理：提示错误信息
+    console.error('刷新实测报告数据失败：', error);
+    ElMessage.error('刷新失败，请检查网络或稍后重试');
+
+  } finally {
+    // 9. 无论成功失败：仅结束加载状态（冷却已提前启动，无需再处理）
+    refreshBtnLoading.value = false;
+  }
+};
 
 
 // --- 交互事件 ---
@@ -848,48 +1028,99 @@ const handleDownload = (row) => {
   }
 }
 
-const handleExportExcel = () => {
-  // 1. 构建多级表头的二维数组（第一行主表头，第二行子表头）
-  const headerAOA = [
-    ['序号', '工程名称', '实测总面积', '计容建筑面积', '计容建筑面积', '计容建筑面积', '计容建筑面积', '不计容建筑面积', '不计容建筑面积', '报告书编号'],
-    ['', '', '', '商业', '住宅', '物管', '其他', '社区', '公用', '']
+const handleExportExcel = async () => {
+  // 1. 创建一个新的 Excel 工作簿
+  const workbook = new ExcelJS.Workbook();
+  // 2. 添加一个工作表，命名为「房产实测汇总表」
+  const worksheet = workbook.addWorksheet('房产实测汇总表');
+
+  // 3. 构建表头数据（多级表头，和你之前的结构一致）
+  const headerData = [
+    [
+      '序号', '工程名称', '不动产权证编号', '合同/批文编号', '期数',
+      '实测总面积', '计容建筑面积', '计容建筑面积', '计容建筑面积', '计容建筑面积',
+      '不计容建筑面积', '不计容建筑面积', '报告书编号', '备注'
+    ],
+    [
+      '', '', '', '', '',
+      '', '商业', '住宅', '物管', '其他',
+      '社区', '公用', '', ''
+    ]
   ];
 
-  // 2. 构建数据行（对应表头的列顺序）
+  // 4. 构建表格数据（和你之前的结构一致）
   const dataRows = displayTableData.value.map((item, index) => [
-    index + 1, // 序号
-    item.projectName, // 工程名称
-    item.totalArea, // 实测总面积
-    item.calcCommercial, // 计容-商业
-    item.calcResidential, // 计容-住宅
-    item.calcPropMgmt, // 计容-物管
-    item.calcOther, // 计容-其他
-    item.nonCalcCommunity, // 不计容-社区
-    item.nonCalcOther, // 不计容-公用
-    item.reportNo // 报告书编号
+    index + 1,
+    item.projectName,
+    item.certNo,
+    item.contractNo,
+    item.phase,
+    Number(item.totalArea).toFixed(2),
+    Number(item.calcCommercial).toFixed(2),
+    Number(item.calcResidential).toFixed(2),
+    Number(item.calcPropMgmt).toFixed(2),
+    Number(item.calcOther).toFixed(2),
+    Number(item.nonCalcCommunity).toFixed(2),
+    Number(item.nonCalcOther).toFixed(2),
+    item.reportNo,
+    item.remarks
   ]);
 
-  // 3. 创建工作表并写入表头
-  const worksheet = XLSX.utils.aoa_to_sheet(headerAOA);
-  // 4. 追加数据行（从第2行开始，因为表头占了2行）
-  XLSX.utils.sheet_add_aoa(worksheet, dataRows, { origin: 2 });
+  // 5. 写入表头到工作表（前 2 行是表头）
+  headerData.forEach((row, rowIndex) => {
+    worksheet.addRow(row);
+    // 表头加粗 + 居中（水平+垂直）
+    row.forEach((_, colIndex) => {
+      const cell = worksheet.getCell(rowIndex + 1, colIndex + 1); // exceljs 行/列从 1 开始
+      cell.font = { bold: true };
+      cell.alignment = {
+        horizontal: 'center',
+        vertical: 'middle',
+        wrapText: true // 自动换行（防止表头内容溢出）
+      };
+    });
+  });
 
-  // 5. 设置合并单元格规则（对应表头的合并范围）
-  worksheet['!merges'] = [
-    // 合并“计容建筑面积”：第1行（索引0）第3列到第6列
-    { s: { r: 0, c: 3 }, e: { r: 0, c: 6 } },
-    // 合并“不计容建筑面积”：第1行第7列到第8列
-    { s: { r: 0, c: 7 }, e: { r: 0, c: 8 } }
+  // 6. 写入表格数据到工作表
+  dataRows.forEach((row) => {
+    const addedRow = worksheet.addRow(row);
+    // 数据单元格居中（水平+垂直）
+    addedRow.eachCell((cell) => {
+      cell.alignment = {
+        horizontal: 'center',
+        vertical: 'middle'
+      };
+    });
+  });
+
+  // 7. 设置合并单元格（和你之前的规则一致）
+  worksheet.mergeCells('G1:J1'); // 合并「计容建筑面积」（第 7 列到第 10 列，第 1 行）
+  worksheet.mergeCells('K1:L1'); // 合并「不计容建筑面积」（第 11 列到第 12 列，第 1 行）
+
+  // 8. 设置列宽（和你之前的需求一致，合理分配列宽）
+  const columnWidths = [
+    6, 20, 20, 18, 8, 12,
+    10, 10, 10, 10, 10, 10,
+    16, 12
   ];
+  worksheet.columns.forEach((col, index) => {
+    col.width = columnWidths[index] || 10; // 给每一列设置对应宽度
+  });
 
-  // 6. 生成Excel文件
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "房产实测汇总表");
-  XLSX.writeFile(workbook, `${currentProjectInfo.name || '项目'}房产实测汇总表.xlsx`);
-  ElMessage.success('导出成功') 
-}
+  // 9. 设置行高（表头行高略高，更美观）
+  worksheet.getRow(1).height = 30; // 第 1 行（合并表头）行高
+  worksheet.getRow(2).height = 25; // 第 2 行（子表头）行高
 
+  // 10. 导出 Excel 文件并下载
+  const buffer = await workbook.xlsx.writeBuffer(); // 生成二进制缓冲区
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  });
+  saveAs(blob, `${currentProjectInfo.name || '项目'}房产实测汇总表.xlsx`);
 
+  // 11. 提示导出成功
+  ElMessage.success('Excel 导出成功！');
+};
 
 const detailDialogVisible = ref(false)
 
@@ -923,6 +1154,7 @@ const viewDetail = async (row) => {
 
     // 调用户室面积接口
     const res = await axios.get(`/api/project/${currentProjectInfo.id}/survey-reports/${row.id}/room-info`)
+    console.log(currentProjectInfo.id, row.id, '户室面积接口响应：')
     if (res.data.code === 200 && Array.isArray(res.data.data)) {
       // 格式化数据（保留重要字段，处理小数位数）
       roomInfoData.value = res.data.data.map(item => ({
@@ -953,39 +1185,393 @@ const viewDetail = async (row) => {
 }
 const isTarget = () => false
 
+// --- 新增：重置冷却状态函数 ---
+const resetRefreshCdStatus = () => {
+  isRefreshCd.value = false;
+  cdRemaining.value = REFRESH_CD_SECONDS;
+  // 清除定时器
+  if (cdTimer) {
+    clearInterval(cdTimer);
+    cdTimer = null;
+  }
+  // 清除当前项目的冷却缓存
+  const cdStorageKey = currentProjectInfo.id ? `refresh_cd_${currentProjectInfo.id}` : null;
+  if (cdStorageKey) localStorage.removeItem(cdStorageKey);
+};
+
+// --- 新增：获取当前项目的冷却缓存Key（和项目ID绑定）---
+const getRefreshCdStorageKey = () => {
+  return currentProjectInfo.id ? `refresh_cd_${currentProjectInfo.id}` : null;
+};
+
+// --- 新增：启动冷却倒计时函数 ---
+const startRefreshCd = () => {
+  const cdStorageKey = getRefreshCdStorageKey();
+  if (!cdStorageKey) return; // 没有项目ID则不启动
+
+  isRefreshCd.value = true;
+  cdRemaining.value = REFRESH_CD_SECONDS;
+
+  // 记录冷却开始时间到本地缓存（和项目绑定）
+  const cdStartAt = Date.now();
+  localStorage.setItem(cdStorageKey, JSON.stringify({
+    startAt: cdStartAt,
+    remaining: REFRESH_CD_SECONDS
+  }));
+
+  // 清除旧定时器
+  if (cdTimer) {
+    clearInterval(cdTimer);
+  }
+
+  // 新定时器：每秒更新剩余时间 + 缓存
+  cdTimer = setInterval(() => {
+    cdRemaining.value--;
+
+    // 更新本地缓存的剩余时间
+    const storedCd = JSON.parse(localStorage.getItem(cdStorageKey) || '{}');
+    if (storedCd.startAt) {
+      storedCd.remaining = cdRemaining.value;
+      localStorage.setItem(cdStorageKey, JSON.stringify(storedCd));
+    }
+
+    // 冷却结束：重置状态 + 清除缓存
+    if (cdRemaining.value <= 0) {
+      clearInterval(cdTimer);
+      cdTimer = null;
+      isRefreshCd.value = false;
+      localStorage.removeItem(cdStorageKey);
+    }
+  }, 1000);
+};
+
+
+
+// 项目更新表单引用
+const projectEditRef = ref(null);
+// 项目更新表单加载/提交状态
+const projectEditLoading = ref(false);
+// 项目更新表单数据（对应 ProjectUpdateDTO）
+const projectUpdateForm = reactive({
+  id: '', // 必填，项目ID
+  projectName: '',
+  projectCode: '',
+  location: '',
+  landArea: null,
+  plannedUse: '',
+  projectTime: '',
+  remark: ''
+});
+// 项目更新表单校验规则
+const projectEditRules = reactive({
+  id: [{ required: true, message: '项目ID不能为空', trigger: 'blur' }],
+   projectTime: [{ required: false, message: '项目时间格式错误', trigger: 'change' }]
+});
+// 1. 拉取项目原始数据（填充表单）：调用 POST /project/projects/query
+
+// 1. 拉取项目原始数据（填充表单）：调用 POST /project/projects/query
+const fetchProjectOriginalData = async (projectId) => {
+  if (!projectId) return;
+  try {
+    const res = await axios.post('/api/project/projects/query', {
+      projectId: Number(projectId)
+    });
+    if (res.data.code === 200 && res.data.data.records.length > 0) {
+      const projectOriginal = res.data.data.records[0];
+      // 🔥 核心修改：删除 Object.defineProperty，直接赋值 ID（无需冻结，前端无修改入口）
+      projectUpdateForm.id = projectOriginal.id;
+      
+      // 其他字段赋值不变
+      projectUpdateForm.projectName = projectOriginal.projectName || '';
+      projectUpdateForm.projectCode = projectOriginal.projectCode || '';
+      projectUpdateForm.location = projectOriginal.location || '';
+      projectUpdateForm.landArea = projectOriginal.landArea || null;
+      projectUpdateForm.plannedUse = projectOriginal.plannedUse || '';
+      projectUpdateForm.projectTime = projectOriginal.projectTime || '';
+      projectUpdateForm.remark = projectOriginal.remark || '';
+    }
+  } catch (error) {
+    console.error('拉取项目原始数据失败：', error);
+    ElMessage.error('拉取项目原始数据失败，无法编辑');
+  }
+};
+
+// 2. 提交项目更新数据：调用 PUT /project/update
+// 2. 提交项目更新数据：调用 PUT /project/update
+const submitProjectUpdate = async () => {
+  if (!projectEditRef.value) return;
+  
+  // 🔥 打印1：提交函数入口，先看 projectUpdateForm 完整数据（最关键）
+  console.log('===== 提交函数入口 - projectUpdateForm 完整数据 =====');
+  console.log('projectUpdateForm：', projectUpdateForm);
+  console.log('ID是否存在：', projectUpdateForm.id, '（类型：', typeof projectUpdateForm.id, '）');
+  console.log('是否有非空字段：', JSON.stringify(projectUpdateForm) !== '{"id":"","projectName":"","projectCode":"","location":"","landArea":null,"plannedUse":"","projectTime":"","remark":""}');
+  
+  // 前置校验：确保 ID 存在
+  if (!projectUpdateForm.id) {
+    ElMessage.warning('项目ID异常，请切换其他tab再切回重试');
+    return;
+  }
+  
+  // 第一步：表单校验
+  try {
+    await projectEditRef.value.validate();
+    
+    // 🔥 打印2：表单校验通过后，再次确认数据（排除校验修改数据的可能）
+    console.log('===== 表单校验通过 - 待构造请求体的数据 =====');
+    console.log('projectUpdateForm 此时的数据：', projectUpdateForm);
+    
+  } catch (error) {
+    ElMessage.warning('表单校验失败，请检查填写内容');
+    return;
+  }
+
+  // 第二步：提交更新
+  projectEditLoading.value = true;
+  try {
+    // 构造请求体
+    const requestData = {
+    id: projectUpdateForm.id,
+    projectName: projectUpdateForm.projectName,
+    projectCode: projectUpdateForm.projectCode,
+    location: projectUpdateForm.location,
+    landArea: projectUpdateForm.landArea,
+    plannedUse: projectUpdateForm.plannedUse,
+    projectTime: projectUpdateForm.projectTime,
+    remark: projectUpdateForm.remark
+  };
+
+    const res = await axios.put('/api/project/update', requestData);
+    
+    // 判断业务成功
+    if (res.data.code === 0 || res.data.code === 200 || res.data.code === 201) { // 兼容 201（后端返回的 code）
+      ElMessage.success('项目信息更新成功！');
+      await refreshProjectRelatedData();
+    } else {
+      ElMessage.error('项目信息更新失败：' + (res.data.msg || '后端业务处理异常'));
+    }
+  } catch (error) {
+    console.error('===== 提交请求捕获异常 =====');
+    console.error('异常信息：', error);
+    ElMessage.error('提交项目更新失败，请检查接口或网络');
+  } finally {
+    projectEditLoading.value = false;
+  }
+};
+// 补充：重置项目更新表单（之前缺失，导致点击无作用）
+const resetProjectForm = () => {
+  if (!projectEditRef.value) return;
+  
+  // 步骤1：清除表单校验状态
+  projectEditRef.value.clearValidate();
+  
+  // 步骤2：重置表单数据（保留只读的ID，其余字段置空/还原原始值）
+  const originalProjectId = projectUpdateForm.id; // 保留ID
+  Object.assign(projectUpdateForm, {
+    // projectName: '',
+    projectCode: '',
+    location: '',
+    landArea: null,
+    plannedUse: '',
+    projectTime: '',
+    remark: ''
+  });
+ 
+  // 可选：重置后重新拉取原始数据，恢复到初始状态（更友好）
+  if (filterProject.value) {
+    fetchProjectOriginalData(filterProject.value);
+  }
+  
+  ElMessage.info('表单已重置');
+};
+// 补全：刷新项目相关数据（更新成功后调用，形成闭环）
+const refreshProjectRelatedData = async () => {
+  if (!filterProject.value) return;
+  
+  try {
+    // 1. 刷新项目下拉列表（防止项目名称修改后，下拉框显示旧数据）
+    await fetchProjectList();
+    
+    // 2. 刷新当前项目的基础信息（tab1的项目名称、编号等）
+    await fetchProjectDetail(filterProject.value);
+    
+    // 3. 刷新项目更新表单的原始数据（让表单显示最新更新后的结果）
+    await fetchProjectOriginalData(filterProject.value);
+    
+  } catch (error) {
+    console.error('刷新项目关联数据失败：', error);
+    ElMessage.warning('项目信息更新成功，但关联数据刷新失败，可手动刷新页面');
+  }
+};
+// 监听 tab 切换，切换到项目更新tab时，自动拉取原始数据
+watch(activeTab, (newVal) => {
+  if (newVal === 'projectEdit' && filterProject.value) {
+    fetchProjectOriginalData(filterProject.value);
+  }
+});
+// --- 新增：启动冷却倒计时函数 ---
+// const startRefreshCd = () => {
+//   // 1. 初始化冷却状态
+//   isRefreshCd.value = true;
+//   cdRemaining.value = REFRESH_CD_SECONDS;
+
+//   // 2. 清除旧定时器（防止重复创建）
+//   if (cdTimer) {
+//     clearInterval(cdTimer);
+//   }
+
+//   // 3. 创建新定时器，每秒更新剩余时间
+//   cdTimer = setInterval(() => {
+//     cdRemaining.value--;
+
+//     // 4. 冷却结束：清除定时器，恢复按钮状态
+//     if (cdRemaining.value <= 0) {
+//       clearInterval(cdTimer);
+//       cdTimer = null;
+//       isRefreshCd.value = false;
+//     }
+//   }, 1000);
+// };
+
+
 // --- 生命周期 & 核心修改：保存/恢复项目ID ---
-watch(filterProject, (newVal) => {
+// watch(filterProject, (newVal) => {
+//   if (newVal) {
+//     localStorage.setItem('projectFilterStatus', newVal)
+//   } else {
+//     localStorage.removeItem('projectFilterStatus')
+//     reportList.value = []
+//     rawTableData.value = []
+//   }
+// })
+// --- 生命周期 & 核心修改：保存/恢复项目ID ---
+watch(filterProject, (newVal, oldVal) => {
   if (newVal) {
     localStorage.setItem('projectFilterStatus', newVal)
+    // 切换项目时，清除旧项目的冷却缓存
+    if (oldVal) {
+      const oldCdKey = `refresh_cd_${oldVal}`;
+      localStorage.removeItem(oldCdKey);
+    }
   } else {
-    localStorage.removeItem('projectFilterStatus')
-    reportList.value = []
-    rawTableData.value = []
+    // 1. 清空本地缓存
+    localStorage.removeItem('projectFilterStatus');
+    // 2. 清空所有项目相关数据
+    reportList.value = [];
+    rawTableData.value = [];
+    unknownUsages.value = [];
+    // 3. 重置项目基本信息（关键：清空ID让刷新按钮禁用）
+    Object.assign(currentProjectInfo, {
+      id: '',
+      name: '请选择项目',
+      code: '-',
+      status: '-'
+    });
+    // 4. 重置冷却状态（项目都清了，冷却没用了）
+    resetRefreshCdStatus();
+    // 重置商住比
+    Object.assign(businessResidentialRatio, {
+      contractRatio: "≥2:8", // 恢复默认值
+      measuredRatio: "-"
+    });
+    // 重置面积核算数组（恢复初始默认值）
+    comparisonData.forEach(item => {
+      item.contract = '0.00';
+      item.measured = '0.00';
+      item.diff = '0.00';
+    });
   }
 })
 
 // 2. 页面初始化
+// onMounted(async () => {
+//   // A. 先拉取项目列表 (填充下拉框)
+//   await fetchProjectList()
+
+//   // B. 决定选中哪个项目
+//   const queryProjectId = route.query.projectId
+//   const savedProjectId = localStorage.getItem('projectFilterStatus')
+
+//   if (queryProjectId) {
+//     // 优先级 1: 路由参数 (从首页跳转过来)
+//     filterProject.value = String(queryProjectId)
+//     handleGlobalSearch() // 立即查询
+//   } else if (savedProjectId) {
+//     // 优先级 2: 本地缓存 (刷新页面保持状态)
+//     // 检查缓存的 ID 是否依然有效 (防止项目被删了缓存还在)
+//     const exists = projectOptions.value.some(p => p.id === savedProjectId)
+//     if (exists) {
+//       filterProject.value = savedProjectId
+//       handleGlobalSearch() // 立即查询
+//     } else {
+//       localStorage.removeItem('projectFilterStatus') // 清除无效缓存
+//     }
+//   }
+// })
 onMounted(async () => {
   // A. 先拉取项目列表 (填充下拉框)
   await fetchProjectList()
 
   // B. 决定选中哪个项目
-  const queryProjectId = route.query.projectId
-  const savedProjectId = localStorage.getItem('projectFilterStatus')
+  const queryProjectId = route.query.projectId;
+  const savedProjectId = localStorage.getItem('projectFilterStatus');
+  let targetProjectId = '';
 
   if (queryProjectId) {
-    // 优先级 1: 路由参数 (从首页跳转过来)
-    filterProject.value = String(queryProjectId)
-    handleGlobalSearch() // 立即查询
+    targetProjectId = String(queryProjectId);
+    filterProject.value = targetProjectId;
+    handleGlobalSearch(); // 立即查询
   } else if (savedProjectId) {
-    // 优先级 2: 本地缓存 (刷新页面保持状态)
-    // 检查缓存的 ID 是否依然有效 (防止项目被删了缓存还在)
-    const exists = projectOptions.value.some(p => p.id === savedProjectId)
+    const exists = projectOptions.value.some(p => p.id === savedProjectId);
     if (exists) {
-      filterProject.value = savedProjectId
-      handleGlobalSearch() // 立即查询
+      targetProjectId = savedProjectId;
+      filterProject.value = targetProjectId;
+      handleGlobalSearch(); // 立即查询
     } else {
-      localStorage.removeItem('projectFilterStatus') // 清除无效缓存
+      localStorage.removeItem('projectFilterStatus');
+    }
+  }
+
+  // C. 恢复当前项目的冷却状态（从本地缓存读取）
+  if (targetProjectId) {
+    const cdStorageKey = `refresh_cd_${targetProjectId}`;
+    const storedCd = localStorage.getItem(cdStorageKey);
+    
+    if (storedCd) {
+      const { startAt, remaining } = JSON.parse(storedCd);
+      // 计算已过去的时间
+      const elapsedSeconds = Math.floor((Date.now() - startAt) / 1000);
+      const currentRemaining = remaining - elapsedSeconds;
+
+      if (currentRemaining > 0) {
+        // 恢复冷却状态
+        isRefreshCd.value = true;
+        cdRemaining.value = currentRemaining;
+
+        // 重启定时器
+        if (cdTimer) clearInterval(cdTimer);
+        cdTimer = setInterval(() => {
+          cdRemaining.value--;
+
+          // 更新本地缓存
+          const updatedStored = JSON.parse(localStorage.getItem(cdStorageKey) || '{}');
+          if (updatedStored.startAt) {
+            updatedStored.remaining = cdRemaining.value;
+            localStorage.setItem(cdStorageKey, JSON.stringify(updatedStored));
+          }
+
+          // 冷却结束
+          if (cdRemaining.value <= 0) {
+            clearInterval(cdTimer);
+            cdTimer = null;
+            isRefreshCd.value = false;
+            localStorage.removeItem(cdStorageKey);
+          }
+        }, 1000);
+      } else {
+        // 冷却已结束，清除无效缓存
+        localStorage.removeItem(cdStorageKey);
+      }
     }
   }
 })
@@ -1139,6 +1725,68 @@ onMounted(async () => {
   overflow: visible !important; /* 让弹窗随表格拉伸 */
 }
 
+/* 新增：card-header 弹性布局，实现左右分栏 */
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+/* 左侧标题+统计信息容器 */
+.header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 右侧刷新按钮样式（贴合页面风格） */
+.refresh-btn {
+  margin-left: 20px;
+  /* 可选：调整按钮颜色，和页面其他按钮保持一致 */
+  background-color: #25dd72;
+  border-color: #23ce1d;
+}
+
+/* 冷却中按钮样式（禁用状态加深，提示用户） */
+:deep(.refresh-btn.is-disabled) {
+  background-color: #cf3131 !important;
+  border-color: #9b070f !important;
+  cursor: not-allowed !important;
+}
+
+/* 项目更新表单样式适配 */
+.project-edit-form {
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+}
+.form-btn-group {
+  margin-top: 20px;
+  padding-left: 40%; /* 对齐表单标签宽度 */
+  
+}
+/* 补充：表单栅格布局样式，让表单更整齐 */
+.form-row {
+  margin-bottom: 16px; /* 每行表单项间距 */
+}
+/* 统一表单输入框/选择器的高度，保持视觉一致 */
+:deep(.project-edit-form .el-input),
+:deep(.project-edit-form .el-input-number),
+:deep(.project-edit-form .el-select),
+:deep(.project-edit-form .el-date-picker) {
+  height: 40px; /* 统一高度 */
+}
+:deep(.project-edit-form .el-input__inner),
+:deep(.project-edit-form .el-select__wrapper),
+:deep(.project-edit-form .el-date-picker__input-wrapper input) {
+  height: 40px; /* 统一输入框内部高度 */
+  line-height: 40px; /* 垂直居中 */
+}
+:deep(.project-edit-form .el-textarea__inner) {
+  min-height: 100px; /* 备注输入框最小高度 */
+}
 
 
 

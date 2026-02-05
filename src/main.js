@@ -11,6 +11,9 @@ import router from './router'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
+// 新增：引入并挂载 Buffer
+import { Buffer } from 'buffer'
+window.Buffer = Buffer // 挂载到 window 全局，让所有组件都能访问
 
 
 const app = createApp(App)
