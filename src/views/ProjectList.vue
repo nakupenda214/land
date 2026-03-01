@@ -21,7 +21,7 @@
         <el-button type="primary" icon="Search" @click="handleGlobalSearch" :disabled="!filterProject">查询档案</el-button>
       </div>
       <div class="project-meta" v-if="currentProjectInfo.id">
-          当前查看：<el-tag effect="dark" size="large">{{ currentProjectInfo.name }}</el-tag>
+          <!-- 当前查看：<el-tag effect="dark" size="large">{{ currentProjectInfo.name }}</el-tag> -->
           <span class="meta-info">
             <!-- 项目编号: {{ currentProjectInfo.code }} | -->
             <!--状态: <span style="color: #67C23A; font-weight: bold;">{{ currentProjectInfo.status }}</span> -->
@@ -225,27 +225,68 @@
         
         </el-tab-pane>
 
-        <el-tab-pane name="contracts" class="no-print">
-          <template #label><span class="custom-tab-label"><el-icon><Document /></el-icon> 项目合同查询</span></template>
+       
+        <el-tab-pane name="contractLandEdit" class="no-print">
+          <template #label>
+            <span class="custom-tab-label">
+              <el-icon><Location /></el-icon> 合同及地块信息
+            </span>
+          </template>
           <div class="tab-content">
-            <el-table :data="contractList" style="width: 100%" stripe border :header-cell-style="{background:'#F5F7FA', color:'#333'}">
-              <!-- 🔴 关键修改2：合同列表添加自增序号，隐藏ID -->
-              <el-table-column label="序号" type="index" width="60" align="center" :index="index => index + 1" />
-              <el-table-column prop="name" label="合同文件名称" min-width="250">
-                 <template #default="{ row }"><div style="display:flex; align-items:center;"><el-icon style="margin-right:8px; font-size:16px; color:#409eff"><Document /></el-icon> <span style="font-weight:500">{{ row.name }}</span></div></template>
-              </el-table-column>
-              <el-table-column prop="type" label="合同类型" width="150" align="center"><template #default="{ row }"><el-tag :type="row.type === '土地出让' ? 'warning' : 'primary'" effect="plain">{{ row.type }}</el-tag></template></el-table-column>
-              <el-table-column prop="no" label="合同编号" width="180" />
-              <el-table-column prop="date" label="签订日期" width="150" align="center" />
-              <el-table-column label="操作" width="200" align="center">
-                <template #default="{ row }">
-                  <el-button link type="primary" icon="View" @click="handlePreview(row)">预览</el-button>
-                  <el-button link type="primary" icon="Download" @click="handleDownload(row)">下载</el-button>
-                </template>
-              </el-table-column>
-            </el-table>
+            <!-- 合同列表 -->
+            <el-card shadow="never" class="mb-20">
+              <template #header>
+                <div class="card-header">
+                  <span class="main-report-title">合同信息列表</span>
+                  <el-button type="primary" size="small" icon="Plus" @click="addContract">新增合同</el-button>
+                </div>
+              </template>
+              <el-table :data="contractLandList" border style="width: 100%" @row-click="handleContractRowClick">
+                <el-table-column label="序号" type="index" width="60" align="center" :index="index => index + 1" />
+                <el-table-column prop="contractNumber" label="合同编号" width="180" />
+                <el-table-column prop="contractType" label="合同类型" width="150" align="center" />
+                <el-table-column prop="transferor" label="出让方" min-width="200" show-overflow-tooltip />
+                <el-table-column prop="transferee" label="受让方" min-width="200" show-overflow-tooltip />
+                <el-table-column prop="totalArea" label="合同总面积(㎡)" width="150" align="right" />
+                <el-table-column prop="plannedUse" label="规划用途" width="120" />
+                <el-table-column label="操作" width="180" align="center">
+                  <template #default="{ row }">
+                    <el-button link type="primary" size="small" icon="Edit" @click="editContract(row)">编辑</el-button>
+                    <el-button link type="danger" size="small" icon="Delete" @click="deleteContract(row)">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-card>
+
+            <!-- 选中合同的地块列表 -->
+            <el-card shadow="never" v-if="selectedContract.id">
+              <template #header>
+                <div class="card-header">
+                  <span class="main-report-title">{{ selectedContract.contractNumber }} - 地块信息列表</span>
+                  <el-button type="primary" size="small" icon="Plus" @click="addLandParcel">新增地块</el-button>
+                </div>
+              </template>
+              <el-table :data="currentLandParcelList" border style="width: 100%">
+                <el-table-column label="序号" type="index" width="60" align="center" :index="index => index + 1" />
+                <el-table-column prop="parcelCode" label="地块编号" min-width="120" />
+                <el-table-column prop="parcelName" label="地块名称" width="150" />
+                <el-table-column prop="plannedUse" label="规划用途" width="120" />
+                <el-table-column prop="totalArea" label="地块总面积(㎡)" width="150" align="right" />
+                <el-table-column prop="residentialArea" label="住宅面积(㎡)" width="150" align="right" />
+                <el-table-column prop="commercialArea" label="商业面积(㎡)" width="150" align="right" />
+                <el-table-column prop="floorAreaRatio" label="容积率" width="100" align="center" />
+                <el-table-column prop="commercialResidentialRatio" label="商住比" width="100" align="center" />
+                <el-table-column label="操作" width="180" align="center">
+                  <template #default="{ row }">
+                    <el-button link type="primary" size="small" icon="Edit" @click="editLandParcel(row)">编辑</el-button>
+                    <el-button link type="danger" size="small" icon="Delete" @click="deleteLandParcel(row)">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-card>
           </div>
         </el-tab-pane>
+       
 
         <el-tab-pane name="reports" class="no-print">
           <template #label><span class="custom-tab-label"><el-icon><Collection /></el-icon> 项目实测报告查询</span></template>
@@ -550,6 +591,88 @@
         
       </el-dialog>
 
+
+
+      <!-- 合同编辑弹窗 -->
+      <el-dialog v-model="contractDialogVisible" title="合同信息编辑" width="700px" :close-on-click-modal="false">
+        <el-form ref="contractFormRef" :model="contractForm" :rules="contractFormRules" label-width="120px">
+          <el-form-item label="合同编号" prop="contractNumber">
+            <el-input v-model="contractForm.contractNumber" placeholder="请输入合同编号" style="width: 100%;" />
+          </el-form-item>
+          <el-form-item label="合同类型" prop="contractType">
+            <el-input v-model="contractForm.contractType" placeholder="请输入合同类型" style="width: 100%;" />
+          </el-form-item>
+          <el-form-item label="出让方" prop="transferor">
+            <el-input v-model="contractForm.transferor" placeholder="请输入出让方（土地管理部门）" style="width: 100%;" />
+          </el-form-item>
+          <el-form-item label="受让方" prop="transferee">
+            <el-input v-model="contractForm.transferee" placeholder="请输入受让方（开发商）" style="width: 100%;" />
+          </el-form-item>
+          <el-form-item label="合同总面积(㎡)" prop="totalArea">
+            <el-input-number v-model="contractForm.totalArea" placeholder="请输入总面积" :precision="2" :min="0" style="width: 100%;" />
+          </el-form-item>
+          <el-form-item label="规划用途" prop="plannedUse">
+            <el-select v-model="contractForm.plannedUse" placeholder="请选择规划用途" clearable style="width: 100%;">
+              <el-option label="住宅" value="住宅" />
+              <el-option label="商业" value="商业" />
+              <el-option label="办公" value="办公" />
+              <el-option label="商住混合" value="商住混合" />
+              <el-option label="其他" value="其他" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="备注" prop="remark">
+            <el-input v-model="contractForm.remark" type="textarea" rows="3" placeholder="请输入备注信息" style="width: 100%;" />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="contractDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitContractForm" :loading="contractFormLoading">确认保存</el-button>
+        </template>
+      </el-dialog>
+
+      <!-- 地块编辑弹窗 -->
+      <el-dialog v-model="landParcelDialogVisible" title="地块信息编辑" width="800px" :close-on-click-modal="false">
+        <el-form ref="landParcelFormRef" :model="landParcelForm" :rules="landParcelFormRules" label-width="120px">
+          <el-form-item label="地块编号" prop="parcelCode">
+            <el-input v-model="landParcelForm.parcelCode" placeholder="请输入地块编号" style="width: 100%;" />
+          </el-form-item>
+          <el-form-item label="地块名称" prop="parcelName">
+            <el-input v-model="landParcelForm.parcelName" placeholder="请输入地块名称" style="width: 100%;" />
+          </el-form-item>
+          <el-form-item label="规划用途" prop="plannedUse">
+            <el-select v-model="landParcelForm.plannedUse" placeholder="请选择规划用途" clearable style="width: 100%;">
+              <el-option label="住宅" value="住宅" />
+              <el-option label="商业" value="商业" />
+              <el-option label="办公" value="办公" />
+              <el-option label="商住混合" value="商住混合" />
+              <el-option label="其他" value="其他" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="地块总面积(㎡)" prop="totalArea">
+            <el-input-number v-model="landParcelForm.totalArea" placeholder="请输入总面积" :precision="2" :min="0" style="width: 100%;" />
+          </el-form-item>
+          <el-form-item label="住宅面积(㎡)" prop="residentialArea">
+            <el-input-number v-model="landParcelForm.residentialArea" placeholder="请输入住宅面积" :precision="2" :min="0" style="width: 100%;" />
+          </el-form-item>
+          <el-form-item label="商业面积(㎡)" prop="commercialArea">
+            <el-input-number v-model="landParcelForm.commercialArea" placeholder="请输入商业面积" :precision="2" :min="0" style="width: 100%;" />
+          </el-form-item>
+          <el-form-item label="容积率" prop="floorAreaRatio">
+            <el-input-number v-model="landParcelForm.floorAreaRatio" placeholder="请输入容积率" :precision="2" :min="0" style="width: 100%;" />
+          </el-form-item>
+          <el-form-item label="商住比" prop="commercialResidentialRatio">
+            <el-input-number v-model="landParcelForm.commercialResidentialRatio" placeholder="请输入商住比" :precision="2" :min="0" style="width: 100%;" />
+          </el-form-item>
+          <el-form-item label="备注" prop="remark">
+            <el-input v-model="landParcelForm.remark" type="textarea" rows="3" placeholder="请输入备注信息" style="width: 100%;" />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="landParcelDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitLandParcelForm" :loading="landParcelFormLoading">确认保存</el-button>
+        </template>
+      </el-dialog>
+
   </div>
 </template>
 
@@ -557,7 +680,7 @@
 import { ref, reactive, onMounted, computed, watch , onUnmounted} from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Search, Download, DataAnalysis, Setting, View, List, Printer, Document, Collection, WarningFilled, Check } from '@element-plus/icons-vue'
-import { ElMessage, ElLoading } from 'element-plus'
+import { ElMessage, ElLoading , ElMessageBox } from 'element-plus'
 
 import axios from 'axios'
 import { usePrint } from '@/hooks/usePrint.ts'
@@ -565,6 +688,8 @@ import { usePrint } from '@/hooks/usePrint.ts'
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { ElForm } from 'element-plus';
+
+import { Location, Plus, Edit, Delete } from '@element-plus/icons-vue'
 
 
 
@@ -776,12 +901,12 @@ const fetchProjectData = async (projectId) => {
       const fileList = res.data.data;
       console.log('获取到文件列表：', fileList);
       
-      // ① 赋值项目基本信息
+      // 赋值项目基本信息
       currentProjectInfo.id = projectId;
       currentProjectInfo.name = projectOptions.value.find(p => p.id === projectId)?.name || `未知项目(${projectId})`;
       currentProjectInfo.code = `XM-${String(projectId).padStart(3, '0')}`;
       
-      // ② 拆分合同列表
+      // 拆分合同列表
       contractList.value = fileList
       .filter(file => file.fileContextType === 'CONTRACT' || (file.originalName && file.originalName.includes('合同')))
       .map(file => ({
@@ -1097,6 +1222,13 @@ const handleExportExcel = async () => {
   worksheet.mergeCells('G1:J1'); // 合并「计容建筑面积」（第 7 列到第 10 列，第 1 行）
   worksheet.mergeCells('K1:L1'); // 合并「不计容建筑面积」（第 11 列到第 12 列，第 1 行）
 
+  
+  const singleHeaderCols = [1,2,3,4,5,13,14]; // 序号、工程名、产权证号、合同号、期数、报告号、备注
+  singleHeaderCols.forEach(col => {
+    worksheet.mergeCells(`${ worksheet.getColumn(col).letter }1:${ worksheet.getColumn(col).letter }2`);
+  });
+
+
   // 8. 设置列宽（和你之前的需求一致，合理分配列宽）
   const columnWidths = [
     6, 20, 20, 18, 8, 12,
@@ -1110,6 +1242,69 @@ const handleExportExcel = async () => {
   // 9. 设置行高（表头行高略高，更美观）
   worksheet.getRow(1).height = 30; // 第 1 行（合并表头）行高
   worksheet.getRow(2).height = 25; // 第 2 行（子表头）行高
+
+  // ========== 新增：添加核算指标表格 ==========
+  // 计算汇总表最后一行位置，空2行分隔
+  const summaryLastRow = 2 + dataRows.length;
+  const gapRows = 2; // 空2行
+  const calcTableStartRow = summaryLastRow + gapRows + 1;
+
+  // 1. 写入核算指标表头
+  const calcHeader = ['核算指标', '合同约定值', '实测值', '差值 (A - B)'];
+  const headerRow = worksheet.getRow(calcTableStartRow);
+  headerRow.values = calcHeader;
+  // 表头样式：加粗、居中、行高
+  headerRow.height = 25;
+  headerRow.eachCell((cell) => {
+    cell.font = { bold: true, size: 12 };
+    cell.alignment = {
+      horizontal: 'center',
+      vertical: 'middle'
+    };
+    // 表头背景色（可选，和页面保持一致）
+    // cell.fill = {
+    //   type: 'pattern',
+    //   pattern: 'solid',
+    //   fgColor: { argb: 'F0F2F5' }
+    // };
+  });
+
+  // 2. 写入核算指标数据
+  tableTotalData.value.forEach((row, index) => {
+    const dataRowNum = calcTableStartRow + index + 1;
+    const dataRow = worksheet.getRow(dataRowNum);
+    // 填充数据
+    dataRow.values = [
+      row.label,
+      row.contract,
+      row.measured,
+      row.isArea ? row.diff : '-'
+    ];
+    // 数据单元格样式
+    dataRow.eachCell((cell, colIndex) => {
+      cell.alignment = {
+        horizontal: 'center',
+        vertical: 'middle'
+      };
+      // 差值列特殊样式：加粗 + 颜色区分
+      // if (colIndex === 3) { // 第4列（差值列）
+      //   cell.font = { bold: true };
+      //   if (row.isArea) {
+      //     const diffValue = Number(row.diff);
+      //     // 正数/零：绿色，负数：红色
+      //     cell.font.color = { argb: diffValue >= 0 ? '67C23A' : 'F56C6C' };
+      //   }
+      // }
+    });
+  });
+
+  // 3. 设置核算指标表格列宽（适配4列）
+  const calcColumnWidths = [15, 18, 18, 12];
+  // 核算表格列对应工作表的A-D列（因为汇总表有14列，这里复用前4列宽度即可）
+  for (let i = 0; i < calcColumnWidths.length; i++) {
+    worksheet.columns[i].width = calcColumnWidths[i];
+  }
+
 
   // 10. 导出 Excel 文件并下载
   const buffer = await workbook.xlsx.writeBuffer(); // 生成二进制缓冲区
@@ -1245,6 +1440,432 @@ const startRefreshCd = () => {
   }, 1000);
 };
 
+// ===== 合同表单相关（补充注释）=====
+const contractLandList = ref([]) // 合同列表（含基础信息）
+const selectedContract = reactive({ id: '', contractNumber: '' }) // 选中的合同
+const currentLandParcelList = ref([]) // 选中合同的地块列表
+
+// 合同表单相关
+const contractDialogVisible = ref(false)
+const contractFormRef = ref(null)
+const contractFormLoading = ref(false)
+const contractForm = reactive({
+  id: '', // 仅用于更新，前端不编辑
+  contractNumber: '',
+  contractType: '',
+  transferor: '',
+  transferee: '',
+  totalArea: null,
+  plannedUse: '',
+  remark: ''
+})
+const contractFormRules = reactive({
+  contractNumber: [{ required: true, message: '请输入合同编号', trigger: 'blur' }]
+})
+
+// 地块表单相关
+const landParcelDialogVisible = ref(false)
+const landParcelFormRef = ref(null)
+const landParcelFormLoading = ref(false)
+const landParcelForm = reactive({
+  id: '', // 仅用于更新，前端不编辑
+  contractId: '', // 关联合同ID
+  parcelCode: '',
+  parcelName: '',
+  plannedUse: '',
+  totalArea: null,
+  residentialArea: null,
+  commercialArea: null,
+  floorAreaRatio: null,
+  commercialResidentialRatio: null,
+  remark: ''
+})
+const landParcelFormRules = reactive({
+  parcelCode: [{ required: true, message: '请输入地块编号', trigger: 'blur' }],
+  parcelName: [{ required: true, message: '请输入地块名称', trigger: 'blur' }]
+})
+
+// ========== 核心接口方法 ==========
+
+// 1. 获取合同列表时的 ID 赋值（确保取到后端返回的真实 ID）
+const fetchContractListByProjectId = async (projectId) => {
+  if (!projectId) return
+  try {
+    const queryParams = {
+      projectId: Number(projectId),
+      current: 1,
+      size: 1 // 足够大的数值，确保获取该项目下所有合同
+    }
+    const res = await axios.post('/api/project/contracts/query', queryParams)
+    if (res.data.code === 200) {
+      // 关键：确保每条合同都正确赋值后端返回的 id
+      contractLandList.value = (res.data.data.records || []).map(contract => ({
+        id: contract.id || '', // 必须取后端的 id，不能为空
+        contractNumber: contract.contractNumber || '',
+        contractType: contract.contractType || '',
+        transferor: contract.transferor || '',
+        transferee: contract.transferee || '',
+        totalArea: contract.totalArea || null,
+        plannedUse: contract.plannedUse || '',
+        remark: contract.remark || ''
+      }));
+      
+      // 清空选中状态（初始无选中）
+      Object.assign(selectedContract, { 
+        id: '', 
+        contractNumber: '' 
+      });
+      currentLandParcelList.value = [];
+      ElMessage.success(`加载到 ${contractLandList.value.length} 份合同`);
+    }
+  } catch (error) {
+    console.error('查询项目合同列表失败：', error);
+    ElMessage.error('获取合同列表失败，请重试');
+    contractLandList.value = [];
+  }
+};
+
+// 2. 合同行点击时的 ID 赋值（确保选中的是后端真实 ID）
+const handleContractRowClick = async (row) => {
+  // 防重复点击
+  if (row.id === selectedContract.id) return;
+  
+  // 关键：赋值后端返回的合同 ID 和编号
+  Object.assign(selectedContract, { 
+    id: row.id, // 真实的合同 ID
+    contractNumber: row.contractNumber || '' 
+  });
+  
+  // 传递合同 ID 查询地块
+  await fetchLandParcelByContractId(row.id);
+};
+
+// 2. 第二步：根据合同ID查询地块信息（GET /project/contract/{contractId}/with-parcels）
+const fetchLandParcelByContractId = async (contractId) => {
+  if (!contractId) return
+  try {
+    const res = await axios.get(`/api/project/contract/${contractId}/with-parcels`)
+    if (res.data.code === 200) {
+      // 假设接口返回格式：{ code:200, data: { parcels: [...] } }
+      // 可根据实际返回结构调整，核心是提取地块列表
+      currentLandParcelList.value = res.data.data.parcels || []
+    } else {
+      currentLandParcelList.value = []
+      ElMessage.warning('该合同暂无关联地块信息')
+    }
+  } catch (error) {
+    console.error('查询合同地块信息失败：', error)
+    ElMessage.error('获取地块信息失败，请重试')
+    currentLandParcelList.value = []
+  }
+}
+
+// 3. 合同表单操作
+const addContract = () => {
+  // 重置表单
+  Object.assign(contractForm, {
+     id: '',
+    contractNumber: '',
+    contractType: '',
+    transferor: '',
+    transferee: '',
+    totalArea: null,
+    plannedUse: '',
+    remark: ''
+  })
+  contractFormRef.value?.clearValidate()
+  contractDialogVisible.value = true
+}
+
+const editContract = (row) => {
+  // 赋值表单（ID仅传递，不允许编辑）
+  Object.assign(contractForm, {
+    id: row.id,
+    contractNumber: row.contractNumber || '',
+    contractType: row.contractType || '',
+    transferor: row.transferor || '',
+    transferee: row.transferee || '',
+    totalArea: row.totalArea || null,
+    plannedUse: row.plannedUse || '',
+    remark: row.remark || ''
+  })
+  contractFormRef.value?.clearValidate()
+  contractDialogVisible.value = true
+}
+
+const submitContractForm = async () => {
+  if (!contractFormRef.value) return
+  try {
+    await contractFormRef.value.validate()
+  } catch (error) {
+    ElMessage.warning('请完善必填项后提交')
+    return
+  }
+
+  contractFormLoading.value = true
+  try {
+    // 构造请求参数（排除ID的修改，仅作为标识）
+    const requestData = {
+      id: contractForm.id, // 必填，用于定位更新的合同
+      contractNumber: contractForm.contractNumber,
+      contractType: contractForm.contractType,
+      transferor: contractForm.transferor,
+      transferee: contractForm.transferee,
+      totalArea: contractForm.totalArea,
+      plannedUse: contractForm.plannedUse,
+      remark: contractForm.remark
+    }
+
+    // 调用合同更新接口
+    const res = await axios.put('/api/project/contract-info/update', {
+      contractInfoUpdateDTO: requestData
+    })
+
+    if (res.data.code === 200) {
+      ElMessage.success('合同信息保存成功')
+      contractDialogVisible.value = false
+      // 刷新合同列表
+      await fetchContractAndLandInfo(currentProjectInfo.id)
+    } else {
+      ElMessage.error('保存失败：' + (res.data.msg || '系统异常'))
+    }
+  } catch (error) {
+    console.error('保存合同信息失败：', error)
+    ElMessage.error('保存合同信息失败，请重试')
+  } finally {
+    contractFormLoading.value = false
+  }
+}
+// 补充：获取合同及地块信息（整合已有函数）
+const fetchContractAndLandInfo = async (projectId) => {
+  await fetchContractListByProjectId(projectId);
+  // 如果有选中的合同，重新拉取其地块信息
+  if (selectedContract.id) {
+    await fetchLandParcelByContractId(selectedContract.id);
+  }
+};
+// 4. 地块表单操作
+const addLandParcel = () => {
+  if (!selectedContract.id) {
+    ElMessage.warning('请先选中一个合同')
+    return
+  }
+  // 重置表单
+  Object.assign(landParcelForm, {
+    id: '', // 新增时ID为空（后端生成）
+    contractId: selectedContract.id, // 关键：绑定选中的合同ID
+    parcelCode: '',
+    parcelName: '',
+    plannedUse: '',
+    totalArea: null,
+    residentialArea: null,
+    commercialArea: null,
+    floorAreaRatio: null,
+    commercialResidentialRatio: null,
+    remark: ''
+  })
+  landParcelFormRef.value?.clearValidate()
+  landParcelDialogVisible.value = true
+}
+
+const editLandParcel = (row) => {
+  // 赋值表单（ID仅传递，不允许编辑）
+  Object.assign(landParcelForm, {
+    id: row.id, // 地块ID（后端生成，仅传递）
+    contractId: selectedContract.id, // 关联合同ID（后端生成，仅传递）
+    parcelCode: row.parcelCode || '',
+    parcelName: row.parcelName || '',
+    plannedUse: row.plannedUse || '',
+    totalArea: row.totalArea || null,
+    residentialArea: row.residentialArea || null,
+    commercialArea: row.commercialArea || null,
+    floorAreaRatio: row.floorAreaRatio || null,
+    commercialResidentialRatio: row.commercialResidentialRatio || null,
+    remark: row.remark || ''
+  })
+  landParcelFormRef.value?.clearValidate()
+  landParcelDialogVisible.value = true
+}
+// ========== 核心修正：对接新增地块接口 ==========
+const submitLandParcelForm = async () => {
+  if (!landParcelFormRef.value) return
+  try {
+    await landParcelFormRef.value.validate()
+  } catch (error) {
+    ElMessage.warning('请完善必填项后提交')
+    return
+  }
+
+  console.log('提交地块表单数据：', landParcelForm)
+
+  landParcelFormLoading.value = true
+  try {
+    let res
+    // 区分新增和编辑：ID为空则新增，否则编辑
+    if (!landParcelForm.id) {
+      const createData = {
+        contractId: landParcelForm.contractId,
+        parcelCode: landParcelForm.parcelCode,
+        parcelName: landParcelForm.parcelName,
+        plannedUse: landParcelForm.plannedUse,
+        totalArea: landParcelForm.totalArea,
+        residentialArea: landParcelForm.residentialArea,
+        commercialArea: landParcelForm.commercialArea,
+        floorAreaRatio: landParcelForm.floorAreaRatio,
+        commercialResidentialRatio: landParcelForm.commercialResidentialRatio,
+        remark: landParcelForm.remark
+      }
+      console.log(createData)
+      res = await axios.post(
+        '/api/project/land-parcel/create',
+        createData,
+        { headers: { 'Content-Type': 'application/json' } }
+      )
+    } else {
+      // 编辑地块：调用 PUT /project/land-parcel/update
+      const updateData = {
+          id: landParcelForm.id, // 仅后端交互用
+          parcelCode: landParcelForm.parcelCode,
+          parcelName: landParcelForm.parcelName,
+          plannedUse: landParcelForm.plannedUse,
+          totalArea: landParcelForm.totalArea,
+          residentialArea: landParcelForm.residentialArea,
+          commercialArea: landParcelForm.commercialArea,
+          floorAreaRatio: landParcelForm.floorAreaRatio,
+          commercialResidentialRatio: landParcelForm.commercialResidentialRatio,
+          remark: landParcelForm.remark
+      }
+      console.log(updateData)
+      res = await axios.put('/api/project/land-parcel/update', updateData)
+    }
+
+    if (res.data.code === 200) {
+      const action = !landParcelForm.id ? '新增' : '编辑'
+      ElMessage.success(`${action}地块信息成功`)
+      landParcelDialogVisible.value = false
+      // 刷新当前合同的地块列表
+      await fetchLandParcelByContractId(selectedContract.id)
+    } else {
+      ElMessage.error('操作失败：' + (res.data.msg || '系统异常'))
+    }
+  } catch (error) {
+    console.error('地块操作失败：', error)
+    ElMessage.error('操作地块信息失败，请重试')
+  } finally {
+    landParcelFormLoading.value = false
+  }
+}
+
+// 5. 监听项目选择，加载合同及地块信息
+watch(filterProject, (newVal) => {
+  if (newVal) {
+    fetchContractListByProjectId(newVal)
+  } else {
+    contractLandList.value = []
+    Object.assign(selectedContract, { id: '', contractNumber: '' })
+    currentLandParcelList.value = []
+  }
+})
+
+// 补充：删除方法（根据实际接口调整，示例逻辑）
+// 5. 合同删除功能（完整实现，对接指定DELETE接口）
+const deleteContract = async (row) => {
+  // 1. 弹出确认弹窗，确认删除操作（危险操作必须二次确认）
+  try {
+    await ElMessageBox.confirm(
+      '确定要删除该合同信息吗？此操作会同时删除关联的地块信息，且不可撤销！',
+      '删除合同确认',
+      {
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        dangerMode: true // 确认按钮变红，强调风险
+      }
+    );
+
+    // 2. 调用DELETE接口删除合同
+    // 接口地址：/project/contract-info/{contractId}
+    // 请求类型：application/x-www-form-urlencoded
+    const res = await axios.delete(
+      `/project/contract-info/${row.id}`, // 路径参数传递合同ID
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded' // 匹配接口要求的Content-Type
+        }
+      }
+    );
+
+    // 3. 处理响应结果
+    if (res.data.code === 200) {
+      ElMessage.success('合同删除成功！');
+      // 4. 刷新合同列表，清空选中状态和地块列表
+      await fetchContractListByProjectId(currentProjectInfo.id);
+      Object.assign(selectedContract, { id: '', contractNumber: '' });
+      currentLandParcelList.value = [];
+    } else {
+      ElMessage.error('删除失败：' + (res.data.msg || '系统异常'));
+    }
+  } catch (error) {
+    // 处理取消操作或接口异常
+    if (error.name !== 'ElMessageBoxCloseError') {
+      console.error('删除合同失败：', error);
+    
+    } else {
+      ElMessage.info('已取消删除操作');
+    }
+  }
+};
+
+// 5. 地块删除功能（完整实现）
+const deleteLandParcel = async (row) => {
+  // 1. 弹出确认弹窗
+  try {
+    await ElMessageBox.confirm(
+      '确定要删除该地块信息吗？此操作不可撤销！',
+      '删除确认',
+      {
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        dangerMode: true // 确认按钮变红，强调风险
+      }
+    );
+
+    // 2. 调用删除接口（DELETE 请求，parcelId 作为路径参数）
+    const res = await axios.delete(
+      `/api/project/land-parcel/${row.id}`, // 路径参数传递地块ID
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded' // 匹配接口要求的Content-Type
+        }
+      }
+    );
+
+    // 3. 处理响应结果
+    if (res.data.code === 200) {
+      ElMessage.success('地块删除成功！');
+      // 4. 刷新当前合同的地块列表
+      await fetchLandParcelByContractId(selectedContract.id);
+    } else {
+      ElMessage.error('删除失败：' + (res.data.msg || '系统异常'));
+    }
+  } catch (error) {
+    // 处理取消操作或接口异常
+    if (error.name !== 'ElMessageBoxCloseError') {
+      console.error('删除地块失败：', error);
+      
+    } else {
+      ElMessage.info('已取消删除操作');
+    }
+  }
+};
+
+
+
+
+
+
+
 
 
 // 项目更新表单引用
@@ -1267,7 +1888,7 @@ const projectEditRules = reactive({
   id: [{ required: true, message: '项目ID不能为空', trigger: 'blur' }],
    projectTime: [{ required: false, message: '项目时间格式错误', trigger: 'change' }]
 });
-// 1. 拉取项目原始数据（填充表单）：调用 POST /project/projects/query
+
 
 // 1. 拉取项目原始数据（填充表单）：调用 POST /project/projects/query
 const fetchProjectOriginalData = async (projectId) => {
@@ -1296,7 +1917,6 @@ const fetchProjectOriginalData = async (projectId) => {
   }
 };
 
-// 2. 提交项目更新数据：调用 PUT /project/update
 // 2. 提交项目更新数据：调用 PUT /project/update
 const submitProjectUpdate = async () => {
   if (!projectEditRef.value) return;
@@ -1447,7 +2067,8 @@ watch(activeTab, (newVal) => {
 // --- 生命周期 & 核心修改：保存/恢复项目ID ---
 watch(filterProject, (newVal, oldVal) => {
   if (newVal) {
-    localStorage.setItem('projectFilterStatus', newVal)
+    localStorage.setItem('projectFilterStatus', newVal);
+   
     // 切换项目时，清除旧项目的冷却缓存
     if (oldVal) {
       const oldCdKey = `refresh_cd_${oldVal}`;
@@ -1460,6 +2081,7 @@ watch(filterProject, (newVal, oldVal) => {
     reportList.value = [];
     rawTableData.value = [];
     unknownUsages.value = [];
+ 
     // 3. 重置项目基本信息（关键：清空ID让刷新按钮禁用）
     Object.assign(currentProjectInfo, {
       id: '',
@@ -1521,12 +2143,14 @@ onMounted(async () => {
     targetProjectId = String(queryProjectId);
     filterProject.value = targetProjectId;
     handleGlobalSearch(); // 立即查询
+    fetchContractListByProjectId(targetProjectId);
   } else if (savedProjectId) {
     const exists = projectOptions.value.some(p => p.id === savedProjectId);
     if (exists) {
       targetProjectId = savedProjectId;
       filterProject.value = targetProjectId;
       handleGlobalSearch(); // 立即查询
+      fetchContractListByProjectId(targetProjectId);
     } else {
       localStorage.removeItem('projectFilterStatus');
     }

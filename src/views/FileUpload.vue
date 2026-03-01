@@ -1290,10 +1290,6 @@ const startProcessing = (row) => {
           // 1. 立即更新前端状态为 "排队中"
           // 这样 UI 会立刻变蓝，并且触发下面的轮询检查
           row.status = 'PENDING' 
-          
-          // 2. 触发轮询机制 (复用之前的逻辑)
-          // 如果轮询没开，这行代码会把它开起来；如果开着，就什么也不做
-          // checkPolling(fileTableData.value)
            startPolling();
         } else {
           ElMessage.error(res.data.msg || '解析请求被拒绝')
@@ -2114,7 +2110,7 @@ const reloadRoomAndSummaryData = async () => {
 </script>
 
 <style scoped>
-/* 保持原有 CSS 不变 */
+
 .macaron-container { padding: 20px; min-height: 80vh; background-color: #f5f7fa; }
 
 .action-header {  display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; background: white; padding: 30px 25px; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.04); }
