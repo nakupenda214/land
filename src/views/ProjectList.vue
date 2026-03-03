@@ -1,33 +1,12 @@
-<template>
+﻿<template>
   <div class="archive-container ">
     
-    <div class="global-filter-card no-print">
-      <div class="filter-row">
-        <div class="filter-item">
-          <span class="label">选择项目</span>
-          <el-select 
-            v-model="filterProject" 
-            placeholder="请输入关键词搜索项目" 
-            style="width: 300px" 
-            filterable 
-            clearable
-            no-match-text="未找到相关项目"
-          >
-            <el-option v-for="p in projectOptions" :key="p.id" :label="p.name" :value="p.id" />
-          </el-select>
-        </div>
-          
-        
-        <el-button type="primary" icon="Search" @click="handleGlobalSearch" :disabled="!filterProject">查询档案</el-button>
-      </div>
-      <div class="project-meta" v-if="currentProjectInfo.id">
-          <!-- 当前查看：<el-tag effect="dark" size="large">{{ currentProjectInfo.name }}</el-tag> -->
-          <span class="meta-info">
-            <!-- 项目编号: {{ currentProjectInfo.code }} | -->
-            <!--状态: <span style="color: #67C23A; font-weight: bold;">{{ currentProjectInfo.status }}</span> -->
-          </span>
-      </div>
-    </div>
+    <ProjectFilterBar
+      v-model="filterProject"
+      :project-options="projectOptions"
+      :current-project-id="currentProjectInfo.id"
+      @search="handleGlobalSearch"
+    />
 
     <div class="content-tabs-wrapper no-print">
       <el-tabs v-model="activeTab" type="border-card" class="archive-tabs no-print">
@@ -36,189 +15,31 @@
           <template #label><span class="custom-tab-label"><el-icon><DataAnalysis /></el-icon> 房产实测汇总表</span></template>
           
           <div class="tab-content">
-            <div class="tab-actions no-print">
-              
-              <div class="action-btns">
-                <el-button icon="Printer" @click="handlePrint" style="margin-right: 15px;">打印报表</el-button>
-                <el-button type="success" color="#CAFFBF" style="color: #555" icon="Download" @click="handleExportExcel">导出 Excel</el-button>
-              </div>
-            </div>
+                        <SummaryTabActions @print="handlePrint" @export="handleExportExcel" />
 
-            <!-- 模板修改：specialRules → unknownUsages，targetCategory → selectedTarget -->
-              <transition name="el-zoom-in-top">
-                <div v-if="unknownUsages.length > 0" class="special-policy-card no-print">
-                  <div class="policy-header">
-                    <el-icon color="#E6A23C" size="18"><WarningFilled /></el-icon>
-                    <span class="policy-title">系统检测到 {{ unknownUsages.length }} 类未知用途区域，请指定其归属类别：</span>
-                  </div>
-                  <div class="policy-items">
-                    <div v-for="(rule, index) in unknownUsages" :key="rule.id" class="policy-item">
-                      <div class="policy-info">
-                        <div class="policy-name">{{ rule.usageName }}</div>
-                        <div class="policy-stats">出现次数: <strong>{{ rule.occurrenceCount }}</strong> | 状态: <span style="color:#F56C6C">待处理</span></div>
-                      </div>
-                      <div class="policy-control">
-                        <span class="control-label">归入:</span>
-                        <el-select v-model="rule.selectedTarget" size="small" style="width: 220px" placeholder="请选择归属分类">
-                            <el-option-group label="计容建筑面积">
-                              <el-option label="商业(办公)" value="calcCommercial" />
-                              <el-option label="住宅" value="calcResidential" />
-                              <el-option label="物管用房" value="calcPropMgmt" />
-                              <el-option label="其他计容" value="calcOther" />
-                            </el-option-group>
-                            <el-option-group label="不计容建筑面积">
-                              <el-option label="社区用房" value="nonCalcCommunity" />
-                              <el-option label="其他公用" value="nonCalcOther" />
-                            </el-option-group>
-                        </el-select>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="policy-footer">
-                    <!-- 补充 loading 绑定 -->
-                    <el-button type="primary" size="small" icon="Check" @click="savePolicy" :loading="isSavingPolicy">确认规则并保存</el-button>
-                  </div>
-                </div>
-              </transition>
+            <!-- 未知用途规则配置卡片 -->
+                          <UnknownUsagePolicyCard
+              :unknown-usages="unknownUsages"
+              :is-saving-policy="isSavingPolicy"
+              @save="savePolicy"
+            />
 
             
 
-            <el-card class="table-card no-print" shadow="never">
-              <template #header>
-                <div class="card-header">
-                  <!-- 左侧：标题 + 统计信息 -->
-                  <div class="header-left">
-                    <span class="main-report-title">{{ currentProjectInfo.name || '项目' }}房产实测信息汇总表</span>
-                    <span style="font-weight: normal; color: #606266;">
-                      (
-                      已上传实测报告：<strong style="color: #409EFF">{{ surveyStats.total }}</strong> 份，
-                      解析成功：<strong style="color: #67C23A">{{ surveyStats.success }}</strong> 份,
-                      <el-divider direction="vertical" />
-                      校验通过：<strong style="color: #67C23A">{{ surveyStats.verified }}</strong> 份，
-                      校验不同：<strong style="color: #F56C6C">{{ surveyStats.unverified }}</strong> 份
-                      )
-                    </span>
-                  </div>
-                  
-                  <!-- 右侧：刷新按钮（新增） -->
-                  <el-button
-                    type="primary"
-                    size="default"
-                    icon="Refresh"
-                    :loading="refreshBtnLoading"
-                    :disabled="isRefreshCd || !currentProjectInfo.id"
-                    @click="handleRefreshSurveyData"
-                    class="refresh-btn"
-                  >
-                    <span v-if="!isRefreshCd">刷新实测报告数据</span>
-                    <span v-else>冷却中（{{ cdRemaining }}s）</span>
-                  </el-button>
-                </div>     
-
-              </template>              
-                <el-table 
-                  :data="displayTableData" 
-                  border 
-                  style="width: 100%" 
-                  max-height="500"
-                  :header-cell-style="{background:'#F5F7FA', color:'#333', fontWeight:'bold', textAlign:'center', fontSize: '12px', padding: '4px 0'}" 
-                  :cell-style="{fontSize: '12px', padding: '4px 0'}"
-                  :virtual-scroll="false"
-                >
-                  <!-- 🔴 关键修改1：替换编号列为自增序号，隐藏内部ID -->
-                  <el-table-column label="序号" type="index" width="50" align="center" fixed :index="index => index + 1" />
-                  <el-table-column label="工程名称" width="160" fixed>
-                    <template #default="{ row }">
-                      <el-link type="primary" :underline="never" style="font-weight:bold" @click="viewDetail(row)">
-                        {{ row.projectName }} <el-icon style="margin-left: 2px"><View /></el-icon>
-                      </el-link>
-                    </template>
-                  </el-table-column>
-                  <el-table-column prop="certNo" label="不动产权证编号" width="200" show-overflow-tooltip />
-                  <el-table-column prop="contractNo" label="合同/批文编号" width="180" show-overflow-tooltip />
-                  <el-table-column prop="phase" label="期数" width="100" align="center" />
-                  <el-table-column prop="totalArea" label="实测总面积" width="150" align="right" />
-                  
-                  <el-table-column label="计容建筑面积" align="center">
-                    <el-table-column prop="calcCommercial" label="商业" width="130" align="right">
-                      <template #default="{ row }"><span :class="{'highlight-val': isTarget(row, 'calcCommercial')}">{{ row.calcCommercial }}</span></template>
-                    </el-table-column>
-                    <el-table-column prop="calcResidential" label="住宅" width="130" align="right">
-                      <template #default="{ row }"><span :class="{'highlight-val': isTarget(row, 'calcResidential')}">{{ row.calcResidential }}</span></template>
-                    </el-table-column>
-                    <el-table-column prop="calcPropMgmt" label="物管" width="130" align="right">
-                      <template #default="{ row }"><span :class="{'highlight-val': isTarget(row, 'calcPropMgmt')}">{{ row.calcPropMgmt }}</span></template>
-                    </el-table-column>
-                    <el-table-column prop="calcOther" label="其他" width="130" align="right">
-                      <template #default="{ row }"><span :class="{'highlight-val': isTarget(row, 'calcOther')}">{{ row.calcOther }}</span></template>
-                    </el-table-column>
-                  </el-table-column>
-
-                  <el-table-column label="不计容建筑面积" align="center">
-                    <el-table-column prop="nonCalcCommunity" label="社区" width="130" align="right">
-                      <template #default="{ row }"><span :class="{'highlight-val': isTarget(row, 'nonCalcCommunity')}">{{ row.nonCalcCommunity }}</span></template>
-                    </el-table-column>
-                    <el-table-column prop="nonCalcOther" label="公用" width="130" align="right">
-                      <template #default="{ row }"><span :class="{'highlight-val': isTarget(row, 'nonCalcOther')}">{{ row.nonCalcOther }}</span></template>
-                    </el-table-column>
-                  </el-table-column>
-                  
-                  <el-table-column prop="reportNo" label="报告书编号" width="130" show-overflow-tooltip />
-                  <el-table-column prop="remarks" label="备注" min-width="80" />
-
-                  <el-table-column prop="pendingConfirmArea" label="待确认面积" width="120" align="center" />
-                  <el-table-column prop="hasUnknownUsage" label="是否有未知用途" width="120" align="center">
-                    <template #default="{ row }">
-                      <el-tag :type="row.hasUnknownUsage === 1 ? 'warning' : 'success'" size="small">
-                        {{ row.hasUnknownUsage === 1 ? '是' : '否' }}
-                      </el-tag>
-                    </template>
-                  </el-table-column>
-                  <el-table-column prop="unknownUsageCount" label="未知用途数量" width="120" align="center" />
-                  <el-table-column prop="isVerified" label="验证状态" width="100" align="center">
-                    <template #default="{ row }">
-                      <el-tag :type="row.isVerified === 1 ? 'success' : 'danger'" size="small">
-                        {{ row.isVerified === 1 ? '验证通过' : '验证不通' }}
-                      </el-tag>
-                    </template>
-                  </el-table-column>
-                  <el-table-column prop="unknownUsages" label="未知用途详情" min-width="150" show-overflow-tooltip />
-                  <el-table-column prop="verificationErrorReason" label="验证失败原因" min-width="200" show-overflow-tooltip />
+                        <SummaryTableCard
+              :current-project-info="currentProjectInfo"
+              :survey-stats="surveyStats"
+              :refresh-btn-loading="refreshBtnLoading"
+              :is-refresh-cd="isRefreshCd"
+              :cd-remaining="cdRemaining"
+              :display-table-data="displayTableData"
+              :is-target="isTarget"
+              @refresh-survey="handleRefreshSurveyData"
+              @view-detail="viewDetail"
+            />
 
 
-                </el-table>
-            
-            </el-card>
-
-
-           <el-card class="info-config-card no-print" shadow="never">
-              <div class="card-title" style="text-align: center;">
-                <span class="title-text">商住比及面积核算对比</span>
-              </div>
-              
-              <!-- 关键修复1：给 el-table 绑定 :data，数据源合并商住比+面积数据 -->
-              <el-table 
-                :data="tableTotalData" 
-                border 
-                style="width: 630px; margin: 0 auto;" 
-                :header-cell-style="{background:'#f0f2f5', color:'#333', fontWeight:'bold', textAlign: 'center'}"
-                :cell-style="{textAlign: 'center'}"
-              >
-                <!-- 表头列（正常定义列，不再循环列） -->
-                <el-table-column prop="label" label="核算指标" width="150" />
-                <el-table-column prop="contract" label="合同约定值" width="180" />
-                <el-table-column prop="measured" label="实测值" width="180" />
-                <el-table-column prop="diff" label="差值 (A - B)" width="120">
-                  <template #default="{ row }">
-                    <!-- 只有面积类数据才显示颜色，商住比显示“-” -->
-                    <span v-if="row.isArea" :class="Number(row.diff) >= 0 ? 'text-green' : 'text-red'" style="font-weight: bold;">
-                      {{ row.diff }}
-                    </span>
-                    <span v-else>-</span>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </el-card>
+           <SummaryComparisonCard :table-total-data="tableTotalData" />
           </div>
 
 
@@ -232,79 +53,28 @@
               <el-icon><Location /></el-icon> 合同及地块信息
             </span>
           </template>
-          <div class="tab-content">
-            <!-- 合同列表 -->
-            <el-card shadow="never" class="mb-20">
-              <template #header>
-                <div class="card-header">
-                  <span class="main-report-title">合同信息列表</span>
-                  <el-button type="primary" size="small" icon="Plus" @click="addContract">新增合同</el-button>
-                </div>
-              </template>
-              <el-table :data="contractLandList" border style="width: 100%" @row-click="handleContractRowClick">
-                <el-table-column label="序号" type="index" width="60" align="center" :index="index => index + 1" />
-                <el-table-column prop="contractNumber" label="合同编号" width="180" />
-                <el-table-column prop="contractType" label="合同类型" width="150" align="center" />
-                <el-table-column prop="transferor" label="出让方" min-width="200" show-overflow-tooltip />
-                <el-table-column prop="transferee" label="受让方" min-width="200" show-overflow-tooltip />
-                <el-table-column prop="totalArea" label="合同总面积(㎡)" width="150" align="right" />
-                <el-table-column prop="plannedUse" label="规划用途" width="120" />
-                <el-table-column label="操作" width="180" align="center">
-                  <template #default="{ row }">
-                    <el-button link type="primary" size="small" icon="Edit" @click="editContract(row)">编辑</el-button>
-                    <el-button link type="danger" size="small" icon="Delete" @click="deleteContract(row)">删除</el-button>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </el-card>
-
-            <!-- 选中合同的地块列表 -->
-            <el-card shadow="never" v-if="selectedContract.id">
-              <template #header>
-                <div class="card-header">
-                  <span class="main-report-title">{{ selectedContract.contractNumber }} - 地块信息列表</span>
-                  <el-button type="primary" size="small" icon="Plus" @click="addLandParcel">新增地块</el-button>
-                </div>
-              </template>
-              <el-table :data="currentLandParcelList" border style="width: 100%">
-                <el-table-column label="序号" type="index" width="60" align="center" :index="index => index + 1" />
-                <el-table-column prop="parcelCode" label="地块编号" min-width="120" />
-                <el-table-column prop="parcelName" label="地块名称" width="150" />
-                <el-table-column prop="plannedUse" label="规划用途" width="120" />
-                <el-table-column prop="totalArea" label="地块总面积(㎡)" width="150" align="right" />
-                <el-table-column prop="residentialArea" label="住宅面积(㎡)" width="150" align="right" />
-                <el-table-column prop="commercialArea" label="商业面积(㎡)" width="150" align="right" />
-                <el-table-column prop="floorAreaRatio" label="容积率" width="100" align="center" />
-                <el-table-column prop="commercialResidentialRatio" label="商住比" width="100" align="center" />
-                <el-table-column label="操作" width="180" align="center">
-                  <template #default="{ row }">
-                    <el-button link type="primary" size="small" icon="Edit" @click="editLandParcel(row)">编辑</el-button>
-                    <el-button link type="danger" size="small" icon="Delete" @click="deleteLandParcel(row)">删除</el-button>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </el-card>
-          </div>
+          <ContractLandTab
+            :contract-land-list="contractLandList"
+            :selected-contract="selectedContract"
+            :current-land-parcel-list="currentLandParcelList"
+            @add-contract="addContract"
+            @contract-row-click="handleContractRowClick"
+            @edit-contract="editContract"
+            @delete-contract="deleteContract"
+            @add-land-parcel="addLandParcel"
+            @edit-land-parcel="editLandParcel"
+            @delete-land-parcel="deleteLandParcel"
+          />
         </el-tab-pane>
        
 
         <el-tab-pane name="reports" class="no-print">
           <template #label><span class="custom-tab-label"><el-icon><Collection /></el-icon> 项目实测报告查询</span></template>
-          <div class="tab-content">
-            <el-table :data="reportList" style="width: 100%" stripe border :header-cell-style="{background:'#F5F7FA', color:'#333'}">
-              <!-- 🔴 关键修改3：报告列表添加自增序号，隐藏ID -->
-              <el-table-column label="序号" type="index" width="60" align="center" :index="index => index + 1" />
-              <el-table-column prop="name" label="报告文件名称" min-width="300">
-                 <template #default="{ row }"><div style="display:flex; align-items:center;"><el-icon style="margin-right:8px; font-size:16px; color:#67C23A"><Collection /></el-icon> <span style="font-weight:500">{{ row.name }}</span></div></template>
-              </el-table-column>
-              <el-table-column prop="build" label="对应楼栋" width="150" align="center" />
-              <el-table-column prop="version" label="版本号" width="100" align="center"><template #default="{ row }">v{{ row.version }}.0</template></el-table-column>
-              <el-table-column prop="size" label="文件大小" width="120" align="center" />
-              <el-table-column label="操作" width="200" align="center">
-                <template #default="{ row }"><el-button link type="primary" icon="View" @click="handlePreview(row)">在线查看</el-button><el-button link type="primary" icon="Download" @click="handleDownload(row)">下载PDF</el-button></template>
-              </el-table-column>
-            </el-table>
-          </div>
+          <ReportListTable
+            :report-list="reportList"
+            @preview="handlePreview"
+            @download="handleDownload"
+          />
         </el-tab-pane>
 
         <!-- 第四个tab：项目信息更新（文档信息栏） -->
@@ -314,382 +84,101 @@
               <el-icon><Document /></el-icon> 项目信息更新
             </span>
           </template>
-          <div class="tab-content">
-            <!-- 项目更新表单（包裹栅格，优化布局） -->
-            <el-form
-              ref="projectEditRef"
-              :model="projectUpdateForm"
-              :rules="projectEditRules"
-              label-width="120px"
-              class="project-edit-form"
-            >
-              <!-- 隐藏ID（已修改） -->
-              <el-form-item prop="id" hidden>
-                <span v-text="projectUpdateForm.id" style="display: none;"></span>
-              </el-form-item>
+          <ProjectEditForm
+            :form="projectUpdateForm"
+            :rules="projectEditRules"
+            :loading="projectEditLoading"
+            :set-form-ref="setProjectEditRef"
+            @submit="submitProjectUpdate"
+            @reset="resetProjectForm"
+          />
+        </el-tab-pane>
 
-              <!-- 用栅格布局包裹表单项，2列布局，统一宽度 -->
-              <el-row :gutter="20" class="form-row">
-                <!-- 第一列：项目名称 -->
-                <el-col :span="12">
-                  <el-form-item label="项目名称" prop="projectName">
-                    <el-input v-model="projectUpdateForm.projectName" placeholder="请输入项目名称（如：XX住宅小区项目）" style="width: 100%;" />
-                  </el-form-item>
-                </el-col>
-                <!-- 第二列：项目编号 -->
-                <el-col :span="12">
-                  <el-form-item label="项目编号" prop="projectCode">
-                    <el-input v-model="projectUpdateForm.projectCode" placeholder="请输入项目编号（如：PRJ2025001）" style="width: 100%;" />
-                  </el-form-item>
-                </el-col>
-              </el-row>
-
-              <el-row :gutter="20" class="form-row">
-                <!-- 第一列：项目位置（跨2列，因为长度较长） -->
-                <el-col :span="24">
-                  <el-form-item label="项目位置" prop="location">
-                    <el-input v-model="projectUpdateForm.location" placeholder="请输入行政区+详细地址" style="width: 100%;" />
-                  </el-form-item>
-                </el-col>
-              </el-row>
-
-              <el-row :gutter="20" class="form-row">
-                <!-- 第一列：占地面积 -->
-                <el-col :span="12">
-                  <el-form-item label="占地面积（㎡）" prop="landArea">
-                    <el-input-number v-model="projectUpdateForm.landArea" placeholder="请输入占地面积" style="width: 100%;" :precision="2" :min="0" />
-                  </el-form-item>
-                </el-col>
-                <!-- 第二列：规划用途 -->
-                <el-col :span="12">
-                  <el-form-item label="规划用途" prop="plannedUse">
-                    <el-select v-model="projectUpdateForm.plannedUse" placeholder="请选择规划用途" style="width: 100%;" clearable>
-                      <el-option label="住宅" value="住宅" />
-                      <el-option label="商业" value="商业" />
-                      <el-option label="办公" value="办公" />
-                      <el-option label="商住混合" value="商住混合" />
-                      <el-option label="其他" value="其他" />
-                    </el-select>
-                  </el-form-item>
-                </el-col>
-              </el-row>
-
-              <el-row :gutter="20" class="form-row">
-                <!-- 第一列：项目时间 -->
-                <el-col :span="12">
-                  <el-form-item label="项目时间" prop="projectTime">
-                    <el-date-picker
-                      v-model="projectUpdateForm.projectTime"
-                      type="month"
-                      placeholder="请选择项目时间"
-                      format="YYYY年MM月"
-                      value-format="YYYY年MM月"
-                      style="width: 100%;"
-                      clearable
-                    />
-                  </el-form-item>
-                </el-col>
-                <!-- 第二列：留空（保持布局对称，可选） -->
-                <el-col :span="12"></el-col>
-              </el-row>
-
-              <el-row :gutter="20" class="form-row">
-                <!-- 备注（跨2列） -->
-                <el-col :span="24">
-                  <el-form-item label="备注" prop="remark">
-                    <el-input v-model="projectUpdateForm.remark" type="textarea" rows="3" placeholder="请输入备注信息" style="width: 100%;" />
-                  </el-form-item>
-                </el-col>
-              </el-row>
-
-              <!-- 提交/重置按钮 -->
-              <el-form-item label="" class="form-btn-group">
-                <el-button type="primary" icon="Check" @click="submitProjectUpdate" :loading="projectEditLoading">提交更新</el-button>
-                <el-button icon="Refresh" @click="resetProjectForm" style="margin-left: 10px;">重置表单</el-button>
-              </el-form-item>
-            </el-form>
-          </div>
+        <el-tab-pane name="archives" class="no-print">
+          <template #label>
+            <span class="custom-tab-label">
+              <el-icon><FolderOpened /></el-icon> 归档文件查询
+            </span>
+          </template>
+          <ArchiveFolderTab
+            :project-id="currentProjectInfo.id"
+            :project-name="currentProjectInfo.name"
+            :active="activeTab === 'archives'"
+          />
         </el-tab-pane>
       </el-tabs>
     </div>
-
-
-
-    <!-- <div id="print-area"> -->
-    <Teleport to="#print-target" v-if="isPrinting">
-        <div class="print-info-section">
-          <div class="print-title">{{ currentProjectInfo.name || '项目' }}房产实测信息汇总表</div>
-          <div class="print-meta-row">
-            <span>打印日期：{{ currentPrintDate }}</span>
-            <span>单位：平方米</span>
-          </div>
-        </div>
-
-        <!-- 关键修改：class 改为 native-print-table -->
-        <table class="native-print-table data-table">
-          <thead>
-            <tr>
-              <th rowspan="2">序号</th>
-              <th rowspan="2">工程名称</th>
-              <th rowspan="2">不动产权证编号</th> 
-              <th rowspan="2">合同/批文编号</th>   
-              <th rowspan="2">期数</th>          
-              <th rowspan="2">实测总面积</th>
-              <th colspan="4">计容建筑面积</th>
-              <th colspan="2">不计容建筑面积</th>
-              <th rowspan="2">报告书编号</th>
-            </tr>
-            <tr>
-              <th>商业</th>
-              <th>住宅</th>
-              <th>物管</th>
-              <th>其他</th>
-              <th>社区</th>
-              <th>公用</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(row, index) in displayTableData" :key="row.id">
-              <td>{{ index + 1 }}</td>
-              <td>{{ row.projectName }}</td>
-              <td>{{ row.certNo }}</td>    <!-- 绑定“不动产权证编号” -->
-              <td>{{ row.contractNo }}</td> <!-- 绑定“合同/批文编号” -->
-              <td>{{ row.phase }}</td>     <!-- 绑定“期数” -->
-              <td>{{ row.totalArea }}</td>
-              <td>{{ row.calcCommercial }}</td>
-              <td>{{ row.calcResidential }}</td>
-              <td>{{ row.calcPropMgmt }}</td>
-              <td>{{ row.calcOther }}</td>
-              <td>{{ row.nonCalcCommunity }}</td>
-              <td>{{ row.nonCalcOther }}</td>
-              <td>{{ row.reportNo }}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <!-- 关键修改：class 改为 native-print-table -->
-        <table class="native-print-table info-table" style="margin-top: 20px;">
-          <thead>
-            <tr>
-              <th style="width: 150px;">核算指标</th>
-              <th style="width: 180px;">合同约定值</th>
-              <th style="width: 180px;">实测值</th>
-              <th style="width: 120px;">差值 (A - B)</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in tableTotalData" :key="row.label">
-              <td>{{ row.label }}</td>
-              <td>{{ row.contract }}</td>
-              <td>{{ row.measured }}</td>
-              <td style="font-weight: bold;">
-                <span v-if="row.isArea" :style="{ color: Number(row.diff) >= 0 ? '#67C23A' : '#F56C6C' }">
-                  {{ row.diff }}
-                </span>
-                <span v-else>-</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div class="print-footer">
-          <div class="print-signatures">
-            <div>制表人：__________</div>
-            <div>审核人：__________</div>
-            <div>日期：__________</div>
-          </div>
-        </div>
-    </Teleport>
+    <PrintSummaryBlock
+      :is-printing="isPrinting"
+      :current-project-info="currentProjectInfo"
+      :current-print-date="currentPrintDate"
+      :display-table-data="displayTableData"
+      :table-total-data="tableTotalData"
+    />
 
 
 
 
-      <el-dialog 
-        v-model="detailDialogVisible" 
-        title="楼栋实测明细 (只读)" 
-        :width="auto"  
-        min-width="1000px"  
-        class="no-print"
-        style="max-width: 90vw;"  
-      >
+            <ProjectDetailDialog
+        v-model="detailDialogVisible"
+        :room-sum-info="roomSumInfo"
+        :room-info-data="roomInfoData"
+        :detail-loading="detailLoading"
+      />
 
-              <!-- 新增：面积总和展示区域（优先用汇总接口的sum，简单高效） -->
-        <div class="sum-info-section" style="margin-bottom: 16px; padding: 12px; background: #f5f7fa; border-radius: 6px;">
-          <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-            <div>
-              <span style="font-weight: bold; color: #606266;">建筑面积总和：</span>
-              <span style="color: #409EFF;">{{ roomSumInfo.buildingAreaSum }}</span> ㎡
-            </div>
-            <div>
-              <span style="font-weight: bold; color: #606266;">套内面积总和：</span>
-              <span style="color: #409EFF;">{{ roomSumInfo.innerAreaSum }}</span> ㎡
-            </div>
-            <div>
-              <span style="font-weight: bold; color: #606266;">阳台面积总和：</span>
-              <span style="color: #409EFF;">{{ roomSumInfo.balconyAreaSum }}</span> ㎡
-            </div>
-            <div>
-              <span style="font-weight: bold; color: #606266;">公摊面积总和：</span>
-              <span style="color: #409EFF;">{{ roomSumInfo.sharedAreaSum }}</span> ㎡
-            </div>
-          </div>
-        </div>
+      <ContractEditDialog
+        v-model="contractDialogVisible"
+        :form="contractForm"
+        :rules="contractFormRules"
+        :loading="contractFormLoading"
+        :set-form-ref="setContractFormRef"
+        @submit="submitContractForm"
+      />
 
-
-        <!-- <div class="detail-table-container" style="width: 100%;">
-       
-        <el-table 
-          :data="roomInfoData" 
-          border 
-          size="small"
-          v-loading="detailLoading"
-          element-loading-text="加载户室数据中..."
-          max-height="500"
-        > -->
-        <div class="resizable-table-container" ref="resizableContainer">
-          <!-- 表格容器：可拉伸的核心容器 -->
-          <div class="detail-table-container" ref="tableContainer" style="width: 100%; height: 500px;">
-              <el-table 
-                :data="roomInfoData" 
-                border 
-                size="small"
-                v-loading="detailLoading"
-                element-loading-text="加载户室数据中..."
-                :style="{ height: '100%' }"
-                max-height="none"
-              >
-
-                <el-table-column label="序号" type="index" width="60" align="center" :index="index => index + 1" />
-                <el-table-column prop="roomLevel" label="楼层" width="80" align="center" />
-                <el-table-column prop="roomNumber" label="房号" width="100" align="center" />
-                <el-table-column prop="buildingArea" label="建筑面积(㎡)" width="120" align="center" />
-                <el-table-column prop="innerArea" label="套内面积(㎡)" width="120" align="center" />
-                <el-table-column prop="balconyArea" label="阳台面积(㎡)" width="120" align="center" />
-                <el-table-column prop="sharedArea" label="公摊面积(㎡)" width="120" align="center" />
-                <el-table-column prop="isCalculate" label="是否计算" width="100" align="center">
-                  <template #default="{ row }">
-                    <span :class="row.isCalculate === 1 ? 'red-text' : ''">
-                      {{ row.isCalculate === 1 ? '是' : '否' }}
-                    </span>
-                  </template>
-                </el-table-column>
-                <el-table-column prop="usageCategory" label="用途类别" width="120" align="center" />
-                <el-table-column prop="roomUsage" label="用途" min-width="100" show-overflow-tooltip align="center"  />
-                <el-table-column prop="floorAreaType" label="面积类型" width="80" align="center">
-                  <template #default="{ row }">
-                    <el-tag :type="row.floorAreaType === '计容' ? 'success' : 'info'" size="small">
-                      {{ row.floorAreaType }}
-                    </el-tag>
-                  </template>
-                </el-table-column>
-              </el-table>
-          </div>
-          
-          <!-- 底部拉伸手柄 -->
-          <div class="resize-handle resize-handle-bottom" @mousedown="(e) => startResize('height', e)"></div>
-        </div>
-        
-      </el-dialog>
-
-
-
-      <!-- 合同编辑弹窗 -->
-      <el-dialog v-model="contractDialogVisible" title="合同信息编辑" width="700px" :close-on-click-modal="false">
-        <el-form ref="contractFormRef" :model="contractForm" :rules="contractFormRules" label-width="120px">
-          <el-form-item label="合同编号" prop="contractNumber">
-            <el-input v-model="contractForm.contractNumber" placeholder="请输入合同编号" style="width: 100%;" />
-          </el-form-item>
-          <el-form-item label="合同类型" prop="contractType">
-            <el-input v-model="contractForm.contractType" placeholder="请输入合同类型" style="width: 100%;" />
-          </el-form-item>
-          <el-form-item label="出让方" prop="transferor">
-            <el-input v-model="contractForm.transferor" placeholder="请输入出让方（土地管理部门）" style="width: 100%;" />
-          </el-form-item>
-          <el-form-item label="受让方" prop="transferee">
-            <el-input v-model="contractForm.transferee" placeholder="请输入受让方（开发商）" style="width: 100%;" />
-          </el-form-item>
-          <el-form-item label="合同总面积(㎡)" prop="totalArea">
-            <el-input-number v-model="contractForm.totalArea" placeholder="请输入总面积" :precision="2" :min="0" style="width: 100%;" />
-          </el-form-item>
-          <el-form-item label="规划用途" prop="plannedUse">
-            <el-select v-model="contractForm.plannedUse" placeholder="请选择规划用途" clearable style="width: 100%;">
-              <el-option label="住宅" value="住宅" />
-              <el-option label="商业" value="商业" />
-              <el-option label="办公" value="办公" />
-              <el-option label="商住混合" value="商住混合" />
-              <el-option label="其他" value="其他" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="备注" prop="remark">
-            <el-input v-model="contractForm.remark" type="textarea" rows="3" placeholder="请输入备注信息" style="width: 100%;" />
-          </el-form-item>
-        </el-form>
-        <template #footer>
-          <el-button @click="contractDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="submitContractForm" :loading="contractFormLoading">确认保存</el-button>
-        </template>
-      </el-dialog>
-
-      <!-- 地块编辑弹窗 -->
-      <el-dialog v-model="landParcelDialogVisible" title="地块信息编辑" width="800px" :close-on-click-modal="false">
-        <el-form ref="landParcelFormRef" :model="landParcelForm" :rules="landParcelFormRules" label-width="120px">
-          <el-form-item label="地块编号" prop="parcelCode">
-            <el-input v-model="landParcelForm.parcelCode" placeholder="请输入地块编号" style="width: 100%;" />
-          </el-form-item>
-          <el-form-item label="地块名称" prop="parcelName">
-            <el-input v-model="landParcelForm.parcelName" placeholder="请输入地块名称" style="width: 100%;" />
-          </el-form-item>
-          <el-form-item label="规划用途" prop="plannedUse">
-            <el-select v-model="landParcelForm.plannedUse" placeholder="请选择规划用途" clearable style="width: 100%;">
-              <el-option label="住宅" value="住宅" />
-              <el-option label="商业" value="商业" />
-              <el-option label="办公" value="办公" />
-              <el-option label="商住混合" value="商住混合" />
-              <el-option label="其他" value="其他" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="地块总面积(㎡)" prop="totalArea">
-            <el-input-number v-model="landParcelForm.totalArea" placeholder="请输入总面积" :precision="2" :min="0" style="width: 100%;" />
-          </el-form-item>
-          <el-form-item label="住宅面积(㎡)" prop="residentialArea">
-            <el-input-number v-model="landParcelForm.residentialArea" placeholder="请输入住宅面积" :precision="2" :min="0" style="width: 100%;" />
-          </el-form-item>
-          <el-form-item label="商业面积(㎡)" prop="commercialArea">
-            <el-input-number v-model="landParcelForm.commercialArea" placeholder="请输入商业面积" :precision="2" :min="0" style="width: 100%;" />
-          </el-form-item>
-          <el-form-item label="容积率" prop="floorAreaRatio">
-            <el-input-number v-model="landParcelForm.floorAreaRatio" placeholder="请输入容积率" :precision="2" :min="0" style="width: 100%;" />
-          </el-form-item>
-          <el-form-item label="商住比" prop="commercialResidentialRatio">
-            <el-input-number v-model="landParcelForm.commercialResidentialRatio" placeholder="请输入商住比" :precision="2" :min="0" style="width: 100%;" />
-          </el-form-item>
-          <el-form-item label="备注" prop="remark">
-            <el-input v-model="landParcelForm.remark" type="textarea" rows="3" placeholder="请输入备注信息" style="width: 100%;" />
-          </el-form-item>
-        </el-form>
-        <template #footer>
-          <el-button @click="landParcelDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="submitLandParcelForm" :loading="landParcelFormLoading">确认保存</el-button>
-        </template>
-      </el-dialog>
+      <LandParcelEditDialog
+        v-model="landParcelDialogVisible"
+        :form="landParcelForm"
+        :rules="landParcelFormRules"
+        :loading="landParcelFormLoading"
+        :set-form-ref="setLandParcelFormRef"
+        @submit="submitLandParcelForm"
+      />
 
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed, watch , onUnmounted} from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { Search, Download, DataAnalysis, Setting, View, List, Printer, Document, Collection, WarningFilled, Check } from '@element-plus/icons-vue'
-import { ElMessage, ElLoading , ElMessageBox } from 'element-plus'
+import { ref, onMounted, computed, watch , onUnmounted} from 'vue'
+import { useRoute } from 'vue-router'
+import { DataAnalysis, Document, Collection } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { downloadGridFsFile } from '@/services/file.service'
 
-import axios from 'axios'
 import { usePrint } from '@/hooks/usePrint.ts'
+import { useProjectSelector } from '@/composables/project-list/useProjectSelector'
+import ProjectFilterBar from '@/components/project-list/ProjectFilterBar.vue'
+import SummaryTabActions from '@/components/project-list/SummaryTabActions.vue'
+import UnknownUsagePolicyCard from '@/components/project-list/UnknownUsagePolicyCard.vue'
+import SummaryTableCard from '@/components/project-list/SummaryTableCard.vue'
+import SummaryComparisonCard from '@/components/project-list/SummaryComparisonCard.vue'
+import PrintSummaryBlock from '@/components/project-list/PrintSummaryBlock.vue'
+import ProjectDetailDialog from '@/components/project-list/ProjectDetailDialog.vue'
+import ContractEditDialog from '@/components/project-list/ContractEditDialog.vue'
+import LandParcelEditDialog from '@/components/project-list/LandParcelEditDialog.vue'
+import ProjectEditForm from '@/components/project-list/ProjectEditForm.vue'
+import ReportListTable from '@/components/project-list/ReportListTable.vue'
+import ContractLandTab from '@/components/project-list/ContractLandTab.vue'
+import ArchiveFolderTab from '@/components/project-list/ArchiveFolderTab.vue'
+import { useContractLandManagement } from '@/composables/project-list/useContractLandManagement'
+import { useProjectEditManagement } from '@/composables/project-list/useProjectEditManagement'
+import { useSurveySummary } from '@/composables/project-list/useSurveySummary'
+import { useSurveyRefresh } from '@/composables/project-list/useSurveyRefresh'
+import { useUnknownUsagePolicy } from '@/composables/project-list/useUnknownUsagePolicy'
+import { useProjectFileCollections } from '@/composables/project-list/useProjectFileCollections'
+import { useProjectExport } from '@/composables/project-list/useProjectExport'
+import { useProjectDetailDialog } from '@/composables/project-list/useProjectDetailDialog'
 
-import ExcelJS from 'exceljs';
-import { saveAs } from 'file-saver';
-import { ElForm } from 'element-plus';
-
-import { Location, Plus, Edit, Delete } from '@element-plus/icons-vue'
+import { FolderOpened, Location } from '@element-plus/icons-vue'
 
 
 
@@ -701,1370 +190,204 @@ const handlePrint = () => {
 
 
 const route = useRoute()
-const router = useRouter()
 
-const resizableContainer = ref(null) // 拉伸外层容器ref
-const tableContainer = ref(null) // 表格容器ref
-const isResizing = ref(false) // 是否正在拉伸
-const resizeType = ref('') // 拉伸类型：width/height/both
-
-// 开始拉伸
-const startResize = (type, e) => {
-  isResizing.value = true
-  resizeType.value = type
-  e.preventDefault()
-  
-  const container = tableContainer.value
-  const startY = e.clientY
-  const startHeight = container.offsetHeight
-  
-  const handleMouseMove = (e) => {
-    if (!isResizing.value) return
-    // 高度调整：最小300px，最大为视口高度的90%
-    if (resizeType.value === 'height') {
-      const newHeight = Math.max(300, startHeight + (e.clientY - startY))
-      // 限制最大高度为视口的90%
-      container.style.height = `${Math.min(newHeight, window.innerHeight * 0.9)}px`
-    }
-  }
-  
-  const handleMouseUp = () => {
-    isResizing.value = false
-    document.removeEventListener('mousemove', handleMouseMove)
-    document.removeEventListener('mouseup', handleMouseUp)
-  }
-  
-  document.addEventListener('mousemove', handleMouseMove)
-  document.addEventListener('mouseup', handleMouseUp)
-}
-// 组件卸载时清理事件（避免内存泄漏）
+// 组件卸载时清理事件，避免内存泄漏
 onUnmounted(() => {
-  if (cdTimer) {
-    clearInterval(cdTimer);
-  }
-
-  document.removeEventListener('mousemove', () => {})
-  document.removeEventListener('mouseup', () => {})
+  clearRefreshTimer();
 })
 
-// --- 页面状态 ---
+// 页面状态
 const activeTab = ref('summary')
-const filterProject = ref('') // 核心：选中的项目ID
-const projectOptions = ref([]) 
-const filterYear = ref(new Date().getFullYear().toString()) 
-
-// --- 项目详情 ---
-const currentProjectInfo = reactive({
-  id: '',
-  name: '请选择项目', 
-  code: '-',        
-  status: '-'    
-})
-
-const surveyStats = computed(() => {
-  // 无项目选中时，直接返回 0
-  if (!filterProject.value) {
-    return { total: 0, success: 0, verified: 0, unverified: 0 }
-  }
-  const verifiedCount = rawTableData.value.filter(item => item.isVerified === 1).length;
-  const unverifiedCount = rawTableData.value.filter(item => item.isVerified === 0).length;
-  // 有项目时：
-  // total = tab3 实测报告列表长度（所有已上传的）
-  // success = tab1 汇总表长度（解析成功的，因为汇总表只返回解析成功的数据）
-  return {
-    total: reportList.value.length,
-    success: rawTableData.value.length,
-    verified: verifiedCount, // 新增：校验通过数
-    unverified: unverifiedCount 
-  }
-})
 
 
-// --- 对比表数据 ---
-const businessResidentialRatio = reactive({ contractRatio: "≥2:8", measuredRatio: "-" })
-const comparisonData = reactive([
-  { label: '合同约定建筑面积', contract: '-', measured: '-', diff: '-', isArea: true },
-  { label: '合同约定商业面积', contract: '-', measured: '-', diff: '-', isArea: true },
-  { label: '合同约定住宅面积', contract: '-', measured: '-', diff: '-', isArea: true }
-])
-const tableTotalData = computed(() => {
-  const ratioRow = { label: '商住比', contract: businessResidentialRatio.contractRatio, measured: businessResidentialRatio.measuredRatio, diff: '-', isArea: false }
-  return [ratioRow, ...comparisonData]
-})
-
-// --- 列表数据源 ---
-const rawTableData = ref([])
+// 列表数据
 const reportList = ref([])
 const contractList = ref([])
-const unknownUsages = ref([]) // 【新增】未知用途列表
-const isSavingPolicy = ref(false)
+const {
+  tableTotalData,
+  rawTableData,
+  unknownUsages,
+  isSavingPolicy,
+  displayTableData,
+  surveyStats,
+  fetchSurveyReports,
+  resetSummaryMetrics
+} = useSurveySummary({ reportList })
 
 
-
-const categoryMap = {
-  'calcCommercial':   { usageCategory: 'COMMERCIAL', floorAreaType: 'BUILDABLE' },
-  'calcResidential':  { usageCategory: 'RESIDENTIAL', floorAreaType: 'BUILDABLE' },
-  'calcPropMgmt':     { usageCategory: 'MANAGEMENT', floorAreaType: 'BUILDABLE' },
-  'calcOther':        { usageCategory: 'OTHER_BUILDABLE', floorAreaType: 'BUILDABLE' },
-  'nonCalcCommunity': { usageCategory: 'COMMUNITY', floorAreaType: 'NON_BUILDABLE' },
-  'nonCalcOther':     { usageCategory: 'OTHER_PUBLIC', floorAreaType: 'NON_BUILDABLE' }
-}
-
-const usageCategoryMap = {
-  'RESIDENTIAL': '住宅',
-  'COMMERCIAL': '商业/办公',
-  'MANAGEMENT': '物管用房',
-  'COMMUNITY': '社区用房',
-  'OTHER_BUILDABLE': '其他计容',
-  'OTHER_PUBLIC': '其他公用',
-  'UNKNOWN': '未知'
-}
-
-// --- 新增：面积总和存储（响应式） ---
-const roomSumInfo = reactive({
-  buildingAreaSum: '0.00',
-  innerAreaSum: '0.00',
-  balconyAreaSum: '0.00',
-  sharedAreaSum: '0.00'
-})
 
 
 // --- 核心 API 逻辑 ---
 
 // 1. 获取项目列表
-const fetchProjectList = async () => {
-  try {
-    const res = await axios.get('/api/project/list')
-    if (res.data.code === 200) {
-      projectOptions.value = res.data.data.map(item => ({
-        id: String(item.id),
-        name: item.projectName
-      }))
-    }
-  } catch (error) { console.error(error) }
-}
-
 const currentPrintDate = computed(() => {
   const date = new Date();
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0'); // 月份从0开始，补前导0
-  const day = String(date.getDate()).padStart(2, '0'); // 日期补前导0
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 });
 
-// 2. 获取详情 & 触发数据拉取
-const fetchProjectDetail = async (projectId) => {
-  if (!projectId) return;
-  
-  // 1. 先更新项目基本信息
-  const projectItem = projectOptions.value.find(p => p.id === projectId);
-  if (projectItem) {
-    currentProjectInfo.id = projectId;
-    currentProjectInfo.name = projectItem.name;
-    currentProjectInfo.code = `XM-${String(projectId).padStart(3, '0')}`;
-    currentProjectInfo.status = '已归档';
+const {
+  createFetchProjectData
+} = useProjectFileCollections({ reportList, contractList })
+
+const fetchProjectData = createFetchProjectData({
+  getProjectOptions: () => projectOptions.value,
+  getCurrentProjectInfo: () => currentProjectInfo
+})
+const {
+  filterProject,
+  projectOptions,
+  currentProjectInfo,
+  fetchProjects: fetchProjectList,
+  fetchProjectDetail
+} = useProjectSelector({ fetchProjectData, fetchSurveyReports })
+const {
+  roomSumInfo,
+  detailDialogVisible,
+  roomInfoData,
+  detailLoading,
+  viewDetail
+} = useProjectDetailDialog({
+  currentProjectInfo,
+  rawTableData
+})
+const {
+  savePolicy
+} = useUnknownUsagePolicy({
+  unknownUsages,
+  isSavingPolicy,
+  currentProjectInfo,
+  fetchSurveyReports
+})
+
+
+
+
+
+
+const {
+  refreshBtnLoading,
+  isRefreshCd,
+  cdRemaining,
+  handleRefreshSurveyData,
+  resetRefreshCdStatus,
+  restoreRefreshCdStatus,
+  clearRefreshTimer
+} = useSurveyRefresh({
+  currentProjectInfo,
+  fetchSurveyReports
+})
+const {
+  handleExportExcel
+} = useProjectExport({
+  displayTableData,
+  tableTotalData,
+  currentProjectInfo
+})
+// ===== 合同表单相关（补充注释）=====
+const {
+  contractLandList,
+  selectedContract,
+  currentLandParcelList,
+  contractDialogVisible,
+  contractForm,
+  contractFormRules,
+  contractFormLoading,
+  setContractFormRef,
+  submitContractForm,
+  landParcelDialogVisible,
+  landParcelForm,
+  landParcelFormRules,
+  landParcelFormLoading,
+  setLandParcelFormRef,
+  submitLandParcelForm,
+  fetchContractListByProjectId,
+  handleContractRowClick,
+  addContract,
+  editContract,
+  deleteContract,
+  addLandParcel,
+  editLandParcel,
+  deleteLandParcel
+} = useContractLandManagement({
+  filterProject,
+  currentProjectInfo
+})
+const {
+  projectEditLoading,
+  projectUpdateForm,
+  projectEditRules,
+  setProjectEditRef,
+  submitProjectUpdate,
+  resetProjectForm
+} = useProjectEditManagement({
+  activeTab,
+  filterProject,
+  fetchProjectList,
+  fetchProjectDetail
+})
+
+const handleGlobalSearch = async () => {
+  const projectId = String(filterProject.value || '')
+  if (!projectId) {
+    ElMessage.warning('请先选择项目')
+    return
   }
 
-  // 2. 并行拉取：tab2/tab3 数据 + tab1 汇总表数据
-  try {
-    await Promise.all([
-      fetchProjectData(projectId), // tab2（合同）、tab3（报告文件）
-      fetchSurveyReports(projectId) // tab1（汇总表）
-    ]);
-    ElMessage.success('所有数据加载完成');
-  } catch (error) {
-    console.error('数据加载异常：', error);
-    ElMessage.warning('部分数据加载失败，请检查');
-  }
-};
-// 补全文件大小格式化函数
-const formatFileSize = (bytes) => {
-  if (!bytes) return '-';
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
-  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
-};
-
-// 3. 拉取业务数据 (合同+报告)
-const fetchProjectData = async (projectId) => {
-  if (!projectId) return;
-  
-  const loading = ElLoading.service({ 
-    lock: true, 
-    text: '加载文件数据中...', 
-    background: 'rgba(0, 0, 0, 0.1)' 
-  })
-  console.log('拉取文件数据，项目ID：', projectId);
-  try {
-    const res = await axios.get(`/api/file/project/${projectId}`)
-    if (res.data.code === 200 && Array.isArray(res.data.data)) {
-      const fileList = res.data.data;
-      console.log('获取到文件列表：', fileList);
-      
-      // 赋值项目基本信息
-      currentProjectInfo.id = projectId;
-      currentProjectInfo.name = projectOptions.value.find(p => p.id === projectId)?.name || `未知项目(${projectId})`;
-      currentProjectInfo.code = `XM-${String(projectId).padStart(3, '0')}`;
-      
-      // 拆分合同列表
-      contractList.value = fileList
-      .filter(file => file.fileContextType === 'CONTRACT' || (file.originalName && file.originalName.includes('合同')))
-      .map(file => ({
-        // 🔴 隐藏内部ID，仅保留业务字段
-        name: file.originalName || '未命名合同.pdf',
-        type: '土地出让',
-        no: '-',
-        date: file.uploadTime ? file.uploadTime.split('T')[0] : '-',
-        fileId: file.gridfsId
-      }));
-
-      // ③ 拆分报告列表
-      reportList.value = fileList
-      
-      .filter(file => file.fileContextType === 'SURVEY_REPORT' || (file.originalName && (file.originalName.includes('报告') || file.originalName.includes('实测'))))
-      .map(file => ({
-        // 🔴 隐藏内部ID，仅保留业务字段
-        name: file.originalName || '未命名实测报告.pdf',
-        build: '-',
-        version: 1,
-        size: formatFileSize(file.fileSize),
-        fileId: file.gridfsId
-      }));
-
-      ElMessage.success(`加载成功：合同${contractList.value.length}份，实测报告${reportList.value.length}份`);
-    }
-  } catch (error) {
-    console.error('拉取文件数据失败：', error);
-    ElMessage.error('拉取文件数据失败，请重试');
-  } finally {
-    loading.close();
-  }
-}
-const fetchSurveyReports = async (projectId) => {
-  if (!projectId) return;
-  
-  try {
-    const res = await axios.get(`/api/project/${projectId}/survey-reports/parsed`); // 注意接口前缀是否需要 /api，根据你的后端调整
-    if (res.data.code === 200 && Array.isArray(res.data.data)) {
-      const surveyData = res.data.data;
-      
-      // 映射接口返回字段到 tab1 汇总表的列（按你的接口返回字段调整）
-      rawTableData.value = surveyData.map(item => ({
-        // 🔴 保留内部ID但不展示，仅用于key绑定
-        id: item.id || '-', 
-        projectName: item.buildingName || '未知楼栋', // 工程名称（楼栋名）
-        certNo: item.propertyCertificateNumber || '-', // 不动产权证编号
-        contractNo: item.propertyAreaConfirmationNoticeNumber || '-', // 合同/批文编号
-        phase: item.phase || '-', // 期数
-        totalArea: (item.actualTotalBuildingArea || 0).toFixed(2), // 实测总面积
-        // 计容建筑面积
-        calcCommercial: (item.actualCommercialArea || 0).toFixed(2), // 商业
-        calcResidential: (item.actualResidentialArea || 0).toFixed(2), // 住宅
-        calcPropMgmt: (item.actualManagementRoomArea || 0).toFixed(2), // 物管
-        calcOther: (item.actualOtherBuildableArea || 0).toFixed(2), // 其他计容
-        // 不计容建筑面积
-        nonCalcCommunity: (item.actualCommunityArea || 0).toFixed(2), // 社区
-        nonCalcOther: (item.actualOtherPublicArea || 0).toFixed(2), // 公用
-        reportNo: item.realEstateSurveyReportNumber || '-', // 报告书编号
-        remarks: item.remark || '-', // 备注
-        
-
-        pendingConfirmArea: item.pendingConfirmArea || 0, // 待确认面积
-        unknownUsages: item.unknownUsages || '[]', // 未知用途JSON
-        unknownUsageCount: item.unknownUsageCount || 0, // 未知用途数量
-        isVerified: item.isVerified || 0, // 验证状态
-        hasUnknownUsage: item.hasUnknownUsage || 0, // 标记是否有未知用途
-        verificationErrorReason: item.verificationErrorReason || '-' ,// 验证失败原因
-
-        roomInfoBuildingAreaSum: item.roomInfoBuildingAreaSum || 0,
-        roomInfoInnerAreaSum: item.roomInfoInnerAreaSum || 0,
-        roomInfoBalconyAreaSum: item.roomInfoBalconyAreaSum || 0,
-        roomInfoSharedAreaSum: item.roomInfoSharedAreaSum || 0
-
-
-      }));
-
-      // 计算商住比对比表数据（可选，根据需要调整）
-      const totalContractArea = 0; // 可从合同接口获取，或暂时设为0
-      const totalMeasuredArea = surveyData.reduce((sum, item) => sum + Number(item.actualTotalBuildingArea || 0), 0);
-      const totalCommercial = surveyData.reduce((sum, item) => sum + Number(item.actualCommercialArea || 0), 0);
-      const totalResidential = surveyData.reduce((sum, item) => sum + Number(item.actualResidentialArea || 0), 0);
-      
-      // 更新对比表数据
-      comparisonData[0].contract = totalContractArea.toFixed(2);
-      comparisonData[0].measured = totalMeasuredArea.toFixed(2);
-      comparisonData[0].diff = (totalMeasuredArea - totalContractArea).toFixed(2);
-      comparisonData[1].contract = '0.00'; // 合同商业面积，可从合同接口补充
-      comparisonData[1].measured = totalCommercial.toFixed(2);
-      comparisonData[1].diff = totalCommercial.toFixed(2);
-      comparisonData[2].contract = '0.00'; // 合同住宅面积，可从合同接口补充
-      comparisonData[2].measured = totalResidential.toFixed(2);
-      comparisonData[2].diff = totalResidential.toFixed(2);
-
-      // 检查是否有未知用途，拉取接口2
-      const hasUnknown = surveyData.some(item => item.hasUnknownUsage === 1);
-      if (hasUnknown) {
-        await fetchUnknownUsages(projectId);
-      } else {
-        unknownUsages.value = [];
-      }
-
-      console.log('tab1 汇总表数据加载完成：', rawTableData.value);
-    }
-  } catch (error) {
-    console.error('拉取 tab1 实测报告数据失败：', error);
-    ElMessage.error('汇总表数据加载失败，请重试');
-  }
-};
-
-const fetchUnknownUsages = async (projectId) => {
-  try {
-    const res = await axios.get(`/api/usage-config/unknown/project/${projectId}`)
-    if (res.data.code === 200 && res.data.data) {
-      // 增加 selectedTarget 字段用于双向绑定
-      unknownUsages.value = res.data.data.map(item => ({ ...item, selectedTarget: '' }))
-    }
-  } catch (e) { console.error('未知用途加载失败', e) }
+  await fetchProjectDetail(projectId)
+  await fetchContractListByProjectId(projectId)
+  restoreRefreshCdStatus(projectId)
 }
 
-const savePolicy = async () => {
-  // 筛选出已选择的规则
-  const validRules = unknownUsages.value.filter(u => u.selectedTarget);
-  if (validRules.length === 0) return ElMessage.warning('请至少指定一项归属规则');
-
-  isSavingPolicy.value = true;
-  try {
-    // 并行提交所有规则 (接口4)
-    const promises = validRules.map(rule => {
-      const mapping = categoryMap[rule.selectedTarget]; // 获取 6选1 对应的后端参数
-      return axios.post('/api/usage-config/create-from-unknown', null, {
-        params: {
-          unknownUsageId: rule.id,
-          usageCategory: mapping.usageCategory,
-          floorAreaType: mapping.floorAreaType,
-          isRegex: 1, // 默认
-          priority: 1000 // 默认
-        }
-      });
-    });
-
-    await Promise.all(promises);
-    ElMessage.success(`成功保存 ${validRules.length} 条规则，正在刷新数据...`);
-
-    // 调用刷新接口 (接口3)
-    await axios.post(`/api/project/${currentProjectInfo.id}/refresh-survey-reports`);
-
-    // 重新拉取 tab1 汇总表数据（关键修改：只刷新tab1，无需刷新文件数据）
-    await fetchSurveyReports(currentProjectInfo.id);
-
-  } catch (e) {
-    console.error(e);
-    ElMessage.error('保存规则失败');
-  } finally {
-    isSavingPolicy.value = false;
-  }
-};
-
-const displayTableData = computed(() => {
-  return rawTableData.value; // 直接返回，无需解构baseMap
-});
-
-// --- 新增：刷新按钮相关状态（冷却时间建议设60秒，可修改）---
-const REFRESH_CD_SECONDS = 15; // 刷新冷却时间，单位：秒
-const refreshBtnLoading = ref(false); // 刷新按钮加载状态
-const isRefreshCd = ref(false); // 是否处于冷却中
-const cdRemaining = ref(REFRESH_CD_SECONDS); // 剩余冷却时间
-let cdTimer = null; // 冷却倒计时定时器（非响应式，仅用于存储定时器ID）
-
-// --- 新增：核心刷新函数 ---
-// --- 核心刷新函数（修改：点击即冷却）---
-const handleRefreshSurveyData = async () => {
-  // 1. 校验：是否选中项目
-  if (!currentProjectInfo.id) {
-    ElMessage.warning('请先选择项目再进行刷新');
-    return;
-  }
-
-  // 2. 校验：是否已在冷却中（防止重复点击）
-  if (isRefreshCd.value) {
-    ElMessage.warning(`请等待 ${cdRemaining.value} 秒后再刷新`);
-    return;
-  }
-
-  // 3. 【关键修改：点击即冷却，提前启动倒计时】
-  startRefreshCd();
-
-  try {
-    // 4. 开始刷新：设置按钮加载状态
-    refreshBtnLoading.value = true;
-    ElMessage.info('正在刷新项目实测报告数据，请稍候...');
-
-    // 5. 调用刷新接口（POST 请求，对应你提供的接口地址）
-    await axios.post(`/api/project/${currentProjectInfo.id}/refresh-survey-reports`);
-
-    // 6. 刷新成功：重新拉取汇总表数据（核心：刷新后更新页面展示）
-    await fetchSurveyReports(currentProjectInfo.id);
-
-    // 7. 提示用户刷新成功
-    ElMessage.success('项目实测报告数据刷新完成，已重新加载汇总表');
-
-  } catch (error) {
-    // 8. 异常处理：提示错误信息
-    console.error('刷新实测报告数据失败：', error);
-    ElMessage.error('刷新失败，请检查网络或稍后重试');
-
-  } finally {
-    // 9. 无论成功失败：仅结束加载状态（冷却已提前启动，无需再处理）
-    refreshBtnLoading.value = false;
-  }
-};
-
-
-// --- 交互事件 ---
-const handleGlobalSearch = () => { 
-  if (filterProject.value) fetchProjectDetail(filterProject.value)
-  else ElMessage.warning('请先选择项目')
+const isTarget = (row, key) => {
+  if (!row || !key) return false
+  const fields = [
+    'calcCommercial',
+    'calcResidential',
+    'calcPropMgmt',
+    'calcOther',
+    'nonCalcCommunity',
+    'nonCalcOther'
+  ]
+  const values = fields.map((field) => Number(row[field] || 0))
+  const maxValue = Math.max(...values, 0)
+  return maxValue > 0 && Number(row[key] || 0) === maxValue
 }
 
-// 在线预览（用 GridFS ID 接口）
-const handlePreview = (row) => { 
-  if (row.fileId) {
-    // ✅ 关键修改：添加 gridfs 路径层级
-    const url = `/api/file/download/gridfs/${row.fileId}`
-    window.open(url, '_blank')
-  } else {
-    ElMessage.warning('文件ID丢失，无法预览')
+const handlePreview = (row) => {
+  if (!row?.fileId) {
+    ElMessage.warning('缺少文件ID，无法预览')
+    return
   }
+  window.open(`/api/file/download/gridfs/${row.fileId}`, '_blank')
 }
 
-// 文件下载（用 GridFS ID 接口）
-const handleDownload = (row) => {
-  if (row.fileId) {
-    // ✅ 关键修改：添加 gridfs 路径层级
-    const url = `/api/file/download/gridfs/${row.fileId}`
+const handleDownload = async (row) => {
+  if (!row?.fileId) {
+    ElMessage.warning('缺少文件ID，无法下载')
+    return
+  }
+
+  try {
+    const res = await downloadGridFsFile(row.fileId, { responseType: 'blob' })
+    const blob = new Blob([res.data], { type: 'application/pdf' })
+    const objectUrl = URL.createObjectURL(blob)
     const link = document.createElement('a')
-    link.href = url
-    link.download = row.name // 指定下载文件名
+    link.href = objectUrl
+    link.download = `${row.name || '报告文件'}.pdf`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-  } else {
-    ElMessage.warning('文件ID丢失，无法下载')
+    URL.revokeObjectURL(objectUrl)
+  } catch (error) {
+    console.error('下载失败:', error)
+    ElMessage.error('下载失败，请稍后重试')
   }
 }
 
-const handleExportExcel = async () => {
-  // 1. 创建一个新的 Excel 工作簿
-  const workbook = new ExcelJS.Workbook();
-  // 2. 添加一个工作表，命名为「房产实测汇总表」
-  const worksheet = workbook.addWorksheet('房产实测汇总表');
-
-  // 3. 构建表头数据（多级表头，和你之前的结构一致）
-  const headerData = [
-    [
-      '序号', '工程名称', '不动产权证编号', '合同/批文编号', '期数',
-      '实测总面积', '计容建筑面积', '计容建筑面积', '计容建筑面积', '计容建筑面积',
-      '不计容建筑面积', '不计容建筑面积', '报告书编号', '备注'
-    ],
-    [
-      '', '', '', '', '',
-      '', '商业', '住宅', '物管', '其他',
-      '社区', '公用', '', ''
-    ]
-  ];
-
-  // 4. 构建表格数据（和你之前的结构一致）
-  const dataRows = displayTableData.value.map((item, index) => [
-    index + 1,
-    item.projectName,
-    item.certNo,
-    item.contractNo,
-    item.phase,
-    Number(item.totalArea).toFixed(2),
-    Number(item.calcCommercial).toFixed(2),
-    Number(item.calcResidential).toFixed(2),
-    Number(item.calcPropMgmt).toFixed(2),
-    Number(item.calcOther).toFixed(2),
-    Number(item.nonCalcCommunity).toFixed(2),
-    Number(item.nonCalcOther).toFixed(2),
-    item.reportNo,
-    item.remarks
-  ]);
-
-  // 5. 写入表头到工作表（前 2 行是表头）
-  headerData.forEach((row, rowIndex) => {
-    worksheet.addRow(row);
-    // 表头加粗 + 居中（水平+垂直）
-    row.forEach((_, colIndex) => {
-      const cell = worksheet.getCell(rowIndex + 1, colIndex + 1); // exceljs 行/列从 1 开始
-      cell.font = { bold: true };
-      cell.alignment = {
-        horizontal: 'center',
-        vertical: 'middle',
-        wrapText: true // 自动换行（防止表头内容溢出）
-      };
-    });
-  });
-
-  // 6. 写入表格数据到工作表
-  dataRows.forEach((row) => {
-    const addedRow = worksheet.addRow(row);
-    // 数据单元格居中（水平+垂直）
-    addedRow.eachCell((cell) => {
-      cell.alignment = {
-        horizontal: 'center',
-        vertical: 'middle'
-      };
-    });
-  });
-
-  // 7. 设置合并单元格（和你之前的规则一致）
-  worksheet.mergeCells('G1:J1'); // 合并「计容建筑面积」（第 7 列到第 10 列，第 1 行）
-  worksheet.mergeCells('K1:L1'); // 合并「不计容建筑面积」（第 11 列到第 12 列，第 1 行）
-
-  
-  const singleHeaderCols = [1,2,3,4,5,13,14]; // 序号、工程名、产权证号、合同号、期数、报告号、备注
-  singleHeaderCols.forEach(col => {
-    worksheet.mergeCells(`${ worksheet.getColumn(col).letter }1:${ worksheet.getColumn(col).letter }2`);
-  });
-
-
-  // 8. 设置列宽（和你之前的需求一致，合理分配列宽）
-  const columnWidths = [
-    6, 20, 20, 18, 8, 12,
-    10, 10, 10, 10, 10, 10,
-    16, 12
-  ];
-  worksheet.columns.forEach((col, index) => {
-    col.width = columnWidths[index] || 10; // 给每一列设置对应宽度
-  });
-
-  // 9. 设置行高（表头行高略高，更美观）
-  worksheet.getRow(1).height = 30; // 第 1 行（合并表头）行高
-  worksheet.getRow(2).height = 25; // 第 2 行（子表头）行高
-
-  // ========== 新增：添加核算指标表格 ==========
-  // 计算汇总表最后一行位置，空2行分隔
-  const summaryLastRow = 2 + dataRows.length;
-  const gapRows = 2; // 空2行
-  const calcTableStartRow = summaryLastRow + gapRows + 1;
-
-  // 1. 写入核算指标表头
-  const calcHeader = ['核算指标', '合同约定值', '实测值', '差值 (A - B)'];
-  const headerRow = worksheet.getRow(calcTableStartRow);
-  headerRow.values = calcHeader;
-  // 表头样式：加粗、居中、行高
-  headerRow.height = 25;
-  headerRow.eachCell((cell) => {
-    cell.font = { bold: true, size: 12 };
-    cell.alignment = {
-      horizontal: 'center',
-      vertical: 'middle'
-    };
-    // 表头背景色（可选，和页面保持一致）
-    // cell.fill = {
-    //   type: 'pattern',
-    //   pattern: 'solid',
-    //   fgColor: { argb: 'F0F2F5' }
-    // };
-  });
-
-  // 2. 写入核算指标数据
-  tableTotalData.value.forEach((row, index) => {
-    const dataRowNum = calcTableStartRow + index + 1;
-    const dataRow = worksheet.getRow(dataRowNum);
-    // 填充数据
-    dataRow.values = [
-      row.label,
-      row.contract,
-      row.measured,
-      row.isArea ? row.diff : '-'
-    ];
-    // 数据单元格样式
-    dataRow.eachCell((cell, colIndex) => {
-      cell.alignment = {
-        horizontal: 'center',
-        vertical: 'middle'
-      };
-      // 差值列特殊样式：加粗 + 颜色区分
-      // if (colIndex === 3) { // 第4列（差值列）
-      //   cell.font = { bold: true };
-      //   if (row.isArea) {
-      //     const diffValue = Number(row.diff);
-      //     // 正数/零：绿色，负数：红色
-      //     cell.font.color = { argb: diffValue >= 0 ? '67C23A' : 'F56C6C' };
-      //   }
-      // }
-    });
-  });
-
-  // 3. 设置核算指标表格列宽（适配4列）
-  const calcColumnWidths = [15, 18, 18, 12];
-  // 核算表格列对应工作表的A-D列（因为汇总表有14列，这里复用前4列宽度即可）
-  for (let i = 0; i < calcColumnWidths.length; i++) {
-    worksheet.columns[i].width = calcColumnWidths[i];
-  }
-
-
-  // 10. 导出 Excel 文件并下载
-  const buffer = await workbook.xlsx.writeBuffer(); // 生成二进制缓冲区
-  const blob = new Blob([buffer], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  });
-  saveAs(blob, `${currentProjectInfo.name || '项目'}房产实测汇总表.xlsx`);
-
-  // 11. 提示导出成功
-  ElMessage.success('Excel 导出成功！');
-};
-
-const detailDialogVisible = ref(false)
-
-const roomInfoData = ref([]) // 存储户室面积数据
-const detailLoading = ref(false) // 详情加载状态
-
-const viewDetail = async (row) => {
-  if (!currentProjectInfo.id || !row.id) { // row.id 是实测报告ID
-    ElMessage.warning('缺少项目/报告ID，无法查看详情')
-    return
-  }
-  
-  detailLoading.value = true
-  detailDialogVisible.value = true // 先打开弹窗，避免用户等待
-  
-  try {
-    const summaryRow = rawTableData.value.find(item => item.id === row.id)
-    console.log(rawTableData.value)
-    if (summaryRow) {
-      roomSumInfo.buildingAreaSum = summaryRow.roomInfoBuildingAreaSum?.toFixed(2) || '0.00'
-      roomSumInfo.innerAreaSum = summaryRow.roomInfoInnerAreaSum?.toFixed(2) || '0.00'
-      roomSumInfo.balconyAreaSum = summaryRow.roomInfoBalconyAreaSum?.toFixed(2) || '0.00'
-      roomSumInfo.sharedAreaSum = summaryRow.roomInfoSharedAreaSum?.toFixed(2) || '0.00'
-    } else {
-      // 兜底：初始化为0
-      roomSumInfo.buildingAreaSum = '0.00'
-      roomSumInfo.innerAreaSum = '0.00'
-      roomSumInfo.balconyAreaSum = '0.00'
-      roomSumInfo.sharedAreaSum = '0.00'
-    }
-
-    // 调用户室面积接口
-    const res = await axios.get(`/api/project/${currentProjectInfo.id}/survey-reports/${row.id}/room-info`)
-    console.log(currentProjectInfo.id, row.id, '户室面积接口响应：')
-    if (res.data.code === 200 && Array.isArray(res.data.data)) {
-      // 格式化数据（保留重要字段，处理小数位数）
-      roomInfoData.value = res.data.data.map(item => ({
-        id: item.id,
-        roomLevel: item.roomLevel || '-', // 楼层
-        roomNumber: item.roomNumber || '-', // 房号
-        buildingArea: (item.buildingArea || 0).toFixed(2), // 建筑面积
-        innerArea: (item.innerArea || 0).toFixed(2), // 套内面积
-        balconyArea: (item.balconyArea || 0).toFixed(2), // 阳台面积
-        sharedArea: (item.sharedArea || 0).toFixed(2), // 公摊面积
-        isCalculate: item.isCalculate || 0,
-        usageCategory: usageCategoryMap[item.usageCategory] || '未知', // 新增：用途类别（转中文）
-        roomUsage: item.roomUsage || '-', // 用途
-        floorAreaType: item.floorAreaType === 'BUILDABLE' ? '计容' : '不计容' // 面积类型
-      }));
-      
-    } else {
-      roomInfoData.value = []
-      ElMessage.warning('暂无户室面积数据')
-    }
-  } catch (error) {
-    console.error('获取户室面积失败：', error)
-    ElMessage.error('获取户室面积数据失败，请重试')
-    roomInfoData.value = []
-  } finally {
-    detailLoading.value = false
-  }
-}
-const isTarget = () => false
-
-// --- 新增：重置冷却状态函数 ---
-const resetRefreshCdStatus = () => {
-  isRefreshCd.value = false;
-  cdRemaining.value = REFRESH_CD_SECONDS;
-  // 清除定时器
-  if (cdTimer) {
-    clearInterval(cdTimer);
-    cdTimer = null;
-  }
-  // 清除当前项目的冷却缓存
-  const cdStorageKey = currentProjectInfo.id ? `refresh_cd_${currentProjectInfo.id}` : null;
-  if (cdStorageKey) localStorage.removeItem(cdStorageKey);
-};
-
-// --- 新增：获取当前项目的冷却缓存Key（和项目ID绑定）---
-const getRefreshCdStorageKey = () => {
-  return currentProjectInfo.id ? `refresh_cd_${currentProjectInfo.id}` : null;
-};
-
-// --- 新增：启动冷却倒计时函数 ---
-const startRefreshCd = () => {
-  const cdStorageKey = getRefreshCdStorageKey();
-  if (!cdStorageKey) return; // 没有项目ID则不启动
-
-  isRefreshCd.value = true;
-  cdRemaining.value = REFRESH_CD_SECONDS;
-
-  // 记录冷却开始时间到本地缓存（和项目绑定）
-  const cdStartAt = Date.now();
-  localStorage.setItem(cdStorageKey, JSON.stringify({
-    startAt: cdStartAt,
-    remaining: REFRESH_CD_SECONDS
-  }));
-
-  // 清除旧定时器
-  if (cdTimer) {
-    clearInterval(cdTimer);
-  }
-
-  // 新定时器：每秒更新剩余时间 + 缓存
-  cdTimer = setInterval(() => {
-    cdRemaining.value--;
-
-    // 更新本地缓存的剩余时间
-    const storedCd = JSON.parse(localStorage.getItem(cdStorageKey) || '{}');
-    if (storedCd.startAt) {
-      storedCd.remaining = cdRemaining.value;
-      localStorage.setItem(cdStorageKey, JSON.stringify(storedCd));
-    }
-
-    // 冷却结束：重置状态 + 清除缓存
-    if (cdRemaining.value <= 0) {
-      clearInterval(cdTimer);
-      cdTimer = null;
-      isRefreshCd.value = false;
-      localStorage.removeItem(cdStorageKey);
-    }
-  }, 1000);
-};
-
-// ===== 合同表单相关（补充注释）=====
-const contractLandList = ref([]) // 合同列表（含基础信息）
-const selectedContract = reactive({ id: '', contractNumber: '' }) // 选中的合同
-const currentLandParcelList = ref([]) // 选中合同的地块列表
-
-// 合同表单相关
-const contractDialogVisible = ref(false)
-const contractFormRef = ref(null)
-const contractFormLoading = ref(false)
-const contractForm = reactive({
-  id: '', // 仅用于更新，前端不编辑
-  contractNumber: '',
-  contractType: '',
-  transferor: '',
-  transferee: '',
-  totalArea: null,
-  plannedUse: '',
-  remark: ''
-})
-const contractFormRules = reactive({
-  contractNumber: [{ required: true, message: '请输入合同编号', trigger: 'blur' }]
-})
-
-// 地块表单相关
-const landParcelDialogVisible = ref(false)
-const landParcelFormRef = ref(null)
-const landParcelFormLoading = ref(false)
-const landParcelForm = reactive({
-  id: '', // 仅用于更新，前端不编辑
-  contractId: '', // 关联合同ID
-  parcelCode: '',
-  parcelName: '',
-  plannedUse: '',
-  totalArea: null,
-  residentialArea: null,
-  commercialArea: null,
-  floorAreaRatio: null,
-  commercialResidentialRatio: null,
-  remark: ''
-})
-const landParcelFormRules = reactive({
-  parcelCode: [{ required: true, message: '请输入地块编号', trigger: 'blur' }],
-  parcelName: [{ required: true, message: '请输入地块名称', trigger: 'blur' }]
-})
-
-// ========== 核心接口方法 ==========
-
-// 1. 获取合同列表时的 ID 赋值（确保取到后端返回的真实 ID）
-const fetchContractListByProjectId = async (projectId) => {
-  if (!projectId) return
-  try {
-    const queryParams = {
-      projectId: Number(projectId),
-      current: 1,
-      size: 1 // 足够大的数值，确保获取该项目下所有合同
-    }
-    const res = await axios.post('/api/project/contracts/query', queryParams)
-    if (res.data.code === 200) {
-      // 关键：确保每条合同都正确赋值后端返回的 id
-      contractLandList.value = (res.data.data.records || []).map(contract => ({
-        id: contract.id || '', // 必须取后端的 id，不能为空
-        contractNumber: contract.contractNumber || '',
-        contractType: contract.contractType || '',
-        transferor: contract.transferor || '',
-        transferee: contract.transferee || '',
-        totalArea: contract.totalArea || null,
-        plannedUse: contract.plannedUse || '',
-        remark: contract.remark || ''
-      }));
-      
-      // 清空选中状态（初始无选中）
-      Object.assign(selectedContract, { 
-        id: '', 
-        contractNumber: '' 
-      });
-      currentLandParcelList.value = [];
-      ElMessage.success(`加载到 ${contractLandList.value.length} 份合同`);
-    }
-  } catch (error) {
-    console.error('查询项目合同列表失败：', error);
-    ElMessage.error('获取合同列表失败，请重试');
-    contractLandList.value = [];
-  }
-};
-
-// 2. 合同行点击时的 ID 赋值（确保选中的是后端真实 ID）
-const handleContractRowClick = async (row) => {
-  // 防重复点击
-  if (row.id === selectedContract.id) return;
-  
-  // 关键：赋值后端返回的合同 ID 和编号
-  Object.assign(selectedContract, { 
-    id: row.id, // 真实的合同 ID
-    contractNumber: row.contractNumber || '' 
-  });
-  
-  // 传递合同 ID 查询地块
-  await fetchLandParcelByContractId(row.id);
-};
-
-// 2. 第二步：根据合同ID查询地块信息（GET /project/contract/{contractId}/with-parcels）
-const fetchLandParcelByContractId = async (contractId) => {
-  if (!contractId) return
-  try {
-    const res = await axios.get(`/api/project/contract/${contractId}/with-parcels`)
-    if (res.data.code === 200) {
-      // 假设接口返回格式：{ code:200, data: { parcels: [...] } }
-      // 可根据实际返回结构调整，核心是提取地块列表
-      currentLandParcelList.value = res.data.data.parcels || []
-    } else {
-      currentLandParcelList.value = []
-      ElMessage.warning('该合同暂无关联地块信息')
-    }
-  } catch (error) {
-    console.error('查询合同地块信息失败：', error)
-    ElMessage.error('获取地块信息失败，请重试')
-    currentLandParcelList.value = []
-  }
-}
-
-// 3. 合同表单操作
-const addContract = () => {
-  // 重置表单
-  Object.assign(contractForm, {
-     id: '',
-    contractNumber: '',
-    contractType: '',
-    transferor: '',
-    transferee: '',
-    totalArea: null,
-    plannedUse: '',
-    remark: ''
-  })
-  contractFormRef.value?.clearValidate()
-  contractDialogVisible.value = true
-}
-
-const editContract = (row) => {
-  // 赋值表单（ID仅传递，不允许编辑）
-  Object.assign(contractForm, {
-    id: row.id,
-    contractNumber: row.contractNumber || '',
-    contractType: row.contractType || '',
-    transferor: row.transferor || '',
-    transferee: row.transferee || '',
-    totalArea: row.totalArea || null,
-    plannedUse: row.plannedUse || '',
-    remark: row.remark || ''
-  })
-  contractFormRef.value?.clearValidate()
-  contractDialogVisible.value = true
-}
-
-const submitContractForm = async () => {
-  if (!contractFormRef.value) return
-  try {
-    await contractFormRef.value.validate()
-  } catch (error) {
-    ElMessage.warning('请完善必填项后提交')
-    return
-  }
-
-  contractFormLoading.value = true
-  try {
-    // 构造请求参数（排除ID的修改，仅作为标识）
-    const requestData = {
-      id: contractForm.id, // 必填，用于定位更新的合同
-      contractNumber: contractForm.contractNumber,
-      contractType: contractForm.contractType,
-      transferor: contractForm.transferor,
-      transferee: contractForm.transferee,
-      totalArea: contractForm.totalArea,
-      plannedUse: contractForm.plannedUse,
-      remark: contractForm.remark
-    }
-
-    // 调用合同更新接口
-    const res = await axios.put('/api/project/contract-info/update', {
-      contractInfoUpdateDTO: requestData
-    })
-
-    if (res.data.code === 200) {
-      ElMessage.success('合同信息保存成功')
-      contractDialogVisible.value = false
-      // 刷新合同列表
-      await fetchContractAndLandInfo(currentProjectInfo.id)
-    } else {
-      ElMessage.error('保存失败：' + (res.data.msg || '系统异常'))
-    }
-  } catch (error) {
-    console.error('保存合同信息失败：', error)
-    ElMessage.error('保存合同信息失败，请重试')
-  } finally {
-    contractFormLoading.value = false
-  }
-}
-// 补充：获取合同及地块信息（整合已有函数）
-const fetchContractAndLandInfo = async (projectId) => {
-  await fetchContractListByProjectId(projectId);
-  // 如果有选中的合同，重新拉取其地块信息
-  if (selectedContract.id) {
-    await fetchLandParcelByContractId(selectedContract.id);
-  }
-};
-// 4. 地块表单操作
-const addLandParcel = () => {
-  if (!selectedContract.id) {
-    ElMessage.warning('请先选中一个合同')
-    return
-  }
-  // 重置表单
-  Object.assign(landParcelForm, {
-    id: '', // 新增时ID为空（后端生成）
-    contractId: selectedContract.id, // 关键：绑定选中的合同ID
-    parcelCode: '',
-    parcelName: '',
-    plannedUse: '',
-    totalArea: null,
-    residentialArea: null,
-    commercialArea: null,
-    floorAreaRatio: null,
-    commercialResidentialRatio: null,
-    remark: ''
-  })
-  landParcelFormRef.value?.clearValidate()
-  landParcelDialogVisible.value = true
-}
-
-const editLandParcel = (row) => {
-  // 赋值表单（ID仅传递，不允许编辑）
-  Object.assign(landParcelForm, {
-    id: row.id, // 地块ID（后端生成，仅传递）
-    contractId: selectedContract.id, // 关联合同ID（后端生成，仅传递）
-    parcelCode: row.parcelCode || '',
-    parcelName: row.parcelName || '',
-    plannedUse: row.plannedUse || '',
-    totalArea: row.totalArea || null,
-    residentialArea: row.residentialArea || null,
-    commercialArea: row.commercialArea || null,
-    floorAreaRatio: row.floorAreaRatio || null,
-    commercialResidentialRatio: row.commercialResidentialRatio || null,
-    remark: row.remark || ''
-  })
-  landParcelFormRef.value?.clearValidate()
-  landParcelDialogVisible.value = true
-}
-// ========== 核心修正：对接新增地块接口 ==========
-const submitLandParcelForm = async () => {
-  if (!landParcelFormRef.value) return
-  try {
-    await landParcelFormRef.value.validate()
-  } catch (error) {
-    ElMessage.warning('请完善必填项后提交')
-    return
-  }
-
-  console.log('提交地块表单数据：', landParcelForm)
-
-  landParcelFormLoading.value = true
-  try {
-    let res
-    // 区分新增和编辑：ID为空则新增，否则编辑
-    if (!landParcelForm.id) {
-      const createData = {
-        contractId: landParcelForm.contractId,
-        parcelCode: landParcelForm.parcelCode,
-        parcelName: landParcelForm.parcelName,
-        plannedUse: landParcelForm.plannedUse,
-        totalArea: landParcelForm.totalArea,
-        residentialArea: landParcelForm.residentialArea,
-        commercialArea: landParcelForm.commercialArea,
-        floorAreaRatio: landParcelForm.floorAreaRatio,
-        commercialResidentialRatio: landParcelForm.commercialResidentialRatio,
-        remark: landParcelForm.remark
-      }
-      console.log(createData)
-      res = await axios.post(
-        '/api/project/land-parcel/create',
-        createData,
-        { headers: { 'Content-Type': 'application/json' } }
-      )
-    } else {
-      // 编辑地块：调用 PUT /project/land-parcel/update
-      const updateData = {
-          id: landParcelForm.id, // 仅后端交互用
-          parcelCode: landParcelForm.parcelCode,
-          parcelName: landParcelForm.parcelName,
-          plannedUse: landParcelForm.plannedUse,
-          totalArea: landParcelForm.totalArea,
-          residentialArea: landParcelForm.residentialArea,
-          commercialArea: landParcelForm.commercialArea,
-          floorAreaRatio: landParcelForm.floorAreaRatio,
-          commercialResidentialRatio: landParcelForm.commercialResidentialRatio,
-          remark: landParcelForm.remark
-      }
-      console.log(updateData)
-      res = await axios.put('/api/project/land-parcel/update', updateData)
-    }
-
-    if (res.data.code === 200) {
-      const action = !landParcelForm.id ? '新增' : '编辑'
-      ElMessage.success(`${action}地块信息成功`)
-      landParcelDialogVisible.value = false
-      // 刷新当前合同的地块列表
-      await fetchLandParcelByContractId(selectedContract.id)
-    } else {
-      ElMessage.error('操作失败：' + (res.data.msg || '系统异常'))
-    }
-  } catch (error) {
-    console.error('地块操作失败：', error)
-    ElMessage.error('操作地块信息失败，请重试')
-  } finally {
-    landParcelFormLoading.value = false
-  }
-}
-
-// 5. 监听项目选择，加载合同及地块信息
-watch(filterProject, (newVal) => {
-  if (newVal) {
-    fetchContractListByProjectId(newVal)
-  } else {
-    contractLandList.value = []
-    Object.assign(selectedContract, { id: '', contractNumber: '' })
-    currentLandParcelList.value = []
-  }
-})
-
-// 补充：删除方法（根据实际接口调整，示例逻辑）
-// 5. 合同删除功能（完整实现，对接指定DELETE接口）
-const deleteContract = async (row) => {
-  // 1. 弹出确认弹窗，确认删除操作（危险操作必须二次确认）
-  try {
-    await ElMessageBox.confirm(
-      '确定要删除该合同信息吗？此操作会同时删除关联的地块信息，且不可撤销！',
-      '删除合同确认',
-      {
-        confirmButtonText: '确认删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-        dangerMode: true // 确认按钮变红，强调风险
-      }
-    );
-
-    // 2. 调用DELETE接口删除合同
-    // 接口地址：/project/contract-info/{contractId}
-    // 请求类型：application/x-www-form-urlencoded
-    const res = await axios.delete(
-      `/project/contract-info/${row.id}`, // 路径参数传递合同ID
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded' // 匹配接口要求的Content-Type
-        }
-      }
-    );
-
-    // 3. 处理响应结果
-    if (res.data.code === 200) {
-      ElMessage.success('合同删除成功！');
-      // 4. 刷新合同列表，清空选中状态和地块列表
-      await fetchContractListByProjectId(currentProjectInfo.id);
-      Object.assign(selectedContract, { id: '', contractNumber: '' });
-      currentLandParcelList.value = [];
-    } else {
-      ElMessage.error('删除失败：' + (res.data.msg || '系统异常'));
-    }
-  } catch (error) {
-    // 处理取消操作或接口异常
-    if (error.name !== 'ElMessageBoxCloseError') {
-      console.error('删除合同失败：', error);
-    
-    } else {
-      ElMessage.info('已取消删除操作');
-    }
-  }
-};
-
-// 5. 地块删除功能（完整实现）
-const deleteLandParcel = async (row) => {
-  // 1. 弹出确认弹窗
-  try {
-    await ElMessageBox.confirm(
-      '确定要删除该地块信息吗？此操作不可撤销！',
-      '删除确认',
-      {
-        confirmButtonText: '确认删除',
-        cancelButtonText: '取消',
-        type: 'warning',
-        dangerMode: true // 确认按钮变红，强调风险
-      }
-    );
-
-    // 2. 调用删除接口（DELETE 请求，parcelId 作为路径参数）
-    const res = await axios.delete(
-      `/api/project/land-parcel/${row.id}`, // 路径参数传递地块ID
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded' // 匹配接口要求的Content-Type
-        }
-      }
-    );
-
-    // 3. 处理响应结果
-    if (res.data.code === 200) {
-      ElMessage.success('地块删除成功！');
-      // 4. 刷新当前合同的地块列表
-      await fetchLandParcelByContractId(selectedContract.id);
-    } else {
-      ElMessage.error('删除失败：' + (res.data.msg || '系统异常'));
-    }
-  } catch (error) {
-    // 处理取消操作或接口异常
-    if (error.name !== 'ElMessageBoxCloseError') {
-      console.error('删除地块失败：', error);
-      
-    } else {
-      ElMessage.info('已取消删除操作');
-    }
-  }
-};
-
-
-
-
-
-
-
-
-
-// 项目更新表单引用
-const projectEditRef = ref(null);
-// 项目更新表单加载/提交状态
-const projectEditLoading = ref(false);
-// 项目更新表单数据（对应 ProjectUpdateDTO）
-const projectUpdateForm = reactive({
-  id: '', // 必填，项目ID
-  projectName: '',
-  projectCode: '',
-  location: '',
-  landArea: null,
-  plannedUse: '',
-  projectTime: '',
-  remark: ''
-});
-// 项目更新表单校验规则
-const projectEditRules = reactive({
-  id: [{ required: true, message: '项目ID不能为空', trigger: 'blur' }],
-   projectTime: [{ required: false, message: '项目时间格式错误', trigger: 'change' }]
-});
-
-
-// 1. 拉取项目原始数据（填充表单）：调用 POST /project/projects/query
-const fetchProjectOriginalData = async (projectId) => {
-  if (!projectId) return;
-  try {
-    const res = await axios.post('/api/project/projects/query', {
-      projectId: Number(projectId)
-    });
-    if (res.data.code === 200 && res.data.data.records.length > 0) {
-      const projectOriginal = res.data.data.records[0];
-      // 🔥 核心修改：删除 Object.defineProperty，直接赋值 ID（无需冻结，前端无修改入口）
-      projectUpdateForm.id = projectOriginal.id;
-      
-      // 其他字段赋值不变
-      projectUpdateForm.projectName = projectOriginal.projectName || '';
-      projectUpdateForm.projectCode = projectOriginal.projectCode || '';
-      projectUpdateForm.location = projectOriginal.location || '';
-      projectUpdateForm.landArea = projectOriginal.landArea || null;
-      projectUpdateForm.plannedUse = projectOriginal.plannedUse || '';
-      projectUpdateForm.projectTime = projectOriginal.projectTime || '';
-      projectUpdateForm.remark = projectOriginal.remark || '';
-    }
-  } catch (error) {
-    console.error('拉取项目原始数据失败：', error);
-    ElMessage.error('拉取项目原始数据失败，无法编辑');
-  }
-};
-
-// 2. 提交项目更新数据：调用 PUT /project/update
-const submitProjectUpdate = async () => {
-  if (!projectEditRef.value) return;
-  
-  // 🔥 打印1：提交函数入口，先看 projectUpdateForm 完整数据（最关键）
-  console.log('===== 提交函数入口 - projectUpdateForm 完整数据 =====');
-  console.log('projectUpdateForm：', projectUpdateForm);
-  console.log('ID是否存在：', projectUpdateForm.id, '（类型：', typeof projectUpdateForm.id, '）');
-  console.log('是否有非空字段：', JSON.stringify(projectUpdateForm) !== '{"id":"","projectName":"","projectCode":"","location":"","landArea":null,"plannedUse":"","projectTime":"","remark":""}');
-  
-  // 前置校验：确保 ID 存在
-  if (!projectUpdateForm.id) {
-    ElMessage.warning('项目ID异常，请切换其他tab再切回重试');
-    return;
-  }
-  
-  // 第一步：表单校验
-  try {
-    await projectEditRef.value.validate();
-    
-    // 🔥 打印2：表单校验通过后，再次确认数据（排除校验修改数据的可能）
-    console.log('===== 表单校验通过 - 待构造请求体的数据 =====');
-    console.log('projectUpdateForm 此时的数据：', projectUpdateForm);
-    
-  } catch (error) {
-    ElMessage.warning('表单校验失败，请检查填写内容');
-    return;
-  }
-
-  // 第二步：提交更新
-  projectEditLoading.value = true;
-  try {
-    // 构造请求体
-    const requestData = {
-    id: projectUpdateForm.id,
-    projectName: projectUpdateForm.projectName,
-    projectCode: projectUpdateForm.projectCode,
-    location: projectUpdateForm.location,
-    landArea: projectUpdateForm.landArea,
-    plannedUse: projectUpdateForm.plannedUse,
-    projectTime: projectUpdateForm.projectTime,
-    remark: projectUpdateForm.remark
-  };
-
-    const res = await axios.put('/api/project/update', requestData);
-    
-    // 判断业务成功
-    if (res.data.code === 0 || res.data.code === 200 || res.data.code === 201) { // 兼容 201（后端返回的 code）
-      ElMessage.success('项目信息更新成功！');
-      await refreshProjectRelatedData();
-    } else {
-      ElMessage.error('项目信息更新失败：' + (res.data.msg || '后端业务处理异常'));
-    }
-  } catch (error) {
-    console.error('===== 提交请求捕获异常 =====');
-    console.error('异常信息：', error);
-    ElMessage.error('提交项目更新失败，请检查接口或网络');
-  } finally {
-    projectEditLoading.value = false;
-  }
-};
-// 补充：重置项目更新表单（之前缺失，导致点击无作用）
-const resetProjectForm = () => {
-  if (!projectEditRef.value) return;
-  
-  // 步骤1：清除表单校验状态
-  projectEditRef.value.clearValidate();
-  
-  // 步骤2：重置表单数据（保留只读的ID，其余字段置空/还原原始值）
-  const originalProjectId = projectUpdateForm.id; // 保留ID
-  Object.assign(projectUpdateForm, {
-    // projectName: '',
-    projectCode: '',
-    location: '',
-    landArea: null,
-    plannedUse: '',
-    projectTime: '',
-    remark: ''
-  });
- 
-  // 可选：重置后重新拉取原始数据，恢复到初始状态（更友好）
-  if (filterProject.value) {
-    fetchProjectOriginalData(filterProject.value);
-  }
-  
-  ElMessage.info('表单已重置');
-};
-// 补全：刷新项目相关数据（更新成功后调用，形成闭环）
-const refreshProjectRelatedData = async () => {
-  if (!filterProject.value) return;
-  
-  try {
-    // 1. 刷新项目下拉列表（防止项目名称修改后，下拉框显示旧数据）
-    await fetchProjectList();
-    
-    // 2. 刷新当前项目的基础信息（tab1的项目名称、编号等）
-    await fetchProjectDetail(filterProject.value);
-    
-    // 3. 刷新项目更新表单的原始数据（让表单显示最新更新后的结果）
-    await fetchProjectOriginalData(filterProject.value);
-    
-  } catch (error) {
-    console.error('刷新项目关联数据失败：', error);
-    ElMessage.warning('项目信息更新成功，但关联数据刷新失败，可手动刷新页面');
-  }
-};
-// 监听 tab 切换，切换到项目更新tab时，自动拉取原始数据
-watch(activeTab, (newVal) => {
-  if (newVal === 'projectEdit' && filterProject.value) {
-    fetchProjectOriginalData(filterProject.value);
-  }
-});
-// --- 新增：启动冷却倒计时函数 ---
-// const startRefreshCd = () => {
-//   // 1. 初始化冷却状态
-//   isRefreshCd.value = true;
-//   cdRemaining.value = REFRESH_CD_SECONDS;
-
-//   // 2. 清除旧定时器（防止重复创建）
-//   if (cdTimer) {
-//     clearInterval(cdTimer);
-//   }
-
-//   // 3. 创建新定时器，每秒更新剩余时间
-//   cdTimer = setInterval(() => {
-//     cdRemaining.value--;
-
-//     // 4. 冷却结束：清除定时器，恢复按钮状态
-//     if (cdRemaining.value <= 0) {
-//       clearInterval(cdTimer);
-//       cdTimer = null;
-//       isRefreshCd.value = false;
-//     }
-//   }, 1000);
-// };
-
-
-// --- 生命周期 & 核心修改：保存/恢复项目ID ---
-// watch(filterProject, (newVal) => {
-//   if (newVal) {
-//     localStorage.setItem('projectFilterStatus', newVal)
-//   } else {
-//     localStorage.removeItem('projectFilterStatus')
-//     reportList.value = []
-//     rawTableData.value = []
-//   }
-// })
-// --- 生命周期 & 核心修改：保存/恢复项目ID ---
+// 持久化项目选择状态
 watch(filterProject, (newVal, oldVal) => {
   if (newVal) {
     localStorage.setItem('projectFilterStatus', newVal);
@@ -2079,8 +402,7 @@ watch(filterProject, (newVal, oldVal) => {
     localStorage.removeItem('projectFilterStatus');
     // 2. 清空所有项目相关数据
     reportList.value = [];
-    rawTableData.value = [];
-    unknownUsages.value = [];
+    resetSummaryMetrics();
  
     // 3. 重置项目基本信息（关键：清空ID让刷新按钮禁用）
     Object.assign(currentProjectInfo, {
@@ -2091,47 +413,12 @@ watch(filterProject, (newVal, oldVal) => {
     });
     // 4. 重置冷却状态（项目都清了，冷却没用了）
     resetRefreshCdStatus();
-    // 重置商住比
-    Object.assign(businessResidentialRatio, {
-      contractRatio: "≥2:8", // 恢复默认值
-      measuredRatio: "-"
-    });
-    // 重置面积核算数组（恢复初始默认值）
-    comparisonData.forEach(item => {
-      item.contract = '0.00';
-      item.measured = '0.00';
-      item.diff = '0.00';
-    });
   }
 })
 
-// 2. 页面初始化
-// onMounted(async () => {
-//   // A. 先拉取项目列表 (填充下拉框)
-//   await fetchProjectList()
-
-//   // B. 决定选中哪个项目
-//   const queryProjectId = route.query.projectId
-//   const savedProjectId = localStorage.getItem('projectFilterStatus')
-
-//   if (queryProjectId) {
-//     // 优先级 1: 路由参数 (从首页跳转过来)
-//     filterProject.value = String(queryProjectId)
-//     handleGlobalSearch() // 立即查询
-//   } else if (savedProjectId) {
-//     // 优先级 2: 本地缓存 (刷新页面保持状态)
-//     // 检查缓存的 ID 是否依然有效 (防止项目被删了缓存还在)
-//     const exists = projectOptions.value.some(p => p.id === savedProjectId)
-//     if (exists) {
-//       filterProject.value = savedProjectId
-//       handleGlobalSearch() // 立即查询
-//     } else {
-//       localStorage.removeItem('projectFilterStatus') // 清除无效缓存
-//     }
-//   }
-// })
+// 页面初始化：恢复项目选择并加载数据
 onMounted(async () => {
-  // A. 先拉取项目列表 (填充下拉框)
+  // A. 先拉取项目列表（填充下拉框）
   await fetchProjectList()
 
   // B. 决定选中哪个项目
@@ -2143,14 +430,12 @@ onMounted(async () => {
     targetProjectId = String(queryProjectId);
     filterProject.value = targetProjectId;
     handleGlobalSearch(); // 立即查询
-    fetchContractListByProjectId(targetProjectId);
   } else if (savedProjectId) {
     const exists = projectOptions.value.some(p => p.id === savedProjectId);
     if (exists) {
       targetProjectId = savedProjectId;
       filterProject.value = targetProjectId;
       handleGlobalSearch(); // 立即查询
-      fetchContractListByProjectId(targetProjectId);
     } else {
       localStorage.removeItem('projectFilterStatus');
     }
@@ -2158,45 +443,7 @@ onMounted(async () => {
 
   // C. 恢复当前项目的冷却状态（从本地缓存读取）
   if (targetProjectId) {
-    const cdStorageKey = `refresh_cd_${targetProjectId}`;
-    const storedCd = localStorage.getItem(cdStorageKey);
-    
-    if (storedCd) {
-      const { startAt, remaining } = JSON.parse(storedCd);
-      // 计算已过去的时间
-      const elapsedSeconds = Math.floor((Date.now() - startAt) / 1000);
-      const currentRemaining = remaining - elapsedSeconds;
-
-      if (currentRemaining > 0) {
-        // 恢复冷却状态
-        isRefreshCd.value = true;
-        cdRemaining.value = currentRemaining;
-
-        // 重启定时器
-        if (cdTimer) clearInterval(cdTimer);
-        cdTimer = setInterval(() => {
-          cdRemaining.value--;
-
-          // 更新本地缓存
-          const updatedStored = JSON.parse(localStorage.getItem(cdStorageKey) || '{}');
-          if (updatedStored.startAt) {
-            updatedStored.remaining = cdRemaining.value;
-            localStorage.setItem(cdStorageKey, JSON.stringify(updatedStored));
-          }
-
-          // 冷却结束
-          if (cdRemaining.value <= 0) {
-            clearInterval(cdTimer);
-            cdTimer = null;
-            isRefreshCd.value = false;
-            localStorage.removeItem(cdStorageKey);
-          }
-        }, 1000);
-      } else {
-        // 冷却已结束，清除无效缓存
-        localStorage.removeItem(cdStorageKey);
-      }
-    }
+    restoreRefreshCdStatus(targetProjectId);
   }
 })
 
@@ -2217,9 +464,9 @@ onMounted(async () => {
 
 /* 其他样式保持不变 */
 .archive-container { padding: 24px; background-color: #f5f7fa; min-height: 90vh; display: flex; flex-direction: column; }
-.global-filter-card { background: white; padding: 24px; border-radius: 8px; margin-bottom: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.04); }
-.filter-row { display: flex; align-items: center; gap: 24px; margin-bottom: 18px; }
-.filter-item .label { font-size: 14px; color: #606266; margin-right: 8px; }
+.global-filter-card { background: #fff; border: 1px solid #ebeef5; padding: 18px 20px; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.04); }
+.filter-row { display: flex; align-items: center; gap: 16px; margin-bottom: 0; }
+.filter-item .label { font-size: 14px; color: #606266; margin-right: 0; }
 .project-meta { font-size: 14px; color: #666; border-top: 1px dashed #eee; padding-top: 15px; display: flex; align-items: center; gap: 15px; }
 .content-tabs-wrapper { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.04); flex: 1; }
 .tab-content { padding: 20px; }
@@ -2240,7 +487,7 @@ onMounted(async () => {
 .footer-analysis { background-color: #fcfcfc; padding: 25px; border-top: 1px solid #ebeef5; margin-top: 20px; }
 .analysis-row { margin-bottom: 12px; font-size: 14px; }
 .comp-line { display: flex; justify-content: flex-end; align-items: center; margin-bottom: 8px; font-size: 14px; color: #606266; }
-/* 汇总表容器：固定高度 + 滚动条 */
+/* 汇总表容器：固定高度 + 滚动 */
 .summary-table-container {
   max-height: 600px; /* 可根据需要调整高度，比如500px/700px */
   overflow-y: auto;
@@ -2260,7 +507,7 @@ onMounted(async () => {
   max-height: none !important; 
 }
 
-/* 滚动条美化保留 */
+/* 滚动条美化 */
 :deep(.summary-table-container::-webkit-scrollbar) {
   width: 6px;
   height: 6px;
@@ -2269,116 +516,6 @@ onMounted(async () => {
   background-color: #dcdfe6;
   border-radius: 3px;
 }
-/* 详情弹窗表格容器：固定高度 + 滚动条 */
-.detail-table-container {
-  max-height: 70vh; /* 占视口70%高度，适配不同屏幕 */
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-/* 弹窗内表格滚动条美化 */
-:deep(.detail-table-container .el-table__body-wrapper) {
-  max-height: none !important;
-}
-:deep(.detail-table-container::-webkit-scrollbar) {
-  width: 6px;
-}
-:deep(.detail-table-container::-webkit-scrollbar-thumb) {
-  background-color: #dcdfe6;
-  border-radius: 3px;
-}
-
-/* 单个字段标红（默认） */
-.red-text {
-  color: #F56C6C !important;
-  font-weight: bold !important;
-}
-
-/* 可选：整行标红（如果用户需要） */
-.red-row {
-  background-color: #fff2f2 !important;
-}
-.red-row td {
-  color: #F56C6C !important;
-  font-weight: bold !important;
-}
-
-.resizable-table-container {
-  position: relative;  /* 给手柄定位 */
-  width: 100%;
-  height: 100%;
-  min-width: 600px;    /* 表格最小宽度 */
-  min-height: 300px;   /* 表格最小高度 */
-}
-
-/* ========== 修改：原表格容器样式（解除固定高度限制） ========== */
-.detail-table-container {
-  width: 100%;
-  height: 500px;       /* 初始高度 */
-  overflow-y: auto;
-  overflow-x: hidden;
-  transition: all 0.1s ease; /* 拉伸平滑过渡 */
-}
-
-/* ========== 新增：拉伸手柄样式 ========== */
-.resize-handle {
-  position: absolute;
-  background-color: #e5e9dd;
-  opacity: 0.5;
-  cursor: pointer;
-  transition: opacity 0.2s;
-  z-index: 10;
-}
-/* 鼠标悬浮高亮 */
-.resize-handle:hover {
-  opacity: 1;
-}
-
-/* 底部手柄（上下拉伸） */
-.resize-handle-bottom {
-  left: 0;
-  bottom: 0;
-  width: 100%;
-  height: 6px;
-  cursor: ns-resize; /* 上下拉伸光标 */
-}
-
-/* ========== 新增：弹窗内容样式（解除溢出限制） ========== */
-:deep(.el-dialog__body) {
-  padding: 20px !important;
-  overflow: visible !important; /* 让弹窗随表格拉伸 */
-}
-
-/* 新增：card-header 弹性布局，实现左右分栏 */
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
-/* 左侧标题+统计信息容器 */
-.header-left {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* 右侧刷新按钮样式（贴合页面风格） */
-.refresh-btn {
-  margin-left: 20px;
-  /* 可选：调整按钮颜色，和页面其他按钮保持一致 */
-  background-color: #25dd72;
-  border-color: #23ce1d;
-}
-
-/* 冷却中按钮样式（禁用状态加深，提示用户） */
-:deep(.refresh-btn.is-disabled) {
-  background-color: #cf3131 !important;
-  border-color: #9b070f !important;
-  cursor: not-allowed !important;
-}
-
 /* 项目更新表单样式适配 */
 .project-edit-form {
   background: #fff;
@@ -2415,3 +552,14 @@ onMounted(async () => {
 
 
 </style>
+
+
+
+
+
+
+
+
+
+
+
