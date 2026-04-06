@@ -1,48 +1,91 @@
-<template>
+﻿<template>
   <el-dialog
     v-model="visible"
     title="地块信息编辑"
-    width="800px"
+    width="96vw"
+    top="2vh"
+    class="land-workspace-dialog"
     :close-on-click-modal="false"
+    :destroy-on-close="false"
   >
-    <el-form :ref="setFormRef" :model="form" :rules="rules" label-width="120px">
-      <el-form-item label="地块编号" prop="parcelCode">
-        <el-input v-model="form.parcelCode" placeholder="请输入地块编号" style="width: 100%;" />
-      </el-form-item>
-      <el-form-item label="地块名称" prop="parcelName">
-        <el-input v-model="form.parcelName" placeholder="请输入地块名称" style="width: 100%;" />
-      </el-form-item>
-      <el-form-item label="规划用途" prop="plannedUse">
-        <el-select v-model="form.plannedUse" placeholder="请选择规划用途" clearable style="width: 100%;">
-          <el-option label="住宅" value="住宅" />
-          <el-option label="商业" value="商业" />
-          <el-option label="办公" value="办公" />
-          <el-option label="商住混合" value="商住混合" />
-          <el-option label="其他" value="其他" />
-        </el-select>
-      </el-form-item>
-      <el-form-item label="地块总面积(㎡)" prop="totalArea">
-        <el-input-number v-model="form.totalArea" placeholder="请输入总面积" :precision="2" :min="0" style="width: 100%;" />
-      </el-form-item>
-      <el-form-item label="住宅面积(㎡)" prop="residentialArea">
-        <el-input-number v-model="form.residentialArea" placeholder="请输入住宅面积" :precision="2" :min="0" style="width: 100%;" />
-      </el-form-item>
-      <el-form-item label="商业面积(㎡)" prop="commercialArea">
-        <el-input-number v-model="form.commercialArea" placeholder="请输入商业面积" :precision="2" :min="0" style="width: 100%;" />
-      </el-form-item>
-      <el-form-item label="容积率" prop="floorAreaRatio">
-        <el-input-number v-model="form.floorAreaRatio" placeholder="请输入容积率" :precision="2" :min="0" style="width: 100%;" />
-      </el-form-item>
-      <el-form-item label="商住比" prop="commercialResidentialRatio">
-        <el-input-number v-model="form.commercialResidentialRatio" placeholder="请输入商住比" :precision="2" :min="0" style="width: 100%;" />
-      </el-form-item>
-      <el-form-item label="备注" prop="remark">
-        <el-input v-model="form.remark" type="textarea" rows="3" placeholder="请输入备注信息" style="width: 100%;" />
-      </el-form-item>
-    </el-form>
+    <div class="workspace">
+      <section class="pdf-panel" v-loading="pdfLoading">
+        <iframe v-if="pdfUrl" class="pdf-frame" :src="pdfUrl" title="合同预览" />
+        <el-empty v-else description="暂无可预览 PDF" />
+      </section>
+
+      <section class="form-panel">
+        <div class="panel-title">地块字段</div>
+        <div class="file-picker-row">
+          <el-select
+            :model-value="selectedFileId"
+            filterable
+            clearable
+            placeholder="选择项目文件（可搜索）"
+            class="file-picker-select"
+            popper-class="project-file-select-dropdown"
+            :loading="fileOptionsLoading"
+            @update:model-value="(v) => emit('update:selectedFileId', v)"
+          >
+            <el-option v-for="item in fileOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </div>
+        <div class="form-meta">
+          <div class="meta-item">
+            <span class="k">地块编号</span>
+            <span class="v">{{ form.parcelCode || '-' }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="k">地块名称</span>
+            <span class="v">{{ form.parcelName || '-' }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="k">规划用途</span>
+            <span class="v">{{ plannedUseLabel(form.plannedUse) }}</span>
+          </div>
+          <div class="meta-item">
+            <span class="k">总面积</span>
+            <span class="v">{{ formatNumber(form.totalArea) }} ㎡</span>
+          </div>
+        </div>
+
+        <el-form :ref="setFormRef" :model="form" :rules="rules" label-position="top" class="land-form">
+          <el-form-item label="地块编号" prop="parcelCode">
+            <el-input v-model="form.parcelCode" placeholder="请输入地块编号" />
+          </el-form-item>
+          <el-form-item label="地块名称" prop="parcelName">
+            <el-input v-model="form.parcelName" placeholder="请输入地块名称" />
+          </el-form-item>
+          <el-form-item label="规划用途" prop="plannedUse">
+            <el-select v-model="form.plannedUse" placeholder="请选择规划用途" clearable>
+              <el-option label="住宅" value="RESIDENTIAL" />
+              <el-option label="商业" value="COMMERCIAL" />
+              <el-option label="商住混合" value="COMMERCIAL_AND_RESIDENTIAL" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="建筑总面积(㎡)" prop="totalArea">
+            <el-input-number v-model="form.totalArea" :precision="2" :min="0" />
+          </el-form-item>
+          <el-form-item label="住宅面积(㎡)" prop="residentialArea" class="readonly-area-item">
+            <el-input-number v-model="form.residentialArea" :precision="2" :min="0" disabled />
+          </el-form-item>
+          <el-form-item label="商业面积(㎡)" prop="commercialArea" class="readonly-area-item">
+            <el-input-number v-model="form.commercialArea" :precision="2" :min="0" disabled />
+          </el-form-item>
+          <el-form-item label="商住比（必填）" prop="commercialResidentialRatio">
+            <el-input-number v-model="form.commercialResidentialRatio" :precision="4" :min="0" :max="1" :step="0.0001" />
+            <div class="ratio-hint">{{ ratioHint }}</div>
+          </el-form-item>
+          <el-form-item label="备注" prop="remark">
+            <el-input v-model="form.remark" type="textarea" :rows="3" placeholder="请输入备注信息" />
+          </el-form-item>
+        </el-form>
+      </section>
+    </div>
+
     <template #footer>
       <el-button @click="visible = false">取消</el-button>
-      <el-button type="primary" @click="emit('submit')" :loading="loading">确认保存</el-button>
+      <el-button type="primary" :loading="loading" @click="emit('submit')">确认保存</el-button>
     </template>
   </el-dialog>
 </template>
@@ -70,13 +113,184 @@ const props = defineProps({
   setFormRef: {
     type: Function,
     default: () => {}
-  }
+  },
+  pdfUrl: {
+    type: String,
+    default: ''
+  },
+  pdfLoading: {
+    type: Boolean,
+    default: false
+  },
+  fileOptions: { type: Array, default: () => [] },
+  fileOptionsLoading: { type: Boolean, default: false },
+  selectedFileId: { type: [String, Number], default: '' }
 })
 
-const emit = defineEmits(['update:modelValue', 'submit'])
+const emit = defineEmits(['update:modelValue', 'submit', 'update:selectedFileId'])
 
 const visible = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value)
 })
+
+const plannedUseLabel = (value) => {
+  if (value === 'RESIDENTIAL') return '住宅'
+  if (value === 'COMMERCIAL') return '商业'
+  if (value === 'COMMERCIAL_AND_RESIDENTIAL') return '商住混合'
+  return value || '-'
+}
+
+const formatNumber = (value) => {
+  const n = Number(value)
+  if (Number.isNaN(n)) return '0.00'
+  return n.toFixed(2)
+}
+
+const ratioHint = computed(() => {
+  const ratio = Number(props.form?.commercialResidentialRatio)
+  if (!Number.isFinite(ratio)) return '请输入 0~1 小数，例如 0.6（表示商业60%、住宅40%）'
+  if (ratio < 0 || ratio > 1) return '商住比必须在 0 到 1 之间'
+  const commercialPercent = (ratio * 100).toFixed(2)
+  const residentialPercent = ((1 - ratio) * 100).toFixed(2)
+  return `当前占比：商业 ${commercialPercent}% ，住宅 ${residentialPercent}%`
+})
 </script>
+
+<style scoped>
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
+  gap: 12px;
+  height: 86vh;
+  min-height: 640px;
+}
+
+.pdf-panel,
+.form-panel {
+  border: 1px solid #e6ebf3;
+  border-radius: 10px;
+  background: #fff;
+  padding: 12px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.panel-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #243447;
+  margin-bottom: 10px;
+}
+
+.pdf-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 8px;
+}
+
+.form-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+  border: 1px solid #edf1f7;
+  border-radius: 8px;
+  padding: 8px;
+  background: #f8fbff;
+}
+
+.file-picker-row {
+  margin-bottom: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+}
+
+.file-picker-select {
+  width: 320px;
+}
+
+:deep(.file-picker-select .el-input__wrapper) {
+  min-height: 34px;
+}
+
+:deep(.project-file-select-dropdown .el-select-dropdown__wrap) {
+  max-height: 280px;
+}
+
+.meta-item {
+  min-width: 0;
+}
+
+.meta-item .k {
+  display: block;
+  font-size: 12px;
+  color: #7b8798;
+}
+
+.meta-item .v {
+  display: block;
+  font-size: 13px;
+  color: #243447;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.form-panel :deep(.el-form) {
+  height: calc(100% - 156px);
+  overflow: auto;
+  padding-right: 6px;
+}
+
+:deep(.land-form .el-form-item) {
+  margin-bottom: 16px;
+}
+
+:deep(.land-form .el-input-number),
+:deep(.land-form .el-select),
+:deep(.land-form .el-input) {
+  width: 100%;
+}
+
+:deep(.readonly-area-item .el-input-number.is-disabled .el-input__wrapper) {
+  background: #f3f5f8;
+  border-color: #d8dee9;
+}
+
+:deep(.readonly-area-item .el-input.is-disabled .el-input__wrapper) {
+  background: #f3f5f8;
+}
+
+.ratio-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #5b6472;
+  line-height: 1.5;
+}
+
+@media (max-width: 1280px) {
+  .workspace {
+    grid-template-columns: 1fr;
+    height: 86vh;
+    min-height: 0;
+  }
+
+  .pdf-panel,
+  .form-panel {
+    height: 42vh;
+  }
+
+  .form-panel :deep(.el-form) {
+    height: calc(100% - 24px);
+  }
+
+  .form-meta {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

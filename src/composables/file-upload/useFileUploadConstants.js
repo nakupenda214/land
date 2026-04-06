@@ -16,8 +16,8 @@ export function useFileUploadConstants() {
 
   const usageCategoryMap = {
     RESIDENTIAL: '住宅',
-    COMMERCIAL: '商业/办公',
-    MANAGEMENT: '物管用房',
+    COMMERCIAL: '商业',
+    MANAGEMENT: '物管',
     COMMUNITY: '社区用房',
     OTHER_BUILDABLE: '其他计容',
     OTHER_PUBLIC: '其他公用',
@@ -26,7 +26,9 @@ export function useFileUploadConstants() {
 
   const usageCategoryReverseMap = {
     住宅: 'RESIDENTIAL',
+    商业: 'COMMERCIAL',
     '商业/办公': 'COMMERCIAL',
+    物管: 'MANAGEMENT',
     物管用房: 'MANAGEMENT',
     社区用房: 'COMMUNITY',
     其他计容: 'OTHER_BUILDABLE',

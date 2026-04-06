@@ -1,10 +1,11 @@
-import { reactive, ref, watch } from 'vue'
+﻿import { reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 
 export function useProjectEditManagement({
   activeTab,
   filterProject,
+  currentProjectInfo,
   fetchProjectList,
   fetchProjectDetail
 }) {
@@ -38,8 +39,8 @@ export function useProjectEditManagement({
         projectId: Number(projectId)
       })
 
-      if (res.data.code === 200 && res.data.data.records.length > 0) {
-        const projectOriginal = res.data.data.records[0]
+      const projectOriginal = res?.data?.data?.records?.[0]
+      if (res?.data?.code === 200 && projectOriginal) {
         projectUpdateForm.id = projectOriginal.id
         projectUpdateForm.projectName = projectOriginal.projectName || ''
         projectUpdateForm.projectCode = projectOriginal.projectCode || ''
@@ -72,7 +73,7 @@ export function useProjectEditManagement({
     if (!projectEditRef.value) return
 
     if (!projectUpdateForm.id) {
-      ElMessage.warning('项目ID异常，请切换其他tab再切回重试')
+      ElMessage.warning('项目ID异常，请重新选择项目后再试')
       return
     }
 
@@ -101,7 +102,7 @@ export function useProjectEditManagement({
         ElMessage.success('项目信息更新成功')
         await refreshProjectRelatedData()
       } else {
-        ElMessage.error('项目信息更新失败：' + (res.data.msg || '后端业务处理异常'))
+        ElMessage.error(`项目信息更新失败：${res.data.msg || '后端业务处理异常'}`)
       }
     } catch (error) {
       console.error('提交项目更新失败:', error)
@@ -136,6 +137,16 @@ export function useProjectEditManagement({
       fetchProjectOriginalData(filterProject.value)
     }
   })
+
+  watch(
+    () => currentProjectInfo.id,
+    (newProjectId, oldProjectId) => {
+      if (!newProjectId || newProjectId === oldProjectId) return
+      if (activeTab.value === 'projectEdit') {
+        fetchProjectOriginalData(newProjectId)
+      }
+    }
+  )
 
   return {
     projectEditLoading,

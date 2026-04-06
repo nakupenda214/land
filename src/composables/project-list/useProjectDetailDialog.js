@@ -1,6 +1,6 @@
-﻿import { reactive, ref } from 'vue'
+import { reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getSurveyRoomInfo } from '@/services/project.service'
+import { getSurveyRoomInfo, querySurveyReports, updateSurveyReportInfo } from '@/services/project.service'
 
 const usageCategoryMap = {
   RESIDENTIAL: '住宅',
@@ -12,7 +12,7 @@ const usageCategoryMap = {
   UNKNOWN: '未知'
 }
 
-export function useProjectDetailDialog({ currentProjectInfo, rawTableData }) {
+export function useProjectDetailDialog({ currentProjectInfo, rawTableData, fetchSurveyReports }) {
   const roomSumInfo = reactive({
     buildingAreaSum: '0.00',
     innerAreaSum: '0.00',
@@ -23,28 +23,96 @@ export function useProjectDetailDialog({ currentProjectInfo, rawTableData }) {
   const detailDialogVisible = ref(false)
   const roomInfoData = ref([])
   const detailLoading = ref(false)
+  const currentDetailRow = ref(null)
+  const reportAuditInfo = reactive({
+    pendingConfirmArea: '0.00',
+    unknownUsageCount: 0,
+    hasUnknownUsage: 0,
+    isVerified: 0,
+    verificationErrorReason: '-',
+    roomInfoBuildingAreaSumFromOcr: '0.00',
+    roomInfoInnerAreaSumFromOcr: '0.00',
+    roomInfoBalconyAreaSumFromOcr: '0.00',
+    roomInfoSharedAreaSumFromOcr: '0.00'
+  })
+  const reportBasicInfoForm = reactive({
+    id: '',
+    propertyCertificateNumber: '',
+    propertyAreaConfirmationNoticeNumber: ''
+  })
+  const reportBasicInfoSaving = ref(false)
+
+  const resetAuditInfo = () => {
+    Object.assign(reportAuditInfo, {
+      pendingConfirmArea: '0.00',
+      unknownUsageCount: 0,
+      hasUnknownUsage: 0,
+      isVerified: 0,
+      verificationErrorReason: '-',
+      roomInfoBuildingAreaSumFromOcr: '0.00',
+      roomInfoInnerAreaSumFromOcr: '0.00',
+      roomInfoBalconyAreaSumFromOcr: '0.00',
+      roomInfoSharedAreaSumFromOcr: '0.00'
+    })
+  }
 
   const viewDetail = async (row) => {
     if (!currentProjectInfo.id || !row.id) {
-      ElMessage.warning('缺少项目/报告ID，无法查看详情')
+      ElMessage.warning('缺少项目/报告 ID，无法查看详情')
       return
     }
 
     detailLoading.value = true
     detailDialogVisible.value = true
+    currentDetailRow.value = row ? { ...row } : null
+    reportBasicInfoForm.id = String(row.id || '')
+    reportBasicInfoForm.propertyCertificateNumber = row?.certNo && row.certNo !== '-' ? row.certNo : ''
+    reportBasicInfoForm.propertyAreaConfirmationNoticeNumber =
+      row?.contractNo && row.contractNo !== '-' ? row.contractNo : ''
 
     try {
+      resetAuditInfo()
+
       const summaryRow = rawTableData.value.find((item) => item.id === row.id)
       if (summaryRow) {
-        roomSumInfo.buildingAreaSum = summaryRow.roomInfoBuildingAreaSum?.toFixed(2) || '0.00'
-        roomSumInfo.innerAreaSum = summaryRow.roomInfoInnerAreaSum?.toFixed(2) || '0.00'
-        roomSumInfo.balconyAreaSum = summaryRow.roomInfoBalconyAreaSum?.toFixed(2) || '0.00'
-        roomSumInfo.sharedAreaSum = summaryRow.roomInfoSharedAreaSum?.toFixed(2) || '0.00'
+        roomSumInfo.buildingAreaSum = Number(summaryRow.roomInfoBuildingAreaSum || 0).toFixed(2)
+        roomSumInfo.innerAreaSum = Number(summaryRow.roomInfoInnerAreaSum || 0).toFixed(2)
+        roomSumInfo.balconyAreaSum = Number(summaryRow.roomInfoBalconyAreaSum || 0).toFixed(2)
+        roomSumInfo.sharedAreaSum = Number(summaryRow.roomInfoSharedAreaSum || 0).toFixed(2)
       } else {
         roomSumInfo.buildingAreaSum = '0.00'
         roomSumInfo.innerAreaSum = '0.00'
         roomSumInfo.balconyAreaSum = '0.00'
         roomSumInfo.sharedAreaSum = '0.00'
+      }
+
+      try {
+        const reportRes = await querySurveyReports({
+          surveyReportInfoId: Number(row.id),
+          pageNum: 1,
+          pageSize: 1,
+          sortField: 'createTime',
+          sortDirection: 'desc'
+        })
+        const reportRecord = reportRes?.data?.data?.records?.[0]
+        if (reportRes?.data?.code === 200 && reportRecord) {
+          reportBasicInfoForm.id = String(reportRecord.id || row.id || '')
+          reportBasicInfoForm.propertyCertificateNumber = reportRecord.propertyCertificateNumber || ''
+          reportBasicInfoForm.propertyAreaConfirmationNoticeNumber =
+            reportRecord.propertyAreaConfirmationNoticeNumber || ''
+
+          reportAuditInfo.pendingConfirmArea = Number(reportRecord.pendingConfirmArea || 0).toFixed(2)
+          reportAuditInfo.unknownUsageCount = Number(reportRecord.unknownUsageCount || 0)
+          reportAuditInfo.hasUnknownUsage = Number(reportRecord.hasUnknownUsage || 0)
+          reportAuditInfo.isVerified = Number(reportRecord.isVerified || 0)
+          reportAuditInfo.verificationErrorReason = reportRecord.verificationErrorReason || '-'
+          reportAuditInfo.roomInfoBuildingAreaSumFromOcr = Number(reportRecord.roomInfoBuildingAreaSumFromOcr || 0).toFixed(2)
+          reportAuditInfo.roomInfoInnerAreaSumFromOcr = Number(reportRecord.roomInfoInnerAreaSumFromOcr || 0).toFixed(2)
+          reportAuditInfo.roomInfoBalconyAreaSumFromOcr = Number(reportRecord.roomInfoBalconyAreaSumFromOcr || 0).toFixed(2)
+          reportAuditInfo.roomInfoSharedAreaSumFromOcr = Number(reportRecord.roomInfoSharedAreaSumFromOcr || 0).toFixed(2)
+        }
+      } catch (error) {
+        console.error('获取实测报告校验信息失败:', error)
       }
 
       const res = await getSurveyRoomInfo(currentProjectInfo.id, row.id)
@@ -67,11 +135,56 @@ export function useProjectDetailDialog({ currentProjectInfo, rawTableData }) {
         ElMessage.warning('暂无户室面积数据')
       }
     } catch (error) {
-      console.error('获取户室面积失败：', error)
+      console.error('获取户室面积失败:', error)
       ElMessage.error('获取户室面积数据失败，请重试')
       roomInfoData.value = []
     } finally {
       detailLoading.value = false
+    }
+  }
+
+  const saveReportBasicInfo = async () => {
+    if (!reportBasicInfoForm.id) {
+      ElMessage.warning('缺少实测报告ID，无法保存')
+      return
+    }
+
+    reportBasicInfoSaving.value = true
+    try {
+      const payload = {
+        id: Number(reportBasicInfoForm.id),
+        propertyCertificateNumber: (reportBasicInfoForm.propertyCertificateNumber || '').trim(),
+        propertyAreaConfirmationNoticeNumber: (reportBasicInfoForm.propertyAreaConfirmationNoticeNumber || '').trim()
+      }
+      const res = await updateSurveyReportInfo(payload)
+      if (res?.data?.code !== 200) {
+        ElMessage.error(res?.data?.msg || '保存失败，请重试')
+        return
+      }
+
+      const target = rawTableData.value.find((item) => String(item.id) === String(reportBasicInfoForm.id))
+      if (target) {
+        target.certNo = payload.propertyCertificateNumber || '-'
+        target.contractNo = payload.propertyAreaConfirmationNoticeNumber || '-'
+      }
+      if (currentDetailRow.value) {
+        currentDetailRow.value = {
+          ...currentDetailRow.value,
+          certNo: payload.propertyCertificateNumber || '-',
+          contractNo: payload.propertyAreaConfirmationNoticeNumber || '-'
+        }
+      }
+
+      if (currentProjectInfo.id) {
+        await fetchSurveyReports(currentProjectInfo.id)
+      }
+
+      ElMessage.success('补录信息已保存')
+    } catch (error) {
+      console.error('保存实测报告基础信息失败:', error)
+      ElMessage.error('保存失败，请重试')
+    } finally {
+      reportBasicInfoSaving.value = false
     }
   }
 
@@ -80,6 +193,11 @@ export function useProjectDetailDialog({ currentProjectInfo, rawTableData }) {
     detailDialogVisible,
     roomInfoData,
     detailLoading,
-    viewDetail
+    currentDetailRow,
+    reportAuditInfo,
+    reportBasicInfoForm,
+    reportBasicInfoSaving,
+    viewDetail,
+    saveReportBasicInfo
   }
 }

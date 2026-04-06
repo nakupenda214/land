@@ -6,47 +6,59 @@
       :project-options="projectOptions"
       :current-project-id="currentProjectInfo.id"
       @search="handleGlobalSearch"
+      @create-project="showCreateProjectDialog = true"
     />
 
     <div class="content-tabs-wrapper no-print">
       <el-tabs v-model="activeTab" type="border-card" class="archive-tabs no-print">
-        
+
+        <el-tab-pane name="archives" class="no-print">
+          <template #label>
+            <span class="custom-tab-label">
+              <el-icon><FolderOpened /></el-icon> 归档文件查询
+            </span>
+          </template>
+          <ArchiveFolderTab
+            ref="archiveTabRef"
+            :project-id="currentProjectInfo.id"
+            :project-name="currentProjectInfo.name"
+            :initial-archive-id="initialArchiveId"
+            :pending-audit-file-id="pendingAuditFileId"
+            :active="activeTab === 'archives'"
+            @audit-consumed="pendingAuditFileId = ''"
+          />
+        </el-tab-pane>
+
         <el-tab-pane name="summary">
           <template #label><span class="custom-tab-label"><el-icon><DataAnalysis /></el-icon> 房产实测汇总表</span></template>
           
           <div class="tab-content">
-                        <SummaryTabActions @print="handlePrint" @export="handleExportExcel" />
-
             <!-- 未知用途规则配置卡片 -->
-                          <UnknownUsagePolicyCard
+            <UnknownUsagePolicyCard
               :unknown-usages="unknownUsages"
               :is-saving-policy="isSavingPolicy"
               @save="savePolicy"
             />
 
-            
-
-                        <SummaryTableCard
+            <SummaryTableCard
               :current-project-info="currentProjectInfo"
               :survey-stats="surveyStats"
               :refresh-btn-loading="refreshBtnLoading"
+              :parsed-refresh-loading="parsedRefreshLoading"
               :is-refresh-cd="isRefreshCd"
               :cd-remaining="cdRemaining"
               :display-table-data="displayTableData"
-              :is-target="isTarget"
               @refresh-survey="handleRefreshSurveyData"
+              @refresh-parsed="handleRefreshParsedOnly"
               @view-detail="viewDetail"
+              @print="handlePrint"
+              @export="handleExportExcel"
             />
 
-
-           <SummaryComparisonCard :table-total-data="tableTotalData" />
+            <SummaryComparisonCard :table-total-data="tableTotalData" :debug-sums="measuredDebugSums" />
           </div>
-
-
-        
         </el-tab-pane>
 
-       
         <el-tab-pane name="contractLandEdit" class="no-print">
           <template #label>
             <span class="custom-tab-label">
@@ -57,6 +69,7 @@
             :contract-land-list="contractLandList"
             :selected-contract="selectedContract"
             :current-land-parcel-list="currentLandParcelList"
+            @refresh-contracts="handleRefreshContracts"
             @add-contract="addContract"
             @contract-row-click="handleContractRowClick"
             @edit-contract="editContract"
@@ -66,18 +79,44 @@
             @delete-land-parcel="deleteLandParcel"
           />
         </el-tab-pane>
-       
 
-        <el-tab-pane name="reports" class="no-print">
-          <template #label><span class="custom-tab-label"><el-icon><Collection /></el-icon> 项目实测报告查询</span></template>
-          <ReportListTable
-            :report-list="reportList"
-            @preview="handlePreview"
-            @download="handleDownload"
+        <el-tab-pane name="planningReview" class="no-print">
+          <template #label>
+            <span class="custom-tab-label">
+              <el-icon><Document /></el-icon> 规划复核表
+            </span>
+          </template>
+          <PlanningReviewTab
+            :project-id="currentProjectInfo.id"
+            :active="activeTab === 'planningReview'"
           />
         </el-tab-pane>
 
-        <!-- 第四个tab：项目信息更新（文档信息栏） -->
+        <el-tab-pane name="projectPartySummary" class="no-print">
+          <template #label>
+            <span class="custom-tab-label">
+              <el-icon><Document /></el-icon> 项目方汇总表
+            </span>
+          </template>
+          <ProjectPartySummaryTab
+            :project-id="currentProjectInfo.id"
+            :active="activeTab === 'projectPartySummary'"
+          />
+        </el-tab-pane>
+
+        <el-tab-pane name="operationAudit" class="no-print">
+          <template #label>
+            <span class="custom-tab-label">
+              <el-icon><Tickets /></el-icon> 审计日志
+            </span>
+          </template>
+          <OperationAuditTab
+            :project-id="currentProjectInfo.id"
+            :active="activeTab === 'operationAudit'"
+          />
+        </el-tab-pane>
+
+        <!-- 项目信息更新放在最后 -->
         <el-tab-pane name="projectEdit" class="no-print">
           <template #label>
             <span class="custom-tab-label">
@@ -91,19 +130,6 @@
             :set-form-ref="setProjectEditRef"
             @submit="submitProjectUpdate"
             @reset="resetProjectForm"
-          />
-        </el-tab-pane>
-
-        <el-tab-pane name="archives" class="no-print">
-          <template #label>
-            <span class="custom-tab-label">
-              <el-icon><FolderOpened /></el-icon> 归档文件查询
-            </span>
-          </template>
-          <ArchiveFolderTab
-            :project-id="currentProjectInfo.id"
-            :project-name="currentProjectInfo.name"
-            :active="activeTab === 'archives'"
           />
         </el-tab-pane>
       </el-tabs>
@@ -122,8 +148,17 @@
             <ProjectDetailDialog
         v-model="detailDialogVisible"
         :room-sum-info="roomSumInfo"
+        :report-audit-info="reportAuditInfo"
         :room-info-data="roomInfoData"
         :detail-loading="detailLoading"
+        :current-detail-row="currentDetailRow"
+        :can-jump-audit="canJumpAuditFromDetail"
+        :report-basic-info-form="reportBasicInfoForm"
+        :report-basic-info-saving="reportBasicInfoSaving"
+        @jump-audit="handleJumpAuditFromDetail"
+        @save-basic-info="saveReportBasicInfo"
+        @update:propertyCertificateNumber="(v) => (reportBasicInfoForm.propertyCertificateNumber = v)"
+        @update:propertyAreaConfirmationNoticeNumber="(v) => (reportBasicInfoForm.propertyAreaConfirmationNoticeNumber = v)"
       />
 
       <ContractEditDialog
@@ -135,40 +170,88 @@
         @submit="submitContractForm"
       />
 
+      <ContractWorkspaceDialog
+        v-model="contractWorkspaceVisible"
+        :form="contractForm"
+        :rules="contractFormRules"
+        :loading="contractFormLoading"
+        :set-form-ref="setContractFormRef"
+        :pdf-url="contractWorkspacePdfUrl"
+        :pdf-loading="contractWorkspacePdfLoading"
+        :file-name="contractWorkspaceFileName"
+        :file-options="contractFileOptions"
+        :file-options-loading="contractFileOptionsLoading"
+        :selected-file-id="selectedPreviewFileId"
+        @submit="submitContractForm"
+        @update:selected-file-id="handleSelectPreviewFile"
+      />
+
       <LandParcelEditDialog
         v-model="landParcelDialogVisible"
         :form="landParcelForm"
         :rules="landParcelFormRules"
         :loading="landParcelFormLoading"
         :set-form-ref="setLandParcelFormRef"
+        :pdf-url="contractWorkspacePdfUrl"
+        :pdf-loading="contractWorkspacePdfLoading"
+        :file-options="contractFileOptions"
+        :file-options-loading="contractFileOptionsLoading"
+        :selected-file-id="selectedPreviewFileId"
         @submit="submitLandParcelForm"
+        @update:selected-file-id="handleSelectPreviewFile"
       />
+
+      <el-dialog v-model="showCreateProjectDialog" title="新建项目" width="500px">
+        <el-form label-position="top">
+          <el-form-item label="项目名称" required>
+            <el-input v-model.trim="newProjectForm.projectName" placeholder="请输入项目名称" maxlength="30" />
+          </el-form-item>
+          <el-form-item label="项目时间" required>
+            <el-date-picker
+              v-model="newProjectForm.projectTime"
+              type="month"
+              value-format="YYYY年MM月"
+              format="YYYY年M月"
+              placeholder="请选择项目时间"
+              style="width: 100%;"
+            />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="showCreateProjectDialog = false">取消</el-button>
+          <el-button type="primary" :loading="createProjectLoading" @click="handleCreateProjectFromTab">
+            立即创建
+          </el-button>
+        </template>
+      </el-dialog>
 
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch , onUnmounted} from 'vue'
-import { useRoute } from 'vue-router'
-import { DataAnalysis, Document, Collection } from '@element-plus/icons-vue'
+import { ref, onMounted, computed, watch , onUnmounted, nextTick} from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { DataAnalysis, Document, Tickets } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { downloadGridFsFile } from '@/services/file.service'
+import { createProject } from '@/services/project.service'
 
 import { usePrint } from '@/hooks/usePrint.ts'
 import { useProjectSelector } from '@/composables/project-list/useProjectSelector'
 import ProjectFilterBar from '@/components/project-list/ProjectFilterBar.vue'
-import SummaryTabActions from '@/components/project-list/SummaryTabActions.vue'
 import UnknownUsagePolicyCard from '@/components/project-list/UnknownUsagePolicyCard.vue'
 import SummaryTableCard from '@/components/project-list/SummaryTableCard.vue'
 import SummaryComparisonCard from '@/components/project-list/SummaryComparisonCard.vue'
 import PrintSummaryBlock from '@/components/project-list/PrintSummaryBlock.vue'
 import ProjectDetailDialog from '@/components/project-list/ProjectDetailDialog.vue'
 import ContractEditDialog from '@/components/project-list/ContractEditDialog.vue'
+import ContractWorkspaceDialog from '@/components/project-list/ContractWorkspaceDialog.vue'
 import LandParcelEditDialog from '@/components/project-list/LandParcelEditDialog.vue'
 import ProjectEditForm from '@/components/project-list/ProjectEditForm.vue'
-import ReportListTable from '@/components/project-list/ReportListTable.vue'
 import ContractLandTab from '@/components/project-list/ContractLandTab.vue'
 import ArchiveFolderTab from '@/components/project-list/ArchiveFolderTab.vue'
+import OperationAuditTab from '@/components/project-list/OperationAuditTab.vue'
+import PlanningReviewTab from '@/components/project-list/PlanningReviewTab.vue'
+import ProjectPartySummaryTab from '@/components/project-list/ProjectPartySummaryTab.vue'
 import { useContractLandManagement } from '@/composables/project-list/useContractLandManagement'
 import { useProjectEditManagement } from '@/composables/project-list/useProjectEditManagement'
 import { useSurveySummary } from '@/composables/project-list/useSurveySummary'
@@ -190,6 +273,15 @@ const handlePrint = () => {
 
 
 const route = useRoute()
+const router = useRouter()
+const initialArchiveId = ref(
+  String(route.query.fromAuditReturn || '') === '1' ? String(route.query.archiveId || '') : ''
+)
+const initialReturnTab = ref(
+  String(route.query.fromAuditReturn || '') === '1' ? String(route.query.tab || 'archives') : ''
+)
+const pendingAuditFileId = ref('')
+const archiveTabRef = ref(null)
 
 // 组件卸载时清理事件，避免内存泄漏
 onUnmounted(() => {
@@ -198,6 +290,12 @@ onUnmounted(() => {
 
 // 页面状态
 const activeTab = ref('summary')
+const showCreateProjectDialog = ref(false)
+const createProjectLoading = ref(false)
+const newProjectForm = ref({
+  projectName: '',
+  projectTime: ''
+})
 
 
 // 列表数据
@@ -209,6 +307,7 @@ const {
   unknownUsages,
   isSavingPolicy,
   displayTableData,
+  measuredDebugSums,
   surveyStats,
   fetchSurveyReports,
   resetSummaryMetrics
@@ -248,11 +347,38 @@ const {
   detailDialogVisible,
   roomInfoData,
   detailLoading,
-  viewDetail
+  currentDetailRow,
+  reportAuditInfo,
+  reportBasicInfoForm,
+  reportBasicInfoSaving,
+  viewDetail,
+  saveReportBasicInfo
 } = useProjectDetailDialog({
   currentProjectInfo,
-  rawTableData
+  rawTableData,
+  fetchSurveyReports
 })
+
+const resolveAuditFileRecordId = (row) => {
+  const raw = row?.fileRecordId || row?.fileId || row?.file_record_id || row?.sourceFileRecordId || row?.source_file_record_id
+  return raw ? String(raw) : ''
+}
+
+const canJumpAuditFromDetail = computed(() => !!resolveAuditFileRecordId(currentDetailRow.value))
+
+const handleJumpAuditFromDetail = async (row) => {
+  const fileRecordId = resolveAuditFileRecordId(row)
+  if (!fileRecordId) {
+    ElMessage.warning('当前记录缺少 fileRecordId，无法直达审核')
+    return
+  }
+  await nextTick()
+  if (!archiveTabRef.value?.openAuditByFileRecordId) {
+    ElMessage.warning('审核组件尚未就绪，请稍后再试')
+    return
+  }
+  await archiveTabRef.value.openAuditByFileRecordId(fileRecordId, { force: true })
+}
 const {
   savePolicy
 } = useUnknownUsagePolicy({
@@ -279,6 +405,23 @@ const {
   currentProjectInfo,
   fetchSurveyReports
 })
+const parsedRefreshLoading = ref(false)
+const handleRefreshParsedOnly = async () => {
+  if (!currentProjectInfo.id) {
+    ElMessage.warning('请先选择项目后再刷新')
+    return
+  }
+  parsedRefreshLoading.value = true
+  try {
+    await fetchSurveyReports(currentProjectInfo.id)
+    ElMessage.success('已刷新已解析实测报告数据')
+  } catch (error) {
+    console.error('刷新已解析列表失败:', error)
+    ElMessage.error('刷新失败，请稍后重试')
+  } finally {
+    parsedRefreshLoading.value = false
+  }
+}
 const {
   handleExportExcel
 } = useProjectExport({
@@ -292,6 +435,13 @@ const {
   selectedContract,
   currentLandParcelList,
   contractDialogVisible,
+  contractWorkspaceVisible,
+  contractWorkspacePdfUrl,
+  contractWorkspacePdfLoading,
+  contractWorkspaceFileName,
+  contractFileOptions,
+  contractFileOptionsLoading,
+  selectedPreviewFileId,
   contractForm,
   contractFormRules,
   contractFormLoading,
@@ -310,11 +460,20 @@ const {
   deleteContract,
   addLandParcel,
   editLandParcel,
-  deleteLandParcel
+  deleteLandParcel,
+  handleSelectPreviewFile
 } = useContractLandManagement({
   filterProject,
   currentProjectInfo
 })
+
+const handleRefreshContracts = async () => {
+  if (!currentProjectInfo.id) {
+    ElMessage.warning('请先查询项目后再刷新合同')
+    return
+  }
+  await fetchContractListByProjectId(currentProjectInfo.id)
+}
 const {
   projectEditLoading,
   projectUpdateForm,
@@ -325,6 +484,7 @@ const {
 } = useProjectEditManagement({
   activeTab,
   filterProject,
+  currentProjectInfo,
   fetchProjectList,
   fetchProjectDetail
 })
@@ -341,49 +501,40 @@ const handleGlobalSearch = async () => {
   restoreRefreshCdStatus(projectId)
 }
 
-const isTarget = (row, key) => {
-  if (!row || !key) return false
-  const fields = [
-    'calcCommercial',
-    'calcResidential',
-    'calcPropMgmt',
-    'calcOther',
-    'nonCalcCommunity',
-    'nonCalcOther'
-  ]
-  const values = fields.map((field) => Number(row[field] || 0))
-  const maxValue = Math.max(...values, 0)
-  return maxValue > 0 && Number(row[key] || 0) === maxValue
-}
-
-const handlePreview = (row) => {
-  if (!row?.fileId) {
-    ElMessage.warning('缺少文件ID，无法预览')
+const handleCreateProjectFromTab = async () => {
+  const projectName = (newProjectForm.value.projectName || '').trim()
+  const projectTime = (newProjectForm.value.projectTime || '').trim()
+  if (!projectName) {
+    ElMessage.warning('请输入项目名称')
     return
   }
-  window.open(`/api/file/download/gridfs/${row.fileId}`, '_blank')
-}
-
-const handleDownload = async (row) => {
-  if (!row?.fileId) {
-    ElMessage.warning('缺少文件ID，无法下载')
+  if (!projectTime) {
+    ElMessage.warning('请选择项目时间')
     return
   }
 
+  createProjectLoading.value = true
   try {
-    const res = await downloadGridFsFile(row.fileId, { responseType: 'blob' })
-    const blob = new Blob([res.data], { type: 'application/pdf' })
-    const objectUrl = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = objectUrl
-    link.download = `${row.name || '报告文件'}.pdf`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(objectUrl)
+    const res = await createProject(projectName, projectTime)
+    if (res.data?.code === 200) {
+      ElMessage.success(res.data?.msg || '项目创建成功')
+      showCreateProjectDialog.value = false
+      newProjectForm.value = { projectName: '', projectTime: '' }
+
+      await fetchProjectList()
+      const target = projectOptions.value.find((item) => item.name === projectName)
+      if (target?.id) {
+        filterProject.value = target.id
+        await handleGlobalSearch()
+      }
+    } else {
+      ElMessage.warning(res.data?.msg || '项目创建失败')
+    }
   } catch (error) {
-    console.error('下载失败:', error)
-    ElMessage.error('下载失败，请稍后重试')
+    console.error('项目创建失败:', error)
+    ElMessage.error(error?.response?.data?.msg || '项目创建失败')
+  } finally {
+    createProjectLoading.value = false
   }
 }
 
@@ -416,10 +567,64 @@ watch(filterProject, (newVal, oldVal) => {
   }
 })
 
+watch(
+  () => route.query.tab,
+  async () => {
+    const fromAuditReturn = String(route.query.fromAuditReturn || '') === '1'
+    if (!fromAuditReturn) return
+
+    const tabName = String(route.query.tab || '')
+    if (['summary', 'contractLandEdit', 'projectEdit', 'archives', 'planningReview', 'projectPartySummary', 'operationAudit'].includes(tabName)) {
+      activeTab.value = tabName
+      initialReturnTab.value = tabName
+    }
+    if (route.query.archiveId) {
+      initialArchiveId.value = String(route.query.archiveId)
+    }
+
+    const cleanQuery = { ...route.query }
+    delete cleanQuery.fromAuditReturn
+    delete cleanQuery.tab
+    await router.replace({ query: cleanQuery })
+  },
+  { immediate: true }
+)
+
+watch(
+  () => route.query.projectId,
+  async (projectId) => {
+    const pid = String(projectId || '')
+    if (!pid) return
+    if (filterProject.value !== pid) {
+      filterProject.value = pid
+    }
+    await handleGlobalSearch()
+  }
+)
+
+watch(activeTab, async (tab, prevTab) => {
+  if (!currentProjectInfo.id) return
+
+  if (tab === 'contractLandEdit') {
+    await fetchContractListByProjectId(currentProjectInfo.id)
+    return
+  }
+
+  if (tab === 'summary' && prevTab !== 'summary') {
+    await fetchSurveyReports(currentProjectInfo.id)
+  }
+})
+
 // 页面初始化：恢复项目选择并加载数据
 onMounted(async () => {
   // A. 先拉取项目列表（填充下拉框）
   await fetchProjectList()
+  if (initialReturnTab.value && ['summary', 'contractLandEdit', 'projectEdit', 'archives', 'planningReview', 'projectPartySummary', 'operationAudit'].includes(initialReturnTab.value)) {
+    activeTab.value = initialReturnTab.value
+    initialReturnTab.value = ''
+  } else {
+    activeTab.value = 'summary'
+  }
 
   // B. 决定选中哪个项目
   const queryProjectId = route.query.projectId;
@@ -454,112 +659,60 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* 样式调整：适配表格而非描述列表 */
-.info-config-card { margin-bottom: 24px; border: 1px solid #ebeef5; padding: 16px; }
-.card-title { font-weight: bold; color: #333; margin-bottom: 10px; font-size: 15px; }
-
-/* 文本颜色 */
-.text-red { color: #F56C6C; }
-.text-green { color: #67C23A; }
-
-/* 其他样式保持不变 */
-.archive-container { padding: 24px; background-color: #f5f7fa; min-height: 90vh; display: flex; flex-direction: column; }
-.global-filter-card { background: #fff; border: 1px solid #ebeef5; padding: 18px 20px; border-radius: 12px; margin-bottom: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.04); }
-.filter-row { display: flex; align-items: center; gap: 16px; margin-bottom: 0; }
-.filter-item .label { font-size: 14px; color: #606266; margin-right: 0; }
-.project-meta { font-size: 14px; color: #666; border-top: 1px dashed #eee; padding-top: 15px; display: flex; align-items: center; gap: 15px; }
-.content-tabs-wrapper { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.04); flex: 1; }
-.tab-content { padding: 20px; }
-.tab-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 20px; }
-.action-btns { display: flex; gap: 15px; }
-.special-policy-card { background: #fdf6ec; border: 1px solid #faecd8; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
-.policy-header { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
-.policy-title { font-size: 14px; font-weight: bold; color: #E6A23C; }
-.policy-items { display: flex; flex-direction: column; gap: 12px; margin-left: 30px; }
-.policy-item { display: flex; align-items: center; justify-content: space-between; background: white; padding: 12px 18px; border-radius: 6px; border: 1px solid #eee; max-width: 900px; }
-.policy-info { display: flex; align-items: center; gap: 20px; }
-.policy-name { font-weight: bold; color: #333; width: 220px; }
-.policy-stats { color: #666; font-size: 14px; width: 180px; }
-.policy-control { display: flex; align-items: center; gap: 12px; }
-.control-label { font-size: 13px; color: #999; }
-.policy-footer { margin-top: 18px; margin-left: 30px; }
-.highlight-val { color: #409EFF; font-weight: bold; }
-.footer-analysis { background-color: #fcfcfc; padding: 25px; border-top: 1px solid #ebeef5; margin-top: 20px; }
-.analysis-row { margin-bottom: 12px; font-size: 14px; }
-.comp-line { display: flex; justify-content: flex-end; align-items: center; margin-bottom: 8px; font-size: 14px; color: #606266; }
-/* 汇总表容器：固定高度 + 滚动 */
-.summary-table-container {
-  max-height: 600px; /* 可根据需要调整高度，比如500px/700px */
-  overflow-y: auto;
-  overflow-x: hidden; /* 横向禁止滚动（表格已有fixed列） */
+.archive-container {
+  padding: 12px;
+  background-color: var(--biz-page-bg);
+  min-height: calc(100vh - 110px);
+  display: flex;
+  flex-direction: column;
 }
 
-/* 汇总表容器：固定高度 + 滚动条（修复版） */
-.summary-table-container {
-  max-height: 600px; /* 可调整高度 */
-  overflow-y: auto;
-  overflow-x: auto; /* 恢复横向滚动，避免列被截断 */
-  min-height: 300px;
-}
-
-/* 移除对表格body-wrapper的高度限制（核心：让表格渲染所有数据） */
-:deep(.summary-table-container .el-table__body-wrapper) {
-  max-height: none !important; 
-}
-
-/* 滚动条美化 */
-:deep(.summary-table-container::-webkit-scrollbar) {
-  width: 6px;
-  height: 6px;
-}
-:deep(.summary-table-container::-webkit-scrollbar-thumb) {
-  background-color: #dcdfe6;
-  border-radius: 3px;
-}
-/* 项目更新表单样式适配 */
-.project-edit-form {
+.content-tabs-wrapper {
   background: #fff;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 1px 6px rgba(15, 23, 42, 0.06);
+  flex: 1;
+}
+
+.tab-content {
   padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-}
-.form-btn-group {
-  margin-top: 20px;
-  padding-left: 40%; /* 对齐表单标签宽度 */
-  
-}
-/* 补充：表单栅格布局样式，让表单更整齐 */
-.form-row {
-  margin-bottom: 16px; /* 每行表单项间距 */
-}
-/* 统一表单输入框/选择器的高度，保持视觉一致 */
-:deep(.project-edit-form .el-input),
-:deep(.project-edit-form .el-input-number),
-:deep(.project-edit-form .el-select),
-:deep(.project-edit-form .el-date-picker) {
-  height: 40px; /* 统一高度 */
-}
-:deep(.project-edit-form .el-input__inner),
-:deep(.project-edit-form .el-select__wrapper),
-:deep(.project-edit-form .el-date-picker__input-wrapper input) {
-  height: 40px; /* 统一输入框内部高度 */
-  line-height: 40px; /* 垂直居中 */
-}
-:deep(.project-edit-form .el-textarea__inner) {
-  min-height: 100px; /* 备注输入框最小高度 */
 }
 
+:deep(.archive-tabs.el-tabs--border-card) {
+  border: 1px solid var(--biz-border);
+  border-radius: 6px;
+  box-shadow: none;
+}
 
+:deep(.archive-tabs.el-tabs--border-card > .el-tabs__header) {
+  background: var(--biz-header-bg);
+  border-bottom: 1px solid var(--biz-border);
+}
 
+:deep(.archive-tabs .el-tabs__item) {
+  height: 42px;
+  color: #4a5568;
+  font-weight: 600;
+}
+
+:deep(.archive-tabs .el-tabs__item.is-active) {
+  color: var(--biz-primary);
+  background: #ffffff;
+}
+
+:deep(.archive-tabs .el-tabs__content) {
+  background: #fff;
+}
+
+:deep(.archive-tabs .el-button) {
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+:deep(.archive-tabs .el-button--primary) {
+  background: var(--biz-btn-soft-bg);
+  border-color: #c8ddf1;
+  color: var(--biz-btn-soft-text);
+}
 </style>
-
-
-
-
-
-
-
-
-
-
-

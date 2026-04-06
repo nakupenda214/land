@@ -16,10 +16,12 @@
         </el-select>
       </div>
 
-      <el-button type="primary" icon="Search" @click="$emit('search')" :disabled="!modelValue">查询档案</el-button>
-    </div>
-    <div class="project-meta" v-if="currentProjectId">
-      <span class="meta-info" />
+      <div class="action-group">
+        <el-button class="query-btn biz-btn biz-btn-primary" type="primary" @click="$emit('search')" :disabled="!modelValue">
+          查询档案
+        </el-button>
+        <el-button class="create-btn biz-btn" @click="$emit('create-project')">新建项目</el-button>
+      </div>
     </div>
   </div>
 </template>
@@ -40,54 +42,75 @@ defineProps({
   }
 })
 
-defineEmits(['update:modelValue', 'search'])
+defineEmits(['update:modelValue', 'search', 'create-project'])
 </script>
 
 <style scoped>
 .global-filter-card {
-  background: #fff;
-  border: 1px solid #ebeef5;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  padding: 18px 20px;
-  margin-bottom: 24px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid #d7dde6;
+  border-radius: 6px;
+  box-shadow: 0 1px 6px rgba(15, 23, 42, 0.06);
+  padding: 14px 16px;
+  margin-bottom: 16px;
 }
 
 .filter-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  justify-content: flex-start;
+  gap: 12px;
 }
 
 .filter-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
-  flex: 1;
 }
 
 .label {
   font-size: 14px;
-  color: #606266;
+  color: #4a5568;
   white-space: nowrap;
+  font-weight: 600;
 }
 
 .project-select {
-  width: 320px;
+  width: 340px;
   max-width: 100%;
 }
 
-.project-meta {
-  font-size: 14px;
-  color: #666;
-  border-top: 1px dashed #eee;
-  padding-top: 12px;
-  margin-top: 12px;
-  display: flex;
+.action-group {
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  margin-left: 2px;
+}
+
+:deep(.query-btn.el-button),
+:deep(.create-btn.el-button) {
+  min-height: 36px;
+  min-width: 104px;
+  border-radius: 6px;
+  font-weight: 600;
+  padding: 8px 14px;
+}
+
+:deep(.query-btn.el-button) {
+  background: #e8f2fc;
+  border-color: #c8ddf1;
+  color: #1f4e79;
+}
+
+:deep(.query-btn.el-button:hover) {
+  background: #d7e7f8;
+  border-color: #b8d3ec;
+  color: #163a5a;
+}
+
+:deep(.query-btn.el-button:disabled) {
+  opacity: 0.7;
 }
 
 @media (max-width: 1024px) {
@@ -97,12 +120,20 @@ defineEmits(['update:modelValue', 'search'])
   }
 
   .filter-item {
-    flex-direction: column;
-    align-items: flex-start;
+    width: 100%;
   }
 
   .project-select {
     width: 100%;
+  }
+
+  .action-group {
+    width: 100%;
+  }
+
+  :deep(.query-btn.el-button),
+  :deep(.create-btn.el-button) {
+    flex: 1;
   }
 }
 </style>

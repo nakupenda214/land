@@ -36,3 +36,6 @@ export const createProjectArchive = (payload) => {
 
 export const deleteProjectArchive = (projectId, archiveId) =>
   axios.delete(`/api/file/project/delete-archives/${projectId}/${archiveId}`)
+
+export const auditPassByFileId = (fileId) =>
+  axios.post(`/api/file/audit/pass/${fileId}`)

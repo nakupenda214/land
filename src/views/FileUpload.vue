@@ -1,6 +1,7 @@
 ﻿<template>
   <div class="macaron-container">
     <UploadActionHeader
+      v-if="!isAuditOnlyMode"
       v-model="currentProject"
       :project-options="projectOptions"
       @create-project="showCreateProject = true"
@@ -8,6 +9,7 @@
     />
 
     <FileUploadTaskPanel
+      v-if="!isAuditOnlyMode"
       :current-project="currentProject"
       :table-loading="tableLoading"
       :selected-rows-length="selectedRows.length"
@@ -40,6 +42,7 @@
     />
 
     <CreateProjectDialog
+      v-if="!isAuditOnlyMode"
       v-model="showCreateProject"
       :new-project-form="newProjectForm"
       :locale="zhCn"
@@ -47,6 +50,7 @@
     />
 
     <BatchUploadDialog
+      v-if="!isAuditOnlyMode"
       v-model="uploadDialogVisible"
       :temp-upload-type="tempUploadType"
       :upload-phase="uploadPhase"
@@ -58,6 +62,10 @@
       @confirm="confirmUpload"
       @closed="handleUploadDialogClosed"
     />
+
+    <div v-if="isAuditOnlyMode && !showCalibration" class="audit-loading">
+      正在打开审核界面...
+    </div>
 
     <CalibrationWorkspaceDialog
       v-model="showCalibration"
@@ -81,19 +89,24 @@
       :audit-summary-display="auditSummaryDisplay"
       :room-info-data="roomInfoData"
       :room-info-loading="roomInfoLoading"
-      @closed="resetCalibrationState"
+      @back="handleCalibrationBack"
+      @closed="handleCalibrationClosed"
     />
   </div>
 </template>
 
 <script setup>
 import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import UploadActionHeader from '@/components/file-upload/UploadActionHeader.vue'
 import FileUploadTaskPanel from '@/components/file-upload/FileUploadTaskPanel.vue'
 import CreateProjectDialog from '@/components/file-upload/CreateProjectDialog.vue'
 import BatchUploadDialog from '@/components/file-upload/BatchUploadDialog.vue'
 import CalibrationWorkspaceDialog from '@/components/file-upload/CalibrationWorkspaceDialog.vue'
 import { useFileUploadPage } from '@/composables/file-upload/useFileUploadPage'
+const route = useRoute()
+const router = useRouter()
 
 const {
   statusMap,
@@ -158,6 +171,55 @@ const {
   roomInfoData,
   roomInfoLoading
 } = useFileUploadPage()
+
+const isAuditOnlyMode = computed(() => String(route.query.returnTo || '') === 'projects')
+
+const isReturningToProjects = ref(false)
+const calibrationOpenedInAudit = ref(false)
+
+const navigateBackToProjects = () => {
+  if (isReturningToProjects.value) return
+  isReturningToProjects.value = true
+  const query = {
+    tab: String(route.query.returnTab || 'archives'),
+    fromAuditReturn: '1'
+  }
+  if (route.query.projectId) query.projectId = String(route.query.projectId)
+  if (route.query.archiveId) query.archiveId = String(route.query.archiveId)
+  router.replace({ name: 'ProjectList', query }).finally(() => {
+    isReturningToProjects.value = false
+  })
+}
+
+const handleCalibrationBack = () => {
+  if (route.query.returnTo === 'projects') {
+    showCalibration.value = false
+    return
+  }
+  showCalibration.value = false
+}
+
+const handleCalibrationClosed = () => {
+  resetCalibrationState()
+  if (route.query.returnTo === 'projects') {
+    navigateBackToProjects()
+  }
+}
+
+watch(
+  () => showCalibration.value,
+  (visible) => {
+    if (!isAuditOnlyMode.value) return
+    if (visible) {
+      calibrationOpenedInAudit.value = true
+      return
+    }
+    if (calibrationOpenedInAudit.value) {
+      calibrationOpenedInAudit.value = false
+      navigateBackToProjects()
+    }
+  }
+)
 </script>
 
 <style scoped>
@@ -165,6 +227,15 @@ const {
   padding: 20px;
   min-height: 80vh;
   background-color: #f5f7fa;
+}
+
+.audit-loading {
+  min-height: 72vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  font-size: 15px;
 }
 
 :deep(.upload-confirm-btn:not(:disabled)) {

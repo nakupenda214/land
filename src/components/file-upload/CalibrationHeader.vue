@@ -1,67 +1,26 @@
 ﻿<template>
   <div class="cali-header">
     <div class="header-left">
-      <el-button icon="Back" round @click="onClose" style="margin-right: 15px;">返回列表</el-button>
+      <el-button icon="Back" round @click="onBack" style="margin-right: 15px;">返回列表</el-button>
       <div class="file-title-block">
         <span class="title">智能审核模式</span>
         <span class="sub-name">{{ currentFile?.name }}</span>
       </div>
     </div>
-    <div class="header-right">
-      <el-button
-        v-if="!isEditing && currentFile?.status !== 'AUDIT_PASS'"
-        type="success"
-        plain
-        round
-        icon="CircleCheck"
-        @click="$emit('audit-pass')"
-      >
-        审核通过
-      </el-button>
-      <el-button
-        v-if="!isEditing && currentFile?.status !== 'AUDIT_PASS'"
-        type="warning"
-        plain
-        round
-        icon="EditPen"
-        @click="$emit('enter-edit')"
-      >
-        进入编辑
-      </el-button>
-      <el-button
-        v-if="isEditing"
-        type="danger"
-        plain
-        round
-        icon="Close"
-        @click="$emit('exit-edit')"
-      >
-        退出编辑（不保存）
-      </el-button>
-      <el-button type="primary" plain round icon="DocumentChecked" @click="$emit('save-data')">保存修改</el-button>
-    </div>
   </div>
 </template>
 
 <script setup>
-const props = defineProps({
+defineProps({
   currentFile: {
     type: Object,
     default: null
-  },
-  isEditing: {
-    type: Boolean,
-    default: false
-  },
-  closeHandler: {
-    type: Function,
-    required: true
   }
 })
 
-defineEmits(['enter-edit', 'exit-edit', 'save-data', 'audit-pass'])
+const emit = defineEmits(['back'])
 
-const onClose = () => props.closeHandler()
+const onBack = () => emit('back')
 </script>
 
 <style scoped>
@@ -106,22 +65,10 @@ const onClose = () => props.closeHandler()
   text-overflow: ellipsis;
 }
 
-.header-right {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
 @media (max-width: 1280px) {
   .cali-header {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .header-right {
-    justify-content: flex-start;
   }
 }
 </style>

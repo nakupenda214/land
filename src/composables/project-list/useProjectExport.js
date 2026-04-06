@@ -1,6 +1,12 @@
-import ExcelJS from 'exceljs'
+﻿import ExcelJS from 'exceljs'
 import { saveAs } from 'file-saver'
 import { ElMessage } from 'element-plus'
+
+const summaryLabelMap = {
+  合同约定建筑面积: '计容建筑面积',
+  合同约定商业面积: '计容商业面积',
+  合同约定住宅面积: '计容住宅面积'
+}
 
 export function useProjectExport({ displayTableData, tableTotalData, currentProjectInfo }) {
   const handleExportExcel = async () => {
@@ -80,34 +86,36 @@ export function useProjectExport({ displayTableData, tableTotalData, currentProj
     const gapRows = 2
     const calcTableStartRow = summaryLastRow + gapRows + 1
 
-    const calcHeader = ['核算指标', '合同约定值', '实测值', '差值 (A - B)']
-    const headerRow = worksheet.getRow(calcTableStartRow)
-    headerRow.values = calcHeader
-    headerRow.height = 25
-    headerRow.eachCell((cell) => {
-      cell.font = { bold: true, size: 12 }
-      cell.alignment = {
-        horizontal: 'center',
-        vertical: 'middle'
-      }
-    })
+    const calcRows = tableTotalData.value.map((row) => [
+      row.label,
+      row.contract,
+      summaryLabelMap[row.label] || '计容面积',
+      row.measured,
+      '差值',
+      row.isArea ? row.diff : '-'
+    ])
 
-    tableTotalData.value.forEach((row, index) => {
-      const dataRowNum = calcTableStartRow + index + 1
-      const dataRow = worksheet.getRow(dataRowNum)
-      dataRow.values = [row.label, row.contract, row.measured, row.isArea ? row.diff : '-']
-      dataRow.eachCell((cell) => {
+    calcRows.forEach((row, index) => {
+      const rowNum = calcTableStartRow + index
+      const dataRow = worksheet.getRow(rowNum)
+      dataRow.values = row
+      dataRow.eachCell((cell, colNumber) => {
         cell.alignment = {
           horizontal: 'center',
           vertical: 'middle'
         }
+        if (colNumber === 1 || colNumber === 3 || colNumber === 5) {
+          cell.font = { bold: true }
+        }
       })
     })
 
-    const calcColumnWidths = [15, 18, 18, 12]
-    for (let i = 0; i < calcColumnWidths.length; i++) {
-      worksheet.columns[i].width = calcColumnWidths[i]
-    }
+    worksheet.getColumn(1).width = 22
+    worksheet.getColumn(2).width = 14
+    worksheet.getColumn(3).width = 18
+    worksheet.getColumn(4).width = 14
+    worksheet.getColumn(5).width = 10
+    worksheet.getColumn(6).width = 14
 
     const buffer = await workbook.xlsx.writeBuffer()
     const blob = new Blob([buffer], {

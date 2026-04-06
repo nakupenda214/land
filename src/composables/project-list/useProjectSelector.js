@@ -1,6 +1,6 @@
 ﻿import { ref, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getProjectList } from '@/services/project.service'
+import { queryProjects } from '@/services/project.service'
 
 export function useProjectSelector({ fetchProjectData, fetchSurveyReports }) {
   const filterProject = ref('')
@@ -15,9 +15,15 @@ export function useProjectSelector({ fetchProjectData, fetchSurveyReports }) {
 
   const fetchProjects = async () => {
     try {
-      const res = await getProjectList()
-      if (res.data.code === 200) {
-        projectOptions.value = res.data.data.map((item) => ({
+      const res = await queryProjects({
+        pageNum: 1,
+        pageSize: 500,
+        sortField: 'updateTime',
+        sortDirection: 'desc'
+      })
+      if (res.data?.code === 200) {
+        const records = Array.isArray(res.data?.data?.records) ? res.data.data.records : []
+        projectOptions.value = records.map((item) => ({
           id: String(item.id),
           name: item.projectName
         }))

@@ -10,7 +10,7 @@ const routes = [
     path: '/',
     name: 'Layout',
     component: () => import('../views/Layout.vue'),
-    redirect: '/dashboard', // 登录后默认去首页
+    redirect: '/dashboard',
     children: [
       {
         path: 'dashboard',
@@ -28,7 +28,7 @@ const routes = [
         path: 'upload',
         name: 'FileUpload',
         component: () => import('../views/FileUpload.vue'),
-        meta: { title: '项目/文件上传' ,keepAlive: true}
+        meta: { title: '项目/文件上传', keepAlive: true }
       },
       {
         path: 'users',
@@ -51,14 +51,14 @@ const router = createRouter({
   routes
 })
 
-// 路由守卫：严格检查 sessionStorage
+// 路由守卫：检查登录态
 router.beforeEach((to, from, next) => {
   const isAuthenticated = sessionStorage.getItem('isAuthenticated')
   if (to.name !== 'Login' && !isAuthenticated) {
     next({ name: 'Login' })
-  } else {
-    next()
+    return
   }
+  next()
 })
 
 export default router

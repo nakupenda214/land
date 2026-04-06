@@ -1,5 +1,5 @@
-<template>
-  <Teleport to="#print-target" v-if="isPrinting">
+﻿<template>
+  <Teleport v-if="isPrinting" to="#print-target">
     <div class="print-info-section">
       <div class="print-title">{{ currentProjectInfo.name || '项目' }}房产实测信息汇总表</div>
       <div class="print-meta-row">
@@ -50,25 +50,14 @@
     </table>
 
     <table class="native-print-table info-table" style="margin-top: 20px;">
-      <thead>
-        <tr>
-          <th style="width: 150px;">核算指标</th>
-          <th style="width: 180px;">合同约定值</th>
-          <th style="width: 180px;">实测值</th>
-          <th style="width: 120px;">差值(A - B)</th>
-        </tr>
-      </thead>
       <tbody>
-        <tr v-for="row in tableTotalData" :key="row.label">
-          <td>{{ row.label }}</td>
+        <tr v-for="row in normalizedTableTotalData" :key="row.label">
+          <td>{{ row.leftLabel }}</td>
           <td>{{ row.contract }}</td>
+          <td>{{ row.rightLabel }}</td>
           <td>{{ row.measured }}</td>
-          <td style="font-weight: bold;">
-            <span v-if="row.isArea" :style="{ color: Number(row.diff) >= 0 ? '#67C23A' : '#F56C6C' }">
-              {{ row.diff }}
-            </span>
-            <span v-else>-</span>
-          </td>
+          <td>差值</td>
+          <td>{{ row.isArea ? row.diff : '-' }}</td>
         </tr>
       </tbody>
     </table>
@@ -84,7 +73,9 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   isPrinting: {
     type: Boolean,
     default: false
@@ -106,5 +97,18 @@ defineProps({
     default: () => []
   }
 })
-</script>
 
+const labelMap = {
+  合同约定建筑面积: '计容建筑面积',
+  合同约定商业面积: '计容商业面积',
+  合同约定住宅面积: '计容住宅面积'
+}
+
+const normalizedTableTotalData = computed(() =>
+  (props.tableTotalData || []).map((row) => ({
+    ...row,
+    leftLabel: row.label,
+    rightLabel: labelMap[row.label] || '计容面积'
+  }))
+)
+</script>

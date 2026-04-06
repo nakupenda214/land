@@ -1,4 +1,5 @@
-import { ref } from 'vue'
+﻿import { nextTick, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useProjectOptions } from '@/composables/file-upload/useProjectOptions'
 import { useFileTableQuery } from '@/composables/file-upload/useFileTableQuery'
 import { useFileUploadConstants, useAuditSummaryDisplay } from '@/composables/file-upload/useFileUploadConstants'
@@ -11,6 +12,9 @@ import { useCalibrationActions } from '@/composables/file-upload/useCalibrationA
 import { useRoomEditWorkflow } from '@/composables/file-upload/useRoomEditWorkflow'
 
 export function useFileUploadPage() {
+  const route = useRoute()
+  const router = useRouter()
+  const pendingAuditFileId = ref('')
   const { statusMap, usageCategoryMap, usageCategoryReverseMap } = useFileUploadConstants()
   const tableRowClassName = () => 'no-hover-highlight'
 
@@ -140,6 +144,40 @@ export function useFileUploadPage() {
     auditSummaryData
   })
 
+  // 从归档页跳转到审核页时，自动带入项目ID
+  watch(
+    () => route.query.projectId,
+    (projectId) => {
+      if (projectId) {
+        currentProject.value = String(projectId)
+      }
+    },
+    { immediate: true }
+  )
+
+  watch(
+    () => route.query.fileRecordId,
+    (fileRecordId) => {
+      pendingAuditFileId.value = fileRecordId ? String(fileRecordId) : ''
+    },
+    { immediate: true }
+  )
+
+  watch([fileTableData, pendingAuditFileId], async ([rows, fileId]) => {
+    if (!fileId || !Array.isArray(rows) || rows.length === 0) return
+    const targetRow = rows.find((item) => String(item.rawId) === String(fileId))
+    if (!targetRow) return
+
+    await nextTick()
+    openCalibration(targetRow)
+    pendingAuditFileId.value = ''
+
+    const nextQuery = { ...route.query }
+    delete nextQuery.fileRecordId
+    delete nextQuery.openAudit
+    router.replace({ query: nextQuery })
+  })
+
   return {
     statusMap,
     tableRowClassName,
@@ -204,3 +242,4 @@ export function useFileUploadPage() {
     handleAuditPass
   }
 }
+
