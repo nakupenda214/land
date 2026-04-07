@@ -249,6 +249,20 @@ const mapStageLabel = (stage) => {
   return stage || '阶段更新'
 }
 
+const resolveStageText = (stageEvt) => {
+  const direct = [stageEvt?.text, stageEvt?.message, stageEvt?.title].find(
+    (x) => typeof x === 'string' && x.trim()
+  )
+  if (direct) return direct.trim()
+  if (stageEvt?.payload && typeof stageEvt.payload === 'object') {
+    const payloadText = [stageEvt.payload.text, stageEvt.payload.message, stageEvt.payload.title].find(
+      (x) => typeof x === 'string' && x.trim()
+    )
+    if (payloadText) return payloadText.trim()
+  }
+  return mapStageLabel(stageEvt?.stage || stageEvt?.payload?.stage)
+}
+
 const extractSyncAnswer = (res) => {
   const data = res?.data?.data
   if (typeof data === 'string') return data
@@ -324,22 +338,24 @@ const handleSend = async () => {
         await scrollToBottom()
       },
       onStage: (stageEvt) => {
-        appendReasoningEvent(assistantMsg, mapStageLabel(stageEvt?.stage), {
+        appendReasoningEvent(assistantMsg, resolveStageText(stageEvt), {
           level: 'running',
           typeLabel: '阶段'
         })
       },
       onToolCall: (evt) => {
-        const toolName = evt?.toolName || evt?.name || 'unknown'
+        const payload = evt?.payload && typeof evt.payload === 'object' ? evt.payload : {}
+        const toolName = evt?.toolName || evt?.name || payload.toolName || 'unknown'
         appendReasoningEvent(
           assistantMsg,
-          `调用工具 ${toolName}，参数：${summarizeArgs(evt?.args ?? evt?.parameters)}`,
+          `调用工具 ${toolName}，参数：${summarizeArgs(evt?.args ?? evt?.parameters ?? payload.args)}`,
           { level: 'running', typeLabel: '工具调用' }
         )
       },
       onToolResult: (evt) => {
-        const toolName = evt?.toolName || evt?.name || 'unknown'
-        const brief = evt?.resultSummary || evt?.summary || summarizeArgs(evt?.result)
+        const payload = evt?.payload && typeof evt.payload === 'object' ? evt.payload : {}
+        const toolName = evt?.toolName || evt?.name || payload.toolName || 'unknown'
+        const brief = evt?.resultSummary || evt?.summary || payload.resultSummary || summarizeArgs(evt?.result ?? payload.result)
         appendReasoningEvent(
           assistantMsg,
           `工具 ${toolName} 返回：${brief}`,

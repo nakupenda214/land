@@ -35,10 +35,10 @@ export const chatAgentStream = async ({
 
   const consumeEvent = (rawEvent) => {
     if (!rawEvent) return
-    const lines = rawEvent.split('\n')
+    const lines = rawEvent.split(/\r?\n/)
     const dataText = lines
-      .filter((line) => line.startsWith('data:'))
-      .map((line) => line.slice(5).trim())
+      .filter((line) => line.trimStart().startsWith('data:'))
+      .map((line) => line.trimStart().slice(5).trim())
       .join('\n')
     if (!dataText) return
     try {
@@ -49,6 +49,7 @@ export const chatAgentStream = async ({
       if (kind === 'delta') onDelta?.(payloadData)
       if (kind === 'done') onDone?.(payloadData)
       if (kind === 'stage') onStage?.(payloadData)
+      if (kind === 'progress') onStage?.(payloadData)
       if (kind === 'tool_call') onToolCall?.(payloadData)
       if (kind === 'tool_result') onToolResult?.(payloadData)
       if (kind === 'guardrail') onGuardrail?.(payloadData)
@@ -61,7 +62,7 @@ export const chatAgentStream = async ({
     const { value, done } = await reader.read()
     if (done) break
     buffer += decoder.decode(value, { stream: true })
-    const events = buffer.split('\n\n')
+    const events = buffer.split(/\r?\n\r?\n/)
     buffer = events.pop() || ''
     events.forEach(consumeEvent)
   }
