@@ -1723,11 +1723,11 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 14px;
-  padding: 14px 16px;
-  border: 1px solid #d4dae3;
-  border-radius: 6px;
-  background: #f5f7fa;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--home-soft-border);
+  border-radius: var(--home-card-radius);
+  background: linear-gradient(180deg, var(--home-header-grad-start) 0%, #f2f7fc 100%);
   font-size: 14px;
 }
 
@@ -1740,8 +1740,12 @@ onBeforeUnmount(() => {
 }
 
 .folder-count {
-  color: #7a8394;
-  font-size: 14px;
+  color: #607286;
+  font-size: 13px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #dbe4ef;
+  background: #ffffff;
 }
 
 .toolbar-actions {
@@ -1758,11 +1762,11 @@ onBeforeUnmount(() => {
 }
 
 .socket-status {
-  font-size: 13px;
+  font-size: 12px;
   padding: 2px 8px;
   border-radius: 999px;
-  border: 1px solid #dbe3ef;
-  background: #f8fbff;
+  border: 1px solid #dbe4ef;
+  background: #ffffff;
   color: #6b7c93;
   white-space: nowrap;
 }
@@ -1822,8 +1826,8 @@ onBeforeUnmount(() => {
 
 .tree-panel,
 .table-panel {
-  border: 1px solid #d4dae3;
-  border-radius: 6px;
+  border: 1px solid var(--home-soft-border);
+  border-radius: var(--home-card-radius);
   background: #fff;
   padding: 10px;
   height: 100%;
@@ -1942,14 +1946,14 @@ onBeforeUnmount(() => {
 
 .query-row {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: flex-start;
-  gap: 10px;
+  gap: 10px 12px;
   margin-bottom: 10px;
-  padding: 12px 14px;
-  border: 1px solid #e1e6ee;
-  border-radius: 6px;
-  background: #f8fafc;
+  padding: 12px;
+  border: 1px solid var(--home-soft-border);
+  border-radius: var(--home-card-radius);
+  background: linear-gradient(180deg, var(--home-panel-grad-start) 0%, var(--home-panel-grad-end) 100%);
 }
 
 .query-fields {
@@ -1957,7 +1961,7 @@ onBeforeUnmount(() => {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   margin-left: auto;
   min-width: 0;
 }
@@ -1968,20 +1972,24 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 8px;
   flex: 0 0 auto;
+  padding-left: 8px;
+  border-left: 1px dashed #d4deea;
 }
 
 .batch-actions {
   display: flex;
   gap: 8px;
   flex: 0 0 auto;
+  padding-right: 4px;
+  border-right: 1px dashed #d4deea;
 }
 
 :deep(.batch-actions .el-button) {
   min-width: 98px;
-  height: 34px;
-  border-radius: 6px;
+  height: 32px;
+  border-radius: 8px;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
   border-color: #9aa8ba;
   color: #334155;
 }
@@ -2009,10 +2017,10 @@ onBeforeUnmount(() => {
 
 :deep(.query-actions .el-button) {
   min-width: 84px;
-  height: 34px;
-  border-radius: 6px;
+  height: 32px;
+  border-radius: 8px;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 :deep(.query-actions .el-button--primary) {
@@ -2022,14 +2030,14 @@ onBeforeUnmount(() => {
 }
 
 .query-item {
-  width: 160px !important;
-  flex: 0 0 160px;
+  width: 150px !important;
+  flex: 0 0 150px;
   --el-font-size-base: 14px;
 }
 
 .query-item.keyword {
   width: 260px !important;
-  flex: 0 0 260px;
+  flex: 1 1 260px;
 }
 
 .table-wrap {
@@ -2045,8 +2053,8 @@ onBeforeUnmount(() => {
 }
 
 :deep(.table-wrap .el-table th.el-table__cell) {
-  background: #f7f9fc;
-  color: #5b6473;
+  background: #f1f6fc;
+  color: #445468;
   font-weight: 600;
   padding-top: 11px;
   padding-bottom: 11px;
@@ -2058,7 +2066,7 @@ onBeforeUnmount(() => {
 }
 
 :deep(.table-wrap .el-table .el-table__row:hover > td.el-table__cell) {
-  background: #f9fbff !important;
+  background: #f0f7ff !important;
 }
 
 .thumb {
@@ -2085,13 +2093,13 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 8px;
-  border-top: 1px solid #f0f2f5;
+  padding: 8px 6px 2px;
+  border-top: 1px solid #e8eef5;
 }
 
 .file-count {
-  color: #7a8394;
-  font-size: 14px;
+  color: #607286;
+  font-size: 13px;
 }
 
 :deep(.pager-row .el-pagination) {
@@ -2111,30 +2119,7 @@ onBeforeUnmount(() => {
   color: #475569;
 }
 
-.op-btn {
-  padding-left: 8px;
-  padding-right: 8px;
-  min-height: 28px;
-  font-weight: 600;
-}
-
-:deep(.op-btn.parse-btn.el-button--primary) {
-  border-color: #c8ddf1;
-  background: #e8f2fc;
-  color: #1f4e79;
-}
-
-:deep(.op-btn.audit-btn.el-button--primary.is-plain) {
-  border-color: #c8ddf1;
-  background: #ffffff;
-  color: #1f4e79;
-}
-
-:deep(.op-btn.delete-btn.el-button--danger.is-plain) {
-  border-color: #f7c4bf;
-  background: #fff3f2;
-  color: #b42318;
-}
+/* 表格操作按钮样式见 @/styles/app-button-system.css（.op-btn / .parse-btn / .audit-btn / .delete-btn） */
 
 :global(body.resizing-splitter) {
   cursor: col-resize !important;
@@ -2148,11 +2133,23 @@ onBeforeUnmount(() => {
 
   .query-fields {
     margin-left: 0;
+    flex-basis: 100%;
+    order: 3;
+  }
+
+  .query-actions {
+    border-left: none;
+    padding-left: 0;
+  }
+
+  .batch-actions {
+    border-right: none;
+    padding-right: 0;
   }
 
   .query-item.keyword {
     width: 220px !important;
-    flex: 0 0 220px;
+    flex: 1 1 220px;
   }
 }
 

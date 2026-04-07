@@ -41,12 +41,14 @@
         <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip />
         <el-table-column label="操作" width="300" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button class="table-mini-btn table-mini-edit" size="small" :icon="Edit" @click="openEditDialog(row)">编辑</el-button>
-            <el-popconfirm title="确认删除该映射？" @confirm="handleDelete(row)">
-              <template #reference>
-                <el-button class="table-mini-btn table-mini-delete" size="small" :icon="Delete">删除</el-button>
-              </template>
-            </el-popconfirm>
+            <span class="field-table-actions">
+              <el-button class="op-btn audit-btn" type="primary" size="small" plain :icon="Edit" @click="openEditDialog(row)">编辑</el-button>
+              <el-popconfirm title="确认删除该映射？" @confirm="handleDelete(row)">
+                <template #reference>
+                  <el-button class="op-btn delete-btn" type="danger" size="small" plain :icon="Delete">删除</el-button>
+                </template>
+              </el-popconfirm>
+            </span>
           </template>
         </el-table-column>
       </el-table>
@@ -94,7 +96,7 @@
         </el-table-column>
         <el-table-column label="操作" width="300" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button class="table-mini-btn table-mini-save" size="small" :icon="Check" @click="saveSpecialConfig(row)">保存</el-button>
+            <el-button class="op-btn parse-btn" type="primary" size="small" :icon="Check" @click="saveSpecialConfig(row)">保存</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -588,50 +590,12 @@ onMounted(async () => {
   font-weight: 600;
 }
 
-.table-mini-btn {
-  height: 26px;
-  padding: 0 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  border: 1px solid transparent;
-}
-
-.table-mini-edit {
-  color: #1f4e79;
-  background: #e8f2fc;
-  border-color: #c8ddf1;
-}
-
-.table-mini-edit:hover {
-  background: #d7e7f8;
-  border-color: #b8d3ec;
-}
-
-.table-mini-edit {
-  margin-right: 28px;
-}
-
-.table-mini-delete {
-  color: #b42318;
-  background: #fff3f2;
-  border-color: #f7c4bf;
-}
-
-.table-mini-delete:hover {
-  background: #ffe9e7;
-  border-color: #f1a9a1;
-}
-
-.table-mini-save {
-  color: #1f4e79;
-  background: #e8f2fc;
-  border-color: #c8ddf1;
-}
-
-.table-mini-save:hover {
-  background: #d7e7f8;
-  border-color: #b8d3ec;
+.field-table-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 :deep(.el-card__body) {
@@ -649,27 +613,4 @@ onMounted(async () => {
   text-overflow: ellipsis;
 }
 
-:deep(.el-button--primary) {
-  background: #e8f2fc;
-  border-color: #c8ddf1;
-  color: #1f4e79;
-}
-
-:deep(.el-button--primary:hover) {
-  background: #d7e7f8;
-  border-color: #b8d3ec;
-  color: #163a5a;
-}
-
-:deep(.el-button--primary.is-plain) {
-  background: #f8fbff;
-  border-color: #d7e6f5;
-  color: #355a84;
-}
-
-:deep(.el-button--primary.is-plain:hover) {
-  background: #edf4fb;
-  border-color: #c8ddf1;
-  color: #234567;
-}
 </style>

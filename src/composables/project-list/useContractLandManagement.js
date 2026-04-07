@@ -182,7 +182,7 @@ export function useContractLandManagement({ filterProject, currentProjectInfo })
   }
 
   const fetchContractListByProjectId = async (projectId) => {
-    if (!projectId) return
+    if (!projectId) return false
 
     try {
       const res = await axios.post('/api/project/contracts/query', {
@@ -210,11 +210,14 @@ export function useContractLandManagement({ filterProject, currentProjectInfo })
 
         Object.assign(selectedContract, { id: '', contractNumber: '', fileRecordId: '' })
         currentLandParcelList.value = []
+        return true
       }
+      return false
     } catch (error) {
       console.error('查询项目合同列表失败:', error)
       ElMessage.error('获取合同列表失败，请重试')
       contractLandList.value = []
+      return false
     }
   }
 

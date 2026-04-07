@@ -23,10 +23,16 @@ export function useProjectSelector({ fetchProjectData, fetchSurveyReports }) {
       })
       if (res.data?.code === 200) {
         const records = Array.isArray(res.data?.data?.records) ? res.data.data.records : []
-        projectOptions.value = records.map((item) => ({
-          id: String(item.id),
-          name: item.projectName
-        }))
+        projectOptions.value = records.map((item) => {
+          const idStr = String(item.id ?? '')
+          return {
+            id: idStr,
+            name: item.projectName || '',
+            code: item.projectCode || `XM-${idStr.padStart(3, '0')}`,
+            projectTime: item.projectTime || '',
+            updateTime: item.updateTime || null
+          }
+        })
       }
     } catch (error) {
       console.error('获取项目列表失败:', error)
@@ -40,7 +46,7 @@ export function useProjectSelector({ fetchProjectData, fetchSurveyReports }) {
     if (projectItem) {
       currentProjectInfo.id = projectId
       currentProjectInfo.name = projectItem.name
-      currentProjectInfo.code = `XM-${String(projectId).padStart(3, '0')}`
+      currentProjectInfo.code = projectItem.code || `XM-${String(projectId).padStart(3, '0')}`
       currentProjectInfo.status = '已归档'
     }
 

@@ -16,6 +16,9 @@ export const getParsedSurveyReportsByProject = (projectId) =>
 export const refreshSurveyReportsByProject = (projectId) =>
   axios.post(`/api/project/${projectId}/refresh-survey-reports`)
 
+export const queryProjectAreaComparison = (projectId) =>
+  axios.get(`/api/project/${projectId}/area-comparison/triple-lines`)
+
 export const getSurveyRoomInfo = (projectId, reportId) =>
   axios.get(`/api/project/${projectId}/survey-reports/${reportId}/room-info`)
 

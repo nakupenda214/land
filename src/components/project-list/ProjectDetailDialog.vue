@@ -9,85 +9,164 @@
     :destroy-on-close="false"
   >
     <div class="summary-grid">
-      <div class="summary-card">
-        <div class="card-title">面积汇总（人工）</div>
-        <div class="card-lines">
-          <div class="line"><span>建筑面积</span><strong>{{ roomSumInfo.buildingAreaSum }} ㎡</strong></div>
-          <div class="line"><span>套内面积</span><strong>{{ roomSumInfo.innerAreaSum }} ㎡</strong></div>
-          <div class="line"><span>阳台面积</span><strong>{{ roomSumInfo.balconyAreaSum }} ㎡</strong></div>
-          <div class="line"><span>公摊面积</span><strong>{{ roomSumInfo.sharedAreaSum }} ㎡</strong></div>
-        </div>
-      </div>
-
-      <div class="summary-card">
-        <div class="card-title">校验信息</div>
-        <div class="card-lines">
-          <div class="line"><span>待确认面积</span><strong class="warn">{{ reportAuditInfo.pendingConfirmArea }} ㎡</strong></div>
-          <div class="line"><span>未知用途数量</span><strong>{{ reportAuditInfo.unknownUsageCount }} 条</strong></div>
-          <div class="line">
-            <span>未知用途</span>
-            <el-tag size="small" :type="reportAuditInfo.hasUnknownUsage === 1 ? 'warning' : 'success'">
-              {{ reportAuditInfo.hasUnknownUsage === 1 ? '有' : '无' }}
-            </el-tag>
+      <article class="summary-card summary-card--manual">
+        <header class="summary-card__head">
+          <div class="summary-card__icon" aria-hidden="true">
+            <el-icon><Histogram /></el-icon>
           </div>
-          <div class="line">
-            <span>校验状态</span>
-            <el-tag size="small" :type="reportAuditInfo.isVerified === 1 ? 'success' : 'danger'">
-              {{ reportAuditInfo.isVerified === 1 ? '通过' : '不通过' }}
-            </el-tag>
+          <div class="summary-card__head-text">
+            <h3 class="summary-card__title">面积汇总（人工）</h3>
+            <p class="summary-card__subtitle">解析后的户室面积加总</p>
+          </div>
+        </header>
+        <div class="summary-card__body">
+          <div class="stat-row">
+            <span class="stat-row__label">建筑面积</span>
+            <span class="stat-row__value">{{ roomSumInfo.buildingAreaSum }}</span>
+            <span class="stat-row__unit">㎡</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-row__label">套内面积</span>
+            <span class="stat-row__value">{{ roomSumInfo.innerAreaSum }}</span>
+            <span class="stat-row__unit">㎡</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-row__label">阳台面积</span>
+            <span class="stat-row__value">{{ roomSumInfo.balconyAreaSum }}</span>
+            <span class="stat-row__unit">㎡</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-row__label">公摊面积</span>
+            <span class="stat-row__value">{{ roomSumInfo.sharedAreaSum }}</span>
+            <span class="stat-row__unit">㎡</span>
           </div>
         </div>
-      </div>
+      </article>
 
-      <div class="summary-card">
-        <div class="card-title">OCR 对比（来自实测报告查询）</div>
-        <div class="card-lines">
-          <div class="line"><span>建筑面积（OCR）</span><strong>{{ reportAuditInfo.roomInfoBuildingAreaSumFromOcr }} ㎡</strong></div>
-          <div class="line"><span>套内面积（OCR）</span><strong>{{ reportAuditInfo.roomInfoInnerAreaSumFromOcr }} ㎡</strong></div>
-          <div class="line"><span>阳台面积（OCR）</span><strong>{{ reportAuditInfo.roomInfoBalconyAreaSumFromOcr }} ㎡</strong></div>
-          <div class="line"><span>公摊面积（OCR）</span><strong>{{ reportAuditInfo.roomInfoSharedAreaSumFromOcr }} ㎡</strong></div>
+      <article class="summary-card summary-card--audit">
+        <header class="summary-card__head">
+          <div class="summary-card__icon" aria-hidden="true">
+            <el-icon><CircleCheck /></el-icon>
+          </div>
+          <div class="summary-card__head-text">
+            <h3 class="summary-card__title">校验信息</h3>
+            <p class="summary-card__subtitle">用途与面积校验结果</p>
+          </div>
+        </header>
+        <div class="summary-card__body">
+          <div class="stat-row">
+            <span class="stat-row__label">待确认面积</span>
+            <span class="stat-row__value stat-row__value--warn">{{ reportAuditInfo.pendingConfirmArea }}</span>
+            <span class="stat-row__unit">㎡</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-row__label">未知用途数量</span>
+            <span class="stat-row__value">{{ reportAuditInfo.unknownUsageCount }}</span>
+            <span class="stat-row__unit">条</span>
+          </div>
+          <div class="stat-row stat-row--tags">
+            <span class="stat-row__label">未知用途</span>
+            <span class="stat-row__tags">
+              <el-tag size="small" effect="light" round :type="reportAuditInfo.hasUnknownUsage === 1 ? 'warning' : 'success'">
+                {{ reportAuditInfo.hasUnknownUsage === 1 ? '有' : '无' }}
+              </el-tag>
+            </span>
+          </div>
+          <div class="stat-row stat-row--tags">
+            <span class="stat-row__label">校验状态</span>
+            <span class="stat-row__tags">
+              <el-tag size="small" effect="light" round :type="reportAuditInfo.isVerified === 1 ? 'success' : 'danger'">
+                {{ reportAuditInfo.isVerified === 1 ? '通过' : '不通过' }}
+              </el-tag>
+            </span>
+          </div>
         </div>
-      </div>
+      </article>
+
+      <article class="summary-card summary-card--ocr">
+        <header class="summary-card__head">
+          <div class="summary-card__icon" aria-hidden="true">
+            <el-icon><Document /></el-icon>
+          </div>
+          <div class="summary-card__head-text">
+            <h3 class="summary-card__title">OCR 对比</h3>
+            <p class="summary-card__subtitle">来自实测报告查询页 OCR 字段</p>
+          </div>
+        </header>
+        <div class="summary-card__body">
+          <div class="stat-row">
+            <span class="stat-row__label">建筑面积（OCR）</span>
+            <span class="stat-row__value">{{ reportAuditInfo.roomInfoBuildingAreaSumFromOcr }}</span>
+            <span class="stat-row__unit">㎡</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-row__label">套内面积（OCR）</span>
+            <span class="stat-row__value">{{ reportAuditInfo.roomInfoInnerAreaSumFromOcr }}</span>
+            <span class="stat-row__unit">㎡</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-row__label">阳台面积（OCR）</span>
+            <span class="stat-row__value">{{ reportAuditInfo.roomInfoBalconyAreaSumFromOcr }}</span>
+            <span class="stat-row__unit">㎡</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-row__label">公摊面积（OCR）</span>
+            <span class="stat-row__value">{{ reportAuditInfo.roomInfoSharedAreaSumFromOcr }}</span>
+            <span class="stat-row__unit">㎡</span>
+          </div>
+        </div>
+      </article>
     </div>
 
     <div v-if="reportAuditInfo.verificationErrorReason && reportAuditInfo.verificationErrorReason !== '-'" class="verify-error">
-      <span class="label">校验失败原因：</span>
-      <span class="content">{{ reportAuditInfo.verificationErrorReason }}</span>
+      <el-icon class="verify-error__icon"><WarningFilled /></el-icon>
+      <div>
+        <span class="verify-error__label">校验失败原因</span>
+        <p class="verify-error__content">{{ reportAuditInfo.verificationErrorReason }}</p>
+      </div>
     </div>
 
-    <div class="basic-info-edit">
-      <div class="edit-form">
-        <el-form label-position="top">
-          <el-row :gutter="12">
+    <section class="basic-info-panel">
+      <div class="basic-info-panel__body">
+        <el-form class="basic-info-form" label-position="top">
+          <el-row :gutter="16">
             <el-col :span="12">
               <el-form-item label="不动产权证编号">
                 <el-input
                   :model-value="reportBasicInfoForm.propertyCertificateNumber"
                   maxlength="80"
                   clearable
-                  placeholder="解析为空时可手动补录"
+                  placeholder="请输入或从报告中核对后补录"
                   @update:model-value="(v) => emit('update:propertyCertificateNumber', v)"
                 />
               </el-form-item>
             </el-col>
             <el-col :span="12">
-              <el-form-item label="合同/批文编号">
+              <el-form-item label="合同 / 批文编号">
                 <el-input
                   :model-value="reportBasicInfoForm.propertyAreaConfirmationNoticeNumber"
                   maxlength="80"
                   clearable
-                  placeholder="解析为空时可手动补录"
+                  placeholder="请输入或从报告中核对后补录"
                   @update:model-value="(v) => emit('update:propertyAreaConfirmationNoticeNumber', v)"
                 />
               </el-form-item>
             </el-col>
           </el-row>
         </el-form>
-        <el-button class="save-basic-btn" type="primary" size="small" :loading="reportBasicInfoSaving" @click="emit('save-basic-info')">
-          保存
-        </el-button>
+        <div class="basic-info-panel__actions">
+          <el-button
+            class="save-basic-btn"
+            type="primary"
+            :loading="reportBasicInfoSaving"
+            @click="emit('save-basic-info')"
+          >
+            <el-icon class="save-basic-btn__ico"><Select /></el-icon>
+            保存
+          </el-button>
+        </div>
       </div>
-    </div>
+    </section>
 
     <div class="table-shell">
       <div class="table-toolbar">
@@ -149,6 +228,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, ref } from 'vue'
+import { Histogram, CircleCheck, Document, WarningFilled, Select } from '@element-plus/icons-vue'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -215,94 +295,259 @@ onBeforeUnmount(() => {
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 14px;
 }
 
 .summary-card {
-  border: 1px solid #e7edf6;
-  border-radius: 10px;
-  background: #f9fbff;
-  padding: 10px 12px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 10px 28px -16px rgba(15, 23, 42, 0.12);
 }
 
-.card-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: #334155;
-  margin-bottom: 8px;
+.summary-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 14px 0 0 14px;
 }
 
-.card-lines {
-  display: grid;
-  gap: 6px;
+.summary-card--manual::before {
+  background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
 }
 
-.line {
+.summary-card--audit::before {
+  background: linear-gradient(180deg, #10b981 0%, #047857 100%);
+}
+
+.summary-card--ocr::before {
+  background: linear-gradient(180deg, #8b5cf6 0%, #6d28d9 100%);
+}
+
+.summary-card__head {
   display: flex;
-  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 14px 10px 16px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.85);
+}
+
+.summary-card__icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
   align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: #fff;
+}
+
+.summary-card--manual .summary-card__icon {
+  background: linear-gradient(145deg, #3b82f6 0%, #1d4ed8 100%);
+  box-shadow: 0 6px 14px -6px rgba(29, 78, 216, 0.55);
+}
+
+.summary-card--audit .summary-card__icon {
+  background: linear-gradient(145deg, #10b981 0%, #059669 100%);
+  box-shadow: 0 6px 14px -6px rgba(5, 150, 105, 0.45);
+}
+
+.summary-card--ocr .summary-card__icon {
+  background: linear-gradient(145deg, #a78bfa 0%, #7c3aed 100%);
+  box-shadow: 0 6px 14px -6px rgba(124, 58, 237, 0.45);
+}
+
+.summary-card__head-text {
+  min-width: 0;
+}
+
+.summary-card__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--biz-text, #1f2d3d);
+  line-height: 1.3;
+}
+
+.summary-card__subtitle {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--biz-subtext, #64748b);
+}
+
+.summary-card__body {
+  padding: 10px 12px 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
   font-size: 13px;
-  color: #4b5563;
+  background: rgba(248, 250, 252, 0.65);
 }
 
-.line strong {
-  color: #1f2937;
+.stat-row:nth-child(even) {
+  background: rgba(241, 245, 249, 0.75);
 }
 
-.line strong.warn {
-  color: #d97706;
+.stat-row--tags {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.stat-row__label {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.stat-row__value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+  font-size: 14px;
+  text-align: right;
+}
+
+.stat-row__value--warn {
+  color: #c2410c;
+}
+
+.stat-row__unit {
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  min-width: 1.5em;
+  text-align: right;
+}
+
+.stat-row__tags {
+  display: flex;
+  justify-content: flex-end;
+  grid-column: 2 / -1;
+}
+
+.stat-row--tags .stat-row__label {
+  align-self: center;
 }
 
 .verify-error {
-  margin-top: 10px;
-  padding: 8px 10px;
-  border: 1px solid #fecaca;
-  background: #fff1f2;
-  border-radius: 8px;
+  margin-top: 14px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(251, 113, 133, 0.45);
+  background: linear-gradient(135deg, rgba(255, 241, 242, 0.95) 0%, rgba(255, 228, 230, 0.55) 100%);
   font-size: 13px;
   color: #9f1239;
 }
 
-.verify-error .label {
+.verify-error__icon {
+  flex-shrink: 0;
+  font-size: 20px;
+  margin-top: 2px;
+  color: #e11d48;
+}
+
+.verify-error__label {
+  display: block;
   font-weight: 700;
-  margin-right: 6px;
+  margin-bottom: 4px;
+  color: #be123c;
 }
 
-.basic-info-edit {
-  margin-top: 10px;
-  border: 1px solid #e6ebf3;
-  border-radius: 8px;
-  background: #fbfcff;
-  padding: 10px 12px;
+.verify-error__content {
+  margin: 0;
+  line-height: 1.55;
+  color: #881337;
 }
 
-.edit-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #334155;
-  margin-bottom: 8px;
+.basic-info-panel {
+  margin-top: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.38);
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.97) 0%, rgba(241, 245, 249, 0.5) 100%);
+  box-shadow: 0 8px 24px -18px rgba(15, 23, 42, 0.12);
+  overflow: hidden;
 }
 
-.edit-form {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
+.basic-info-panel__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 16px 20px;
+  padding: 14px 16px 16px;
 }
 
-.edit-form :deep(.el-form) {
-  flex: 1;
+.basic-info-form {
+  min-width: 0;
 }
 
-.edit-form :deep(.el-form-item) {
+.basic-info-form :deep(.el-form-item) {
   margin-bottom: 0;
+}
+
+.basic-info-form :deep(.el-form-item__label) {
+  font-weight: 600;
+  color: #475569;
+  font-size: 12.5px;
+}
+
+.basic-info-form :deep(.el-input__wrapper) {
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.basic-info-panel__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 2px;
+}
+
+:deep(.save-basic-btn.el-button--primary) {
+  min-height: 40px;
+  padding: 10px 22px;
+  border-radius: 10px;
+  font-weight: 600;
+  border: none;
+  background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+  box-shadow: 0 8px 20px -10px rgba(29, 78, 216, 0.65);
+}
+
+:deep(.save-basic-btn.el-button--primary:hover) {
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+}
+
+.save-basic-btn__ico {
+  margin-right: 4px;
+  font-size: 16px;
 }
 
 .table-shell {
   border: 1px solid #e6ebf3;
-  border-radius: 8px;
+  border-radius: 12px;
   background: #fff;
   overflow: hidden;
-  margin-top: 12px;
+  margin-top: 14px;
 }
 
 .table-toolbar {
@@ -346,20 +591,6 @@ onBeforeUnmount(() => {
   color: #163a5a;
 }
 
-:deep(.save-basic-btn.el-button--primary) {
-  border-color: #c8ddf1;
-  background: #e8f2fc;
-  color: #1f4e79;
-  font-weight: 600;
-  height: 35px;
-}
-
-:deep(.save-basic-btn.el-button--primary:hover) {
-  border-color: #b8d3ec;
-  background: #d7e7f8;
-  color: #163a5a;
-}
-
 .table-container {
   height: 500px;
   min-height: 280px;
@@ -381,5 +612,45 @@ onBeforeUnmount(() => {
   .summary-grid {
     grid-template-columns: 1fr;
   }
+
+  .basic-info-panel__body {
+    grid-template-columns: 1fr;
+  }
+
+  .basic-info-panel__actions {
+    justify-content: stretch;
+  }
+
+  :deep(.save-basic-btn.el-button--primary) {
+    width: 100%;
+  }
+}
+</style>
+
+<style>
+/* 弹窗标题与内边距，类挂在 teleport 后的 dialog 上需非 scoped */
+.detail-dialog.el-dialog {
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 24px 64px -20px rgba(15, 23, 42, 0.28);
+}
+
+.detail-dialog .el-dialog__header {
+  padding: 16px 20px 12px;
+  margin: 0;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+.detail-dialog .el-dialog__title {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--biz-text, #1f2d3d);
+}
+
+.detail-dialog .el-dialog__body {
+  padding: 16px 20px 20px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 55%, #eef2f6 100%);
 }
 </style>

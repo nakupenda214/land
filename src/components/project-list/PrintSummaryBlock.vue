@@ -49,18 +49,27 @@
       </tbody>
     </table>
 
-    <table class="native-print-table info-table" style="margin-top: 20px;">
-      <tbody>
-        <tr v-for="row in normalizedTableTotalData" :key="row.label">
-          <td>{{ row.leftLabel }}</td>
-          <td>{{ row.contract }}</td>
-          <td>{{ row.rightLabel }}</td>
-          <td>{{ row.measured }}</td>
-          <td>差值</td>
-          <td>{{ row.isArea ? row.diff : '-' }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <section v-for="group in selectedPrintGroups" :key="group.key" class="print-comparison-group">
+      <div class="print-group-title">{{ group.title }}</div>
+      <table class="native-print-table info-table" style="margin-top: 8px;">
+        <thead>
+          <tr>
+            <th>维度</th>
+            <th>合同约定面积</th>
+            <th>计容面积</th>
+            <th>差值</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in group.rows" :key="`${group.key}-${row.label}`">
+            <td>{{ row.label }}</td>
+            <td>{{ row.contractAgreedArea }}</td>
+            <td>{{ row.buildableArea }}</td>
+            <td>{{ row.difference }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
 
     <div class="print-footer">
       <div class="print-signatures">
@@ -92,23 +101,60 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
-  tableTotalData: {
+  areaComparison: {
+    type: Object,
+    default: () => ({
+      systemCalculated: {},
+      projectPartyDeclared: {},
+      planningCalculated: {}
+    })
+  },
+  selectedComparisonGroups: {
     type: Array,
-    default: () => []
+    default: () => ['systemCalculated', 'projectPartyDeclared', 'planningCalculated']
   }
 })
 
-const labelMap = {
-  合同约定建筑面积: '计容建筑面积',
-  合同约定商业面积: '计容商业面积',
-  合同约定住宅面积: '计容住宅面积'
+const groupMeta = [
+  { key: 'systemCalculated', title: '系统计算口径' },
+  { key: 'projectPartyDeclared', title: '项目方声明口径' },
+  { key: 'planningCalculated', title: '规划复核口径' }
+]
+
+const formatArea = (value) => {
+  const num = Number(value)
+  if (!Number.isFinite(num)) return '-'
+  return num.toFixed(2)
 }
 
-const normalizedTableTotalData = computed(() =>
-  (props.tableTotalData || []).map((row) => ({
-    ...row,
-    leftLabel: row.label,
-    rightLabel: labelMap[row.label] || '计容面积'
-  }))
+const buildRows = (tripleLine) => [
+  {
+    label: '建筑面积',
+    contractAgreedArea: formatArea(tripleLine?.totalBuilding?.contractAgreedArea),
+    buildableArea: formatArea(tripleLine?.totalBuilding?.buildableArea),
+    difference: formatArea(tripleLine?.totalBuilding?.difference)
+  },
+  {
+    label: '商业面积',
+    contractAgreedArea: formatArea(tripleLine?.commercial?.contractAgreedArea),
+    buildableArea: formatArea(tripleLine?.commercial?.buildableArea),
+    difference: formatArea(tripleLine?.commercial?.difference)
+  },
+  {
+    label: '住宅面积',
+    contractAgreedArea: formatArea(tripleLine?.residential?.contractAgreedArea),
+    buildableArea: formatArea(tripleLine?.residential?.buildableArea),
+    difference: formatArea(tripleLine?.residential?.difference)
+  }
+]
+
+const selectedPrintGroups = computed(() =>
+  groupMeta
+    .filter((meta) => props.selectedComparisonGroups.includes(meta.key))
+    .map((meta) => ({
+      key: meta.key,
+      title: meta.title,
+      rows: buildRows(props.areaComparison?.[meta.key])
+    }))
 )
 </script>

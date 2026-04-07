@@ -1,7 +1,7 @@
 ﻿import { computed, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
-import { getParsedSurveyReportsByProject } from '@/services/project.service'
+import { getParsedSurveyReportsByProject, queryProjectAreaComparison } from '@/services/project.service'
 import { queryFiles } from '@/services/file.service'
 
 function normalizeVerifiedFlag(value) {
@@ -52,6 +52,26 @@ function calcMeasuredByRule(surveyData) {
   }
 }
 
+const COMPARISON_GROUP_KEYS = ['systemCalculated', 'projectPartyDeclared', 'planningCalculated']
+
+const createEmptyTripleLines = () => ({
+  totalBuilding: { contractAgreedArea: null, buildableArea: null, difference: null },
+  commercial: { contractAgreedArea: null, buildableArea: null, difference: null },
+  residential: { contractAgreedArea: null, buildableArea: null, difference: null }
+})
+
+const createEmptyAreaComparison = () => ({
+  systemCalculated: createEmptyTripleLines(),
+  projectPartyDeclared: createEmptyTripleLines(),
+  planningCalculated: createEmptyTripleLines(),
+  consistencyFlags: [],
+  dataCompleteness: {
+    systemCalculatedAvailable: false,
+    projectPartyDeclaredAvailable: false,
+    planningCalculatedAvailable: false
+  }
+})
+
 export function useSurveySummary({ reportList }) {
   const businessResidentialRatio = reactive({ contractRatio: '≥2:8', measuredRatio: '-' })
   const comparisonData = reactive([
@@ -69,6 +89,8 @@ export function useSurveySummary({ reportList }) {
   const isSavingPolicy = ref(false)
   const displayTableData = computed(() => rawTableData.value)
   const requestSeq = ref(0)
+  const areaComparison = ref(createEmptyAreaComparison())
+  const selectedComparisonGroups = ref([...COMPARISON_GROUP_KEYS])
   const uploadedSurveyReportTotal = ref(0)
   const measuredDebugSums = ref({
     commercial: 0,
@@ -124,21 +146,21 @@ export function useSurveySummary({ reportList }) {
     }
   }
 
-const fetchContractMetrics = async (projectId) => {
-  const zero = { totalArea: 0, residentialArea: 0, commercialArea: 0 }
-  try {
-    const summaryRes = await axios.get(`/api/project/contracts/area-summary/${Number(projectId)}`)
-    if (summaryRes?.data?.code !== 200 || !summaryRes?.data?.data) return zero
-    return {
-      totalArea: Number(summaryRes.data.data.totalArea || 0),
-      residentialArea: Number(summaryRes.data.data.residentialArea || 0),
-      commercialArea: Number(summaryRes.data.data.commercialArea || 0)
+  const fetchContractMetrics = async (projectId) => {
+    const zero = { totalArea: 0, residentialArea: 0, commercialArea: 0 }
+    try {
+      const summaryRes = await axios.get(`/api/project/contracts/area-summary/${Number(projectId)}`)
+      if (summaryRes?.data?.code !== 200 || !summaryRes?.data?.data) return zero
+      return {
+        totalArea: Number(summaryRes.data.data.totalArea || 0),
+        residentialArea: Number(summaryRes.data.data.residentialArea || 0),
+        commercialArea: Number(summaryRes.data.data.commercialArea || 0)
+      }
+    } catch (error) {
+      console.error('获取合同汇总指标失败:', error)
+      return zero
     }
-  } catch (error) {
-    console.error('获取合同汇总指标失败:', error)
-    return zero
   }
-}
 
   const fetchSurveyReports = async (projectId) => {
     if (!projectId) {
@@ -152,14 +174,19 @@ const fetchContractMetrics = async (projectId) => {
     unknownUsages.value = []
 
     try {
-      const [surveyRes, contractMetrics, uploadedTotal] = await Promise.all([
+      const [surveyRes, contractMetrics, uploadedTotal, comparisonRes] = await Promise.all([
         getParsedSurveyReportsByProject(projectId),
         fetchContractMetrics(projectId),
-        fetchUploadedSurveyReportTotal(projectId)
+        fetchUploadedSurveyReportTotal(projectId),
+        queryProjectAreaComparison(projectId)
       ])
       if (currentSeq !== requestSeq.value) return
 
       uploadedSurveyReportTotal.value = uploadedTotal
+      areaComparison.value =
+        comparisonRes?.data?.code === 200 && comparisonRes?.data?.data
+          ? comparisonRes.data.data
+          : createEmptyAreaComparison()
 
       if (surveyRes.data?.code !== 200 || !Array.isArray(surveyRes.data?.data)) {
         rawTableData.value = []
@@ -253,6 +280,8 @@ const fetchContractMetrics = async (projectId) => {
     rawTableData.value = []
     unknownUsages.value = []
     uploadedSurveyReportTotal.value = 0
+    areaComparison.value = createEmptyAreaComparison()
+    selectedComparisonGroups.value = [...COMPARISON_GROUP_KEYS]
     measuredDebugSums.value = {
       commercial: 0,
       residential: 0,
@@ -284,6 +313,8 @@ const fetchContractMetrics = async (projectId) => {
     isSavingPolicy,
     displayTableData,
     measuredDebugSums,
+    areaComparison,
+    selectedComparisonGroups,
     surveyStats,
     fetchSurveyReports,
     resetSummaryMetrics

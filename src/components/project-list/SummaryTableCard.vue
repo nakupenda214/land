@@ -1,107 +1,226 @@
 ﻿<template>
-  <el-card class="table-card no-print" shadow="never">
-    <template #header>
-      <div class="summary-header">
-        <div class="title-row">
-          <h3 class="main-report-title">{{ currentProjectInfo.name || '请选择项目' }} 房产实测信息汇总表</h3>
-          <div class="stats-row in-title">
-            <span class="stat-item">已上传实测报告：<strong>{{ surveyStats.total }}</strong> 份</span>
-            <span class="stat-item">解析成功：<strong>{{ surveyStats.success }}</strong> 份</span>
-            <span class="stat-item">校验通过：<strong>{{ surveyStats.verified }}</strong> 份</span>
-            <span class="stat-item danger">校验不通过：<strong>{{ surveyStats.unverified }}</strong> 份</span>
-          </div>
-          <div class="header-actions">
-            <el-button class="tool-btn print-btn" @click="$emit('print')">打印报表</el-button>
-            <el-button class="tool-btn export-btn" @click="$emit('export')">导出 Excel</el-button>
-          </div>
-          <el-button
-            type="primary"
-            icon="Refresh"
-            :loading="parsedRefreshLoading"
-            :disabled="!currentProjectInfo.id"
-            @click="$emit('refresh-parsed')"
-            class="refresh-btn parsed-btn"
-          >
-            刷新文件列表
-          </el-button>
+  <div class="summary-panel summary-panel--modern project-tab-panel no-print">
+    <header class="summary-hero">
+      <div class="summary-hero__brand">
+        <div class="summary-hero__icon-wrap" aria-hidden="true">
+          <el-icon class="summary-hero__icon"><DataAnalysis /></el-icon>
+        </div>
+        <div class="summary-hero__titles">
+          <span class="summary-hero__eyebrow">房产实测汇总</span>
+          <h2 class="summary-hero__title" :title="`${currentProjectInfo.name || '请选择项目'} · 房产实测信息汇总表`">
+            <span class="summary-hero__project">{{ currentProjectInfo.name || '请选择项目' }}</span>
+          </h2>
         </div>
       </div>
-    </template>
 
-    <el-table
-      :data="displayTableData"
-      border
-      style="width: 100%"
-      :max-height="summaryTableMaxHeight"
-      :row-class-name="tableRowClassName"
-      :header-cell-style="{ background: '#F5F7FA', color: '#333', fontWeight: 'bold', textAlign: 'center', fontSize: '12px', padding: '4px 0' }"
-      :cell-style="{ fontSize: '12px', padding: '4px 0' }"
-      :virtual-scroll="false"
-    >
-      <el-table-column label="序号" type="index" width="50" align="center" fixed :index="(index) => index + 1" />
-      <el-table-column label="工程名称" width="160" fixed>
-        <template #default="{ row }">
-          <el-link type="primary" :underline="false" style="font-weight: bold" @click="$emit('view-detail', row)">
-            {{ row.projectName }} <el-icon style="margin-left: 2px"><View /></el-icon>
-          </el-link>
-        </template>
-      </el-table-column>
-      <el-table-column prop="fileOriginalName" label="文件原始名" width="220" show-overflow-tooltip />
-      <el-table-column prop="certNo" label="不动产权证编号" width="200" show-overflow-tooltip />
-      <el-table-column prop="contractNo" label="合同/批文编号" width="180" show-overflow-tooltip />
-      <el-table-column prop="phase" label="期数" width="100" align="center" />
-      <el-table-column prop="totalArea" label="实测总面积" width="150" align="right" />
+      <div class="summary-stat-grid" role="group" aria-label="实测报告统计">
+        <div class="stat-tile stat-tile--slate">
+          <div class="stat-tile__icon"><el-icon><Upload /></el-icon></div>
+          <div class="stat-tile__text">
+            <div class="stat-tile__line">
+              <span class="stat-tile__value">{{ surveyStats.total }}</span>
+              <span class="stat-tile__unit">份</span>
+            </div>
+            <span class="stat-tile__label">已上传</span>
+          </div>
+        </div>
+        <div class="stat-tile stat-tile--blue">
+          <div class="stat-tile__icon"><el-icon><CircleCheck /></el-icon></div>
+          <div class="stat-tile__text">
+            <div class="stat-tile__line">
+              <span class="stat-tile__value">{{ surveyStats.success }}</span>
+              <span class="stat-tile__unit">份</span>
+            </div>
+            <span class="stat-tile__label">解析成功</span>
+          </div>
+        </div>
+        <div class="stat-tile stat-tile--teal">
+          <div class="stat-tile__icon"><el-icon><Medal /></el-icon></div>
+          <div class="stat-tile__text">
+            <div class="stat-tile__line">
+              <span class="stat-tile__value">{{ surveyStats.verified }}</span>
+              <span class="stat-tile__unit">份</span>
+            </div>
+            <span class="stat-tile__label">校验通过</span>
+          </div>
+        </div>
+        <div class="stat-tile stat-tile--rose">
+          <div class="stat-tile__icon"><el-icon><Warning /></el-icon></div>
+          <div class="stat-tile__text">
+            <div class="stat-tile__line">
+              <span class="stat-tile__value stat-tile__value--emph">{{ surveyStats.unverified }}</span>
+              <span class="stat-tile__unit">份</span>
+            </div>
+            <span class="stat-tile__label">校验不通过</span>
+          </div>
+        </div>
+      </div>
 
-      <el-table-column label="计容建筑面积" align="center">
-        <el-table-column prop="calcCommercial" label="商业" width="130" align="right">
-          <template #default="{ row }">{{ row.calcCommercial }}</template>
-        </el-table-column>
-        <el-table-column prop="calcResidential" label="住宅" width="130" align="right">
-          <template #default="{ row }">{{ row.calcResidential }}</template>
-        </el-table-column>
-        <el-table-column prop="calcPropMgmt" label="物管" width="130" align="right">
-          <template #default="{ row }">{{ row.calcPropMgmt }}</template>
-        </el-table-column>
-        <el-table-column prop="calcOther" label="其他" width="130" align="right">
-          <template #default="{ row }">{{ row.calcOther }}</template>
-        </el-table-column>
-      </el-table-column>
+      <div class="summary-hero__actions" aria-label="汇总表操作">
+        <div class="summary-hero__actions-row">
+          <el-button class="hero-btn hero-btn--ghost" size="small" @click="$emit('print')">
+            <el-icon><Printer /></el-icon>
+            打印
+          </el-button>
+          <el-button class="hero-btn hero-btn--ghost" size="small" @click="$emit('export')">
+            <el-icon><Download /></el-icon>
+            导出
+          </el-button>
+        </div>
+        <el-button
+          class="hero-btn hero-btn--primary"
+          type="primary"
+          size="small"
+          :icon="Refresh"
+          :loading="parsedRefreshLoading"
+          :disabled="!currentProjectInfo.id"
+          @click="$emit('refresh-parsed')"
+        >
+          刷新文件列表
+        </el-button>
+      </div>
+    </header>
 
-      <el-table-column label="不计容建筑面积" align="center">
-        <el-table-column prop="nonCalcCommunity" label="社区" width="130" align="right">
-          <template #default="{ row }">{{ row.nonCalcCommunity }}</template>
+    <div class="summary-table-wrap project-tab-panel__body project-tab-panel__body--flush">
+      <el-table
+        ref="tableRef"
+        class="project-tab-el-table summary-modern-table"
+        :data="displayTableData"
+        border
+        stripe
+        style="width: 100%"
+        :max-height="SUMMARY_TABLE_MAX_HEIGHT"
+        scrollbar-always-on
+        :row-class-name="tableRowClassName"
+        :virtual-scroll="false"
+      >
+        <el-table-column label="序号" type="index" width="50" align="center" header-align="center" fixed="left" :index="(index) => index + 1" />
+        <el-table-column label="工程名称" width="160" fixed="left" header-align="center" class-name="summary-col-project-name">
+          <template #default="{ row }">
+            <el-tooltip :content="String(row.projectName || '')" placement="top" :show-after="300">
+              <span class="project-name-trigger">
+                <el-link type="primary" :underline="false" class="project-name-link" @click="$emit('view-detail', row)">
+                  <span class="project-name-text">{{ row.projectName }}</span>
+                  <el-icon class="view-ico"><View /></el-icon>
+                </el-link>
+              </span>
+            </el-tooltip>
+          </template>
         </el-table-column>
-        <el-table-column prop="nonCalcOther" label="公用" width="130" align="right">
-          <template #default="{ row }">{{ row.nonCalcOther }}</template>
-        </el-table-column>
-      </el-table-column>
+        <el-table-column label="文件原始名" prop="fileOriginalName" :width="colW.fileOriginalName" show-overflow-tooltip />
+        <el-table-column label="不动产权证编号" prop="certNo" :width="colW.certNo" show-overflow-tooltip />
+        <el-table-column label="合同/批文编号" prop="contractNo" :width="colW.contractNo" show-overflow-tooltip />
+        <el-table-column label="期数" prop="phase" :width="colW.phase" align="center" />
+        <el-table-column label="实测总面积" prop="totalArea" :width="colW.totalArea" align="right" />
 
-      <el-table-column prop="reportNo" label="报告书编号" width="130" show-overflow-tooltip />
-      <el-table-column prop="remarks" label="备注" min-width="80" />
-      <el-table-column prop="pendingConfirmArea" label="待确认面积" width="120" align="center" />
-      <el-table-column prop="hasUnknownUsage" label="是否有未知用途" width="120" align="center">
-        <template #default="{ row }">
-          <el-tag :type="row.hasUnknownUsage === 1 ? 'warning' : 'success'" size="small">
-            {{ row.hasUnknownUsage === 1 ? '是' : '否' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="isVerified" label="验证状态" width="100" align="center">
-        <template #default="{ row }">
-          <el-tag :type="getVerifiedTagType(row.isVerified)" size="small">
-            {{ getVerifiedText(row.isVerified) }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="unknownUsages" label="未知用途详情" min-width="150" show-overflow-tooltip />
-      <el-table-column prop="verificationErrorReason" label="验证失败原因" min-width="200" show-overflow-tooltip />
-    </el-table>
-  </el-card>
+        <el-table-column label="计容建筑面积" align="center" header-align="center">
+          <el-table-column prop="calcCommercial" label="商业" :width="colW.calcCommercial" align="right" header-align="center">
+            <template #default="{ row }">{{ row.calcCommercial }}</template>
+          </el-table-column>
+          <el-table-column prop="calcResidential" label="住宅" :width="colW.calcResidential" align="right" header-align="center">
+            <template #default="{ row }">{{ row.calcResidential }}</template>
+          </el-table-column>
+          <el-table-column prop="calcPropMgmt" label="物管" :width="colW.calcPropMgmt" align="right" header-align="center">
+            <template #default="{ row }">{{ row.calcPropMgmt }}</template>
+          </el-table-column>
+          <el-table-column prop="calcOther" label="其他" :width="colW.calcOther" align="right" header-align="center">
+            <template #default="{ row }">{{ row.calcOther }}</template>
+          </el-table-column>
+        </el-table-column>
+
+        <el-table-column label="不计容建筑面积" align="center" header-align="center">
+          <el-table-column prop="nonCalcCommunity" label="社区" :width="colW.nonCalcCommunity" align="right" header-align="center">
+            <template #default="{ row }">{{ row.nonCalcCommunity }}</template>
+          </el-table-column>
+          <el-table-column prop="nonCalcOther" label="公用" :width="colW.nonCalcOther" align="right" header-align="center">
+            <template #default="{ row }">{{ row.nonCalcOther }}</template>
+          </el-table-column>
+        </el-table-column>
+
+        <el-table-column label="报告书编号" prop="reportNo" :width="colW.reportNo" show-overflow-tooltip />
+        <el-table-column label="备注" prop="remarks" v-bind="remarksColProps" show-overflow-tooltip />
+        <el-table-column label="待确认面积" prop="pendingConfirmArea" :width="colW.pendingConfirmArea" align="center" />
+        <el-table-column prop="hasUnknownUsage" label="是否有未知用途" :width="colW.hasUnknownUsage" align="center" header-align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.hasUnknownUsage === 1 ? 'warning' : 'success'" size="small" effect="light" round>
+              {{ row.hasUnknownUsage === 1 ? '是' : '否' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="验证状态" prop="isVerified" :width="colW.isVerified" align="center" header-align="center">
+          <template #default="{ row }">
+            <el-tag :type="getVerifiedTagType(row.isVerified)" size="small" effect="light" round>
+              {{ getVerifiedText(row.isVerified) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="未知用途详情" prop="unknownUsages" v-bind="unknownUsagesColProps" show-overflow-tooltip />
+        <el-table-column label="验证失败原因" prop="verificationErrorReason" v-bind="verificationErrorReasonColProps" show-overflow-tooltip />
+      </el-table>
+
+      <!-- 宽表：边缘渐变 + 悬浮翻页（不占用表头上方整行空间） -->
+      <div
+        v-show="showXScrollProxy"
+        class="table-x-float-layer"
+        role="presentation"
+        aria-hidden="true"
+      >
+        <div
+          class="table-x-float-layer__edge table-x-float-layer__edge--left"
+          :class="{ 'is-active': canScrollLeft }"
+        />
+        <div
+          class="table-x-float-layer__edge table-x-float-layer__edge--right"
+          :class="{ 'is-active': canScrollRight }"
+        />
+        <el-tooltip content="向左" placement="left">
+          <el-button
+            v-show="canScrollLeft"
+            class="table-x-float-layer__fab table-x-float-layer__fab--left"
+            circle
+            type="primary"
+            aria-label="向左查看更多列"
+            @click="scrollTableBy(-300)"
+          >
+            <el-icon><DArrowLeft /></el-icon>
+          </el-button>
+        </el-tooltip>
+        <el-tooltip content="向右" placement="right">
+          <el-button
+            v-show="canScrollRight"
+            class="table-x-float-layer__fab table-x-float-layer__fab--right"
+            circle
+            type="primary"
+            aria-label="向右查看更多列"
+            @click="scrollTableBy(300)"
+          >
+            <el-icon><DArrowRight /></el-icon>
+          </el-button>
+        </el-tooltip>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { View } from '@element-plus/icons-vue'
+import { ref, toRef, computed } from 'vue'
+import {
+  View,
+  Refresh,
+  DataAnalysis,
+  Upload,
+  CircleCheck,
+  Medal,
+  Warning,
+  Printer,
+  Download,
+  DArrowLeft,
+  DArrowRight
+} from '@element-plus/icons-vue'
+import { useSummaryTableHorizontalScroll } from '@/composables/project-list/useSummaryTableHorizontalScroll'
+
+/** 数据少时表体随内容增高；超出后表内滚动，避免底部大块留白 */
+const SUMMARY_TABLE_MAX_HEIGHT = 600
 
 const props = defineProps({
   currentProjectInfo: {
@@ -136,7 +255,80 @@ const props = defineProps({
 
 defineEmits(['refresh-survey', 'refresh-parsed', 'view-detail', 'print', 'export'])
 
-const summaryTableMaxHeight = computed(() => (props.displayTableData.length > 8 ? 620 : undefined))
+/** 单元格视为空：null/undefined/空白串（数值 0 与「否」等有效值不算空） */
+function isEmptyCell(v) {
+  if (v === null || v === undefined) return true
+  if (typeof v === 'string' && v.trim() === '') return true
+  return false
+}
+
+function allRowsEmpty(rows, prop) {
+  if (!rows?.length) return true
+  return rows.every((row) => isEmptyCell(row?.[prop]))
+}
+
+/** 整列无数据时列宽收紧为约等于表头文字宽度 */
+function headerOnlyWidth(label, minPx = 64, maxPx = 360) {
+  const chars = [...String(label)].length
+  return Math.min(maxPx, Math.max(minPx, Math.ceil(chars * 13) + 28))
+}
+
+function colWidth(rows, prop, label, fullW) {
+  return allRowsEmpty(rows, prop) ? headerOnlyWidth(label) : fullW
+}
+
+const colW = computed(() => {
+  const rows = props.displayTableData || []
+  return {
+    fileOriginalName: colWidth(rows, 'fileOriginalName', '文件原始名', 200),
+    certNo: colWidth(rows, 'certNo', '不动产权证编号', 180),
+    contractNo: colWidth(rows, 'contractNo', '合同/批文编号', 160),
+    phase: colWidth(rows, 'phase', '期数', 88),
+    totalArea: colWidth(rows, 'totalArea', '实测总面积', 120),
+    calcCommercial: colWidth(rows, 'calcCommercial', '商业', 110),
+    calcResidential: colWidth(rows, 'calcResidential', '住宅', 110),
+    calcPropMgmt: colWidth(rows, 'calcPropMgmt', '物管', 110),
+    calcOther: colWidth(rows, 'calcOther', '其他', 110),
+    nonCalcCommunity: colWidth(rows, 'nonCalcCommunity', '社区', 110),
+    nonCalcOther: colWidth(rows, 'nonCalcOther', '公用', 110),
+    reportNo: colWidth(rows, 'reportNo', '报告书编号', 120),
+    pendingConfirmArea: colWidth(rows, 'pendingConfirmArea', '待确认面积', 108),
+    hasUnknownUsage: colWidth(rows, 'hasUnknownUsage', '是否有未知用途', 112),
+    isVerified: colWidth(rows, 'isVerified', '验证状态', 96)
+  }
+})
+
+const remarksColProps = computed(() => {
+  const rows = props.displayTableData || []
+  if (allRowsEmpty(rows, 'remarks')) {
+    return { width: headerOnlyWidth('备注', 56, 220) }
+  }
+  return { minWidth: 80 }
+})
+
+const unknownUsagesColProps = computed(() => {
+  const rows = props.displayTableData || []
+  if (allRowsEmpty(rows, 'unknownUsages')) {
+    return { width: headerOnlyWidth('未知用途详情') }
+  }
+  return { minWidth: 140 }
+})
+
+const verificationErrorReasonColProps = computed(() => {
+  const rows = props.displayTableData || []
+  if (allRowsEmpty(rows, 'verificationErrorReason')) {
+    return { width: headerOnlyWidth('验证失败原因') }
+  }
+  return { minWidth: 180 }
+})
+
+const tableRef = ref(null)
+const {
+  showXScrollProxy,
+  canScrollLeft,
+  canScrollRight,
+  scrollTableBy
+} = useSummaryTableHorizontalScroll(tableRef, toRef(props, 'displayTableData'))
 
 const normalizeVerifiedFlag = (value) => {
   if (value === 1 || value === '1' || value === true) return 1
@@ -158,140 +350,395 @@ const getVerifiedTagType = (value) => {
   return 'info'
 }
 
-const tableRowClassName = ({ row }) => normalizeVerifiedFlag(row?.isVerified) === 0 ? 'summary-row-unverified' : ''
+const tableRowClassName = ({ row }) => (normalizeVerifiedFlag(row?.isVerified) === 0 ? 'summary-row-unverified' : '')
 </script>
 
 <style scoped>
-.table-card {
-  min-height: 0;
+.summary-panel--modern.project-tab-panel {
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 48%, #f1f5f9 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 14px 40px -22px rgba(15, 23, 42, 0.18);
+  overflow: hidden;
 }
 
-.summary-header {
-  display: block;
-}
-
-.title-row {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 20px;
-}
-
-.stats-row.in-title {
-  flex: 1 1 auto;
-  justify-content: flex-start;
-  margin-top: 0;
-  gap: 12px;
-}
-
-.main-report-title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: #303133;
-}
-
-.stats-row {
+.summary-hero {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 14px;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 11px 14px 11px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+  background: linear-gradient(125deg, rgba(255, 255, 255, 0.97) 0%, rgba(248, 250, 252, 0.92) 45%, rgba(241, 245, 249, 0.88) 100%);
 }
 
-.stat-item {
+.summary-hero::after {
+  content: '';
+  position: absolute;
+  right: -20%;
+  top: -60%;
+  width: 45%;
+  height: 200%;
+  background: radial-gradient(closest-side, rgba(59, 130, 246, 0.1), transparent 72%);
+  pointer-events: none;
+}
+
+.summary-hero__brand {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 220px;
+  min-width: 0;
+  z-index: 1;
+}
+
+.summary-hero__icon-wrap {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(145deg, #3b82f6 0%, #1d4ed8 100%);
+  box-shadow:
+    0 8px 18px -10px rgba(29, 78, 216, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.summary-hero__icon {
+  font-size: 21px;
+  color: #fff;
+}
+
+.summary-hero__titles {
+  min-width: 0;
+}
+
+.summary-hero__eyebrow {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 2px;
+}
+
+.summary-hero__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.summary-hero__project {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #1e3a5f;
+}
+
+.summary-stat-grid {
+  position: relative;
+  z-index: 1;
+  flex: 2 1 360px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.stat-tile {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.stat-tile__icon {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+}
+
+.stat-tile--slate .stat-tile__icon {
+  background: rgba(100, 116, 139, 0.12);
+  color: #475569;
+}
+
+.stat-tile--blue .stat-tile__icon {
+  background: rgba(59, 130, 246, 0.14);
+  color: #1d4ed8;
+}
+
+.stat-tile--teal .stat-tile__icon {
+  background: rgba(20, 184, 166, 0.14);
+  color: #0f766e;
+}
+
+.stat-tile--rose .stat-tile__icon {
+  background: rgba(244, 63, 94, 0.12);
+  color: #be123c;
+}
+
+.stat-tile__text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+}
+
+.stat-tile__line {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  line-height: 1.1;
+}
+
+.stat-tile__value {
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+  line-height: 1;
+}
+
+.stat-tile__value--emph {
+  color: #be123c;
+}
+
+.stat-tile__unit {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.stat-tile__label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #64748b;
+  line-height: 1.2;
+}
+
+.summary-hero__actions {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  min-width: 148px;
+}
+
+.summary-hero__actions-row {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+}
+
+.summary-hero__actions-row .hero-btn {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.hero-btn {
+  justify-content: center;
+  border-radius: 9px;
+  font-weight: 600;
+}
+
+.summary-hero__actions > .hero-btn--primary {
+  width: 100%;
+}
+
+.hero-btn--ghost {
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  background: rgba(255, 255, 255, 0.92);
+  color: #334155;
+}
+
+.hero-btn--ghost:hover {
+  border-color: #94a3b8;
+  background: #fff;
+  color: #0f172a;
+}
+
+:deep(.hero-btn--primary.el-button--primary) {
+  border: none;
+  background: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+  box-shadow: 0 8px 20px -10px rgba(29, 78, 216, 0.65);
+}
+
+:deep(.hero-btn--primary.el-button--primary:hover) {
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+}
+
+:deep(.hero-btn--primary.el-button--primary.is-disabled) {
+  opacity: 0.55;
+  box-shadow: none;
+}
+
+.summary-table-wrap {
+  position: relative;
+  background: #fff;
+}
+
+.project-name-trigger {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.project-name-link {
+  font-weight: 600;
   display: inline-flex;
   align-items: center;
-  background: #f4f6f8;
-  border: 1px solid #e8edf2;
-  border-radius: 999px;
-  padding: 8px 14px;
-  font-size: 14px;
-  line-height: 1;
-  color: #606266;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.project-name-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.stat-item strong {
-  color: #409eff;
-  margin: 0 4px;
+.view-ico {
+  flex-shrink: 0;
+  margin-left: 2px;
+  vertical-align: -0.12em;
 }
 
-.stat-item.danger strong {
-  color: #f56c6c;
+:deep(.summary-modern-table .summary-col-project-name .cell) {
+  overflow: hidden;
 }
 
-.refresh-btn {
-  min-width: 172px;
-  height: 40px;
-  border-radius: 18px;
-  font-weight: 600;
-}
-
-.parsed-btn {
-  min-width: 154px;
-}
-
-.header-actions {
+:deep(.summary-modern-table .summary-col-project-name .project-name-link .el-link__inner) {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin-left: auto;
+  max-width: 100%;
+  min-width: 0;
 }
 
-:deep(.tool-btn.el-button) {
-  min-width: 172px;
-  height: 40px;
-  padding: 0 14px;
-  border-radius: 6px;
-  font-weight: 600;
+/* 宽表悬浮层：覆盖在表格之上，pointer-events:none 让点击穿透到单元格；按钮/下拉单独开启 */
+.table-x-float-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
 }
 
-:deep(.print-btn.el-button) {
-  border: 1px solid #c8ddf1;
-  background: #ffffff;
-  color: #1f4e79;
+.table-x-float-layer__edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 36px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
 }
 
-:deep(.print-btn.el-button:hover) {
-  border-color: #b8d3ec;
-  background: #f3f8fe;
-  color: #163a5a;
+.table-x-float-layer__edge--left {
+  left: 0;
+  background: linear-gradient(90deg, rgba(15, 23, 42, 0.06), transparent);
 }
 
-:deep(.export-btn.el-button) {
-  border: 1px solid #c8ddf1;
-  background: #ffffff;
-  color: #1f4e79;
+.table-x-float-layer__edge--right {
+  right: 0;
+  background: linear-gradient(270deg, rgba(15, 23, 42, 0.06), transparent);
 }
 
-:deep(.export-btn.el-button:hover) {
-  border-color: #b8d3ec;
-  background: #f3f8fe;
-  color: #163a5a;
+.table-x-float-layer__edge.is-active {
+  opacity: 1;
 }
 
-:deep(.el-table .summary-row-unverified > td.el-table__cell) {
-  background-color: #fff1f0 !important;
+.table-x-float-layer__fab {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: auto;
+  box-shadow: 0 8px 24px -8px rgba(29, 78, 216, 0.55);
+  border: none;
 }
 
-@media (max-width: 1024px) {
-  .title-row {
+.table-x-float-layer__fab--left {
+  left: 6px;
+}
+
+.table-x-float-layer__fab--right {
+  right: 6px;
+}
+
+:deep(.summary-modern-table .el-table__inner-wrapper::before) {
+  display: none;
+}
+
+:deep(.summary-modern-table th.el-table__cell) {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
+  font-weight: 700;
+  color: #334155;
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* 勿对 th .cell 使用 flex，会破坏 el-table 表头/表体布局导致整表不渲染 */
+:deep(.summary-modern-table th.el-table__cell > .cell) {
+  text-align: center;
+  line-height: 1.35;
+  white-space: normal;
+  word-break: break-word;
+}
+
+:deep(.summary-modern-table .el-table__body tr.summary-row-unverified > td.el-table__cell) {
+  background-color: #fff1f2 !important;
+}
+
+:deep(.summary-modern-table .el-table__body tr.summary-row-unverified:hover > td.el-table__cell) {
+  background-color: #ffe4e6 !important;
+}
+
+@media (max-width: 1200px) {
+  .summary-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .summary-hero__actions {
+    width: 100%;
+    min-width: 0;
     flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
   }
 
-  .stats-row.in-title {
-    justify-content: flex-start;
-    gap: 10px;
-  }
-
-  .refresh-btn {
+  .summary-hero__actions-row {
     width: 100%;
   }
+}
 
-  .header-actions {
-    margin-left: 0;
+@media (max-width: 640px) {
+  .summary-stat-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

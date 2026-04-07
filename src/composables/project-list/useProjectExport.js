@@ -2,14 +2,30 @@
 import { saveAs } from 'file-saver'
 import { ElMessage } from 'element-plus'
 
-const summaryLabelMap = {
-  合同约定建筑面积: '计容建筑面积',
-  合同约定商业面积: '计容商业面积',
-  合同约定住宅面积: '计容住宅面积'
+const comparisonGroupMeta = [
+  { key: 'systemCalculated', title: '系统计算口径' },
+  { key: 'projectPartyDeclared', title: '项目方声明口径' },
+  { key: 'planningCalculated', title: '规划复核口径' }
+]
+
+const formatArea = (value) => {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '-'
+  return n.toFixed(2)
 }
 
-export function useProjectExport({ displayTableData, tableTotalData, currentProjectInfo }) {
+const buildComparisonRows = (tripleLine) => [
+  ['建筑面积', formatArea(tripleLine?.totalBuilding?.contractAgreedArea), formatArea(tripleLine?.totalBuilding?.buildableArea), formatArea(tripleLine?.totalBuilding?.difference)],
+  ['商业面积', formatArea(tripleLine?.commercial?.contractAgreedArea), formatArea(tripleLine?.commercial?.buildableArea), formatArea(tripleLine?.commercial?.difference)],
+  ['住宅面积', formatArea(tripleLine?.residential?.contractAgreedArea), formatArea(tripleLine?.residential?.buildableArea), formatArea(tripleLine?.residential?.difference)]
+]
+
+export function useProjectExport({ displayTableData, currentProjectInfo, areaComparison, selectedComparisonGroups }) {
   const handleExportExcel = async () => {
+    if (!selectedComparisonGroups.value.length) {
+      ElMessage.warning('请至少选择一组面积核算对比数据后再导出')
+      return
+    }
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('房产实测汇总表')
 
@@ -86,36 +102,41 @@ export function useProjectExport({ displayTableData, tableTotalData, currentProj
     const gapRows = 2
     const calcTableStartRow = summaryLastRow + gapRows + 1
 
-    const calcRows = tableTotalData.value.map((row) => [
-      row.label,
-      row.contract,
-      summaryLabelMap[row.label] || '计容面积',
-      row.measured,
-      '差值',
-      row.isArea ? row.diff : '-'
-    ])
+    let cursorRow = calcTableStartRow
+    const selectedGroups = comparisonGroupMeta.filter((group) => selectedComparisonGroups.value.includes(group.key))
+    selectedGroups.forEach((group) => {
+      worksheet.getCell(cursorRow, 1).value = `${group.title}（面积核算对比）`
+      worksheet.getCell(cursorRow, 1).font = { bold: true }
+      worksheet.mergeCells(`A${cursorRow}:D${cursorRow}`)
+      cursorRow += 1
 
-    calcRows.forEach((row, index) => {
-      const rowNum = calcTableStartRow + index
-      const dataRow = worksheet.getRow(rowNum)
-      dataRow.values = row
-      dataRow.eachCell((cell, colNumber) => {
-        cell.alignment = {
-          horizontal: 'center',
-          vertical: 'middle'
-        }
-        if (colNumber === 1 || colNumber === 3 || colNumber === 5) {
-          cell.font = { bold: true }
-        }
+      const headerRow = worksheet.getRow(cursorRow)
+      headerRow.values = ['维度', '合同约定面积', '计容面积', '差值']
+      headerRow.eachCell((cell) => {
+        cell.font = { bold: true }
+        cell.alignment = { horizontal: 'center', vertical: 'middle' }
       })
+      cursorRow += 1
+
+      buildComparisonRows(areaComparison.value?.[group.key]).forEach((row) => {
+        const dataRow = worksheet.getRow(cursorRow)
+        dataRow.values = row
+        dataRow.eachCell((cell, colNumber) => {
+          cell.alignment = {
+            horizontal: colNumber === 1 ? 'left' : 'right',
+            vertical: 'middle'
+          }
+        })
+        cursorRow += 1
+      })
+
+      cursorRow += 1
     })
 
     worksheet.getColumn(1).width = 22
     worksheet.getColumn(2).width = 14
-    worksheet.getColumn(3).width = 18
+    worksheet.getColumn(3).width = 14
     worksheet.getColumn(4).width = 14
-    worksheet.getColumn(5).width = 10
-    worksheet.getColumn(6).width = 14
 
     const buffer = await workbook.xlsx.writeBuffer()
     const blob = new Blob([buffer], {

@@ -2,6 +2,18 @@
   <div class="dashboard-page">
     <el-card shadow="never" class="dashboard-card filter-card">
       <div class="filter-panel">
+        <div class="filter-brand">
+          <div class="brand-icon-wrap">
+            <el-icon class="brand-icon"><DataAnalysis /></el-icon>
+          </div>
+          <div class="brand-copy">
+            <div class="brand-title-row">
+              <span class="brand-title">首页项目工作台</span>
+              <span class="brand-pill">总项目 {{ total }}</span>
+            </div>
+            <p class="brand-desc">支持多维条件筛选，快速进入项目详情进行档案、合同和实测数据处理</p>
+          </div>
+        </div>
         <div class="filter-row">
           <el-input
             v-model.trim="queryForm.projectName"
@@ -62,6 +74,7 @@
         <div class="table-toolbar-left">
           <div class="table-title">项目清单</div>
           <div class="project-count">共有项目：{{ total }} 个</div>
+          <div class="selected-count">已勾选：{{ selectedRows.length }} 个</div>
         </div>
         <div class="table-actions">
           <el-button class="biz-btn action-ghost" :disabled="selectedRows.length === 0" @click="handlePrintSelected">
@@ -128,7 +141,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { CollectionTag, Location, OfficeBuilding, Tickets } from '@element-plus/icons-vue'
+import { CollectionTag, DataAnalysis, Location, OfficeBuilding, Tickets } from '@element-plus/icons-vue'
 import { deleteProjectById, queryProjectDetails } from '@/services/project.service'
 import { useDashboardPrint } from '@/composables/dashboard/useDashboardPrint'
 import { usePrint } from '@/hooks/usePrint.ts'
@@ -316,17 +329,76 @@ onMounted(() => {
 
 .filter-panel {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 12px 14px;
-  border: 1px solid #dfe5ee;
-  border-radius: 8px;
-  background: #fff;
+  justify-content: flex-start;
+  gap: 14px 16px;
+  padding: 14px;
+  border: 1px solid var(--home-soft-border);
+  border-radius: var(--home-card-radius);
+  background: linear-gradient(180deg, #ffffff 0%, var(--home-panel-grad-start) 100%);
+}
+
+.filter-brand {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 260px;
+  max-width: 380px;
+}
+
+.brand-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(145deg, #2563eb 0%, #1e40af 100%);
+  box-shadow: 0 10px 24px -12px rgba(30, 64, 175, 0.75);
+}
+
+.brand-icon {
+  color: #fff;
+  font-size: 22px;
+}
+
+.brand-copy {
+  min-width: 0;
+}
+
+.brand-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.brand-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.brand-pill {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e40af;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+}
+
+.brand-desc {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #607286;
 }
 
 .filter-row {
-  flex: 1;
+  flex: 1 1 720px;
   min-width: 0;
   display: grid;
   grid-template-columns: 1fr 1fr 1fr 1fr 1.4fr;
@@ -344,6 +416,8 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   gap: 10px;
+  padding-left: 12px;
+  border-left: 1px dashed #d3ddea;
 }
 
 .filter-card :deep(.el-input__wrapper),
@@ -380,9 +454,9 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border: 1px solid #e3e9f1;
-  border-radius: 10px;
-  background: #f7f9fc;
+  border: 1px solid var(--home-soft-border);
+  border-radius: var(--home-card-radius);
+  background: linear-gradient(180deg, #f9fbff 0%, #f2f7fc 100%);
   padding: 10px 12px;
   margin-bottom: 10px;
 }
@@ -403,6 +477,15 @@ onMounted(() => {
   font-size: 13px;
   font-weight: 600;
   color: #5f6f87;
+}
+
+.selected-count {
+  font-size: 12px;
+  color: #516173;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #dbe4ef;
+  background: #fff;
 }
 
 .table-actions {
@@ -487,8 +570,11 @@ onMounted(() => {
 
 @media (max-width: 1400px) {
   .filter-panel {
-    flex-direction: column;
     align-items: stretch;
+  }
+
+  .filter-brand {
+    max-width: none;
   }
 
   .filter-row {
@@ -498,6 +584,8 @@ onMounted(() => {
 
   .filter-actions {
     justify-content: flex-end;
+    border-left: none;
+    padding-left: 0;
   }
 }
 

@@ -55,7 +55,11 @@
               @export="handleExportExcel"
             />
 
-            <SummaryComparisonCard :table-total-data="tableTotalData" :debug-sums="measuredDebugSums" />
+            <SummaryComparisonCard
+              :area-comparison="areaComparison"
+              :selected-groups="selectedComparisonGroups"
+              @update:selected-groups="(val) => (selectedComparisonGroups = val)"
+            />
           </div>
         </el-tab-pane>
 
@@ -69,6 +73,7 @@
             :contract-land-list="contractLandList"
             :selected-contract="selectedContract"
             :current-land-parcel-list="currentLandParcelList"
+            :contract-refresh-loading="contractRefreshLoading"
             @refresh-contracts="handleRefreshContracts"
             @add-contract="addContract"
             @contract-row-click="handleContractRowClick"
@@ -139,7 +144,8 @@
       :current-project-info="currentProjectInfo"
       :current-print-date="currentPrintDate"
       :display-table-data="displayTableData"
-      :table-total-data="tableTotalData"
+      :area-comparison="areaComparison"
+      :selected-comparison-groups="selectedComparisonGroups"
     />
 
 
@@ -268,6 +274,10 @@ import { FolderOpened, Location } from '@element-plus/icons-vue'
 // const handlePrint = () => window.print()
 const { isPrinting, triggerPrint } = usePrint()
 const handlePrint = () => {
+  if (!selectedComparisonGroups.value.length) {
+    ElMessage.warning('请至少选择一组面积核算对比数据后再打印')
+    return
+  }
   triggerPrint() // 调用 Teleport 打印逻辑
 }
 
@@ -302,12 +312,12 @@ const newProjectForm = ref({
 const reportList = ref([])
 const contractList = ref([])
 const {
-  tableTotalData,
   rawTableData,
   unknownUsages,
   isSavingPolicy,
   displayTableData,
-  measuredDebugSums,
+  areaComparison,
+  selectedComparisonGroups,
   surveyStats,
   fetchSurveyReports,
   resetSummaryMetrics
@@ -426,8 +436,9 @@ const {
   handleExportExcel
 } = useProjectExport({
   displayTableData,
-  tableTotalData,
-  currentProjectInfo
+  currentProjectInfo,
+  areaComparison,
+  selectedComparisonGroups
 })
 // ===== 合同表单相关（补充注释）=====
 const {
@@ -467,12 +478,22 @@ const {
   currentProjectInfo
 })
 
+const contractRefreshLoading = ref(false)
+
 const handleRefreshContracts = async () => {
   if (!currentProjectInfo.id) {
     ElMessage.warning('请先查询项目后再刷新合同')
     return
   }
-  await fetchContractListByProjectId(currentProjectInfo.id)
+  contractRefreshLoading.value = true
+  try {
+    const ok = await fetchContractListByProjectId(currentProjectInfo.id)
+    if (ok) {
+      ElMessage.success('合同列表已更新')
+    }
+  } finally {
+    contractRefreshLoading.value = false
+  }
 }
 const {
   projectEditLoading,
@@ -660,18 +681,20 @@ onMounted(async () => {
 
 <style scoped>
 .archive-container {
-  padding: 12px;
+  padding: 14px;
   background-color: var(--biz-page-bg);
   min-height: calc(100vh - 110px);
   display: flex;
   flex-direction: column;
+  gap: 12px;
 }
 
 .content-tabs-wrapper {
-  background: #fff;
-  border-radius: 6px;
+  background: linear-gradient(180deg, #ffffff 0%, var(--home-panel-grad-start) 100%);
+  border-radius: var(--home-card-radius);
   overflow: hidden;
-  box-shadow: 0 1px 6px rgba(15, 23, 42, 0.06);
+  border: 1px solid var(--home-soft-border);
+  box-shadow: var(--home-soft-shadow);
   flex: 1;
 }
 
@@ -680,29 +703,34 @@ onMounted(async () => {
 }
 
 :deep(.archive-tabs.el-tabs--border-card) {
-  border: 1px solid var(--biz-border);
-  border-radius: 6px;
+  border: 1px solid transparent;
+  border-radius: var(--home-card-radius);
   box-shadow: none;
+  background: transparent;
 }
 
 :deep(.archive-tabs.el-tabs--border-card > .el-tabs__header) {
-  background: var(--biz-header-bg);
-  border-bottom: 1px solid var(--biz-border);
+  background: linear-gradient(180deg, var(--home-header-grad-start) 0%, var(--home-header-grad-end) 100%);
+  border-bottom: 1px solid var(--home-soft-border);
+  padding: 0 8px;
 }
 
 :deep(.archive-tabs .el-tabs__item) {
-  height: 42px;
-  color: #4a5568;
+  height: 44px;
+  color: var(--home-tab-text);
   font-weight: 600;
+  border-radius: 8px 8px 0 0;
+  margin-top: 4px;
 }
 
 :deep(.archive-tabs .el-tabs__item.is-active) {
-  color: var(--biz-primary);
+  color: var(--home-tab-active);
   background: #ffffff;
 }
 
 :deep(.archive-tabs .el-tabs__content) {
   background: #fff;
+  padding: 2px;
 }
 
 :deep(.archive-tabs .el-button) {

@@ -15,8 +15,8 @@
       />
     </template>
 
-    <div class="split-view">
-      <div class="left-panel" v-loading="pdfLoading && currentViewType !== 'recognition'">
+    <div ref="auditLayoutRef" class="split-view audit-split-layout audit-split-layout--responsive audit-split-layout--calibration">
+      <div class="left-panel audit-split-layout__left" :style="leftPanelStyle" v-loading="pdfLoading && currentViewType !== 'recognition'">
         <CalibrationPdfToolbar
           :current-view-type="currentViewType"
           :is-preprocess-available="isPreprocessAvailable"
@@ -67,56 +67,122 @@
         </div>
       </div>
 
-      <div class="right-panel">
+      <div
+        class="audit-splitter"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="拖动调节左右区域宽度"
+        @mousedown="onSplitterMouseDown"
+      />
+
+      <div class="right-panel audit-split-layout__right">
         <div class="cali-right-panel">
           <section class="sum-info-section">
             <div class="sum-layout">
               <div class="sum-grid">
-                <div v-for="item in summaryMetrics" :key="item.key" class="sum-card">
-                  <div class="sum-title">{{ item.title }}</div>
-                  <div class="sum-matrix">
-                    <div class="sum-row">
-                      <span class="label">列表汇总</span>
-                      <span class="value">{{ item.manual }}<span class="unit">㎡</span></span>
+                <article
+                  v-for="item in summaryMetrics"
+                  :key="item.key"
+                  class="summary-card summary-card--ocr"
+                >
+                  <header class="summary-card__head">
+                    <div class="summary-card__head-text">
+                      <h3 class="summary-card__title">{{ item.title }}</h3>
+                      <p class="summary-card__subtitle">列表汇总与 OCR 对比</p>
                     </div>
-                    <div class="sum-row">
-                      <span class="label">OCR</span>
-                      <span class="value ocr">{{ item.ocr }}<span class="unit">㎡</span></span>
+                  </header>
+                  <div class="summary-card__body">
+                    <div class="stat-row">
+                      <span class="stat-row__label">列表汇总</span>
+                      <span class="stat-row__value">{{ item.manual }}</span>
+                      <span class="stat-row__unit">㎡</span>
                     </div>
-                    <div class="sum-row delta">
-                      <span class="label">差值</span>
-                      <span :class="['value', Math.abs(item.delta) > 0.01 ? 'warn' : 'ok']">
-                        {{ formatDelta(item.delta) }}<span class="unit">㎡</span>
-                      </span>
+                    <div class="stat-row">
+                      <span class="stat-row__label">OCR</span>
+                      <span class="stat-row__value stat-row__value--ocr">{{ item.ocr }}</span>
+                      <span class="stat-row__unit">㎡</span>
+                    </div>
+                    <div class="stat-row">
+                      <span class="stat-row__label">差值</span>
+                      <span
+                        :class="[
+                          'stat-row__value',
+                          Math.abs(item.delta) > 0.01 ? 'stat-row__value--warn' : 'stat-row__value--ok'
+                        ]"
+                      >{{ formatDelta(item.delta) }}</span>
+                      <span class="stat-row__unit">㎡</span>
                     </div>
                   </div>
-                </div>
+                </article>
               </div>
 
-              <div class="audit-overview-card">
-                <div class="overview-row">
-                  <div class="meta-item"><span class="k">待确认面积</span><span class="v warn">{{ auditSummaryData.pendingConfirmArea }} ㎡</span></div>
-                  <div class="meta-item"><span class="k">未知用途</span><span :class="['v', auditSummaryDisplay.hasUnknownUsageText === '有' ? 'danger' : 'ok']">{{ auditSummaryDisplay.hasUnknownUsageText }}</span></div>
-                  <div class="meta-item"><span class="k">未知用途数量</span><span class="v danger">{{ auditSummaryData.unknownUsageCount }} 条</span></div>
-                  <div class="meta-item"><span class="k">验证状态</span><span :class="['v', auditSummaryDisplay.isVerifiedText === '已验证' ? 'ok' : 'muted']">{{ auditSummaryDisplay.isVerifiedText }}</span></div>
+              <article class="summary-card summary-card--audit cali-audit-card">
+                <header class="summary-card__head">
+                  <div class="summary-card__icon" aria-hidden="true">
+                    <el-icon><CircleCheck /></el-icon>
+                  </div>
+                  <div class="summary-card__head-text">
+                    <h3 class="summary-card__title">校验信息</h3>
+                    <p class="summary-card__subtitle">用途与面积校验结果</p>
+                  </div>
+                </header>
+                <div class="summary-card__body">
+                  <div class="stat-row">
+                    <span class="stat-row__label">待确认面积</span>
+                    <span class="stat-row__value stat-row__value--warn">{{ auditSummaryData.pendingConfirmArea }}</span>
+                    <span class="stat-row__unit">㎡</span>
+                  </div>
+                  <div class="stat-row">
+                    <span class="stat-row__label">未知用途数量</span>
+                    <span class="stat-row__value">{{ auditSummaryData.unknownUsageCount }}</span>
+                    <span class="stat-row__unit">条</span>
+                  </div>
+                  <div class="stat-row stat-row--tags">
+                    <span class="stat-row__label">未知用途</span>
+                    <span class="stat-row__tags">
+                      <el-tag
+                        size="small"
+                        effect="light"
+                        round
+                        :type="auditSummaryDisplay.hasUnknownUsageText === '有' ? 'warning' : 'success'"
+                      >
+                        {{ auditSummaryDisplay.hasUnknownUsageText }}
+                      </el-tag>
+                    </span>
+                  </div>
+                  <div class="stat-row stat-row--tags">
+                    <span class="stat-row__label">验证状态</span>
+                    <span class="stat-row__tags">
+                      <el-tag
+                        size="small"
+                        effect="light"
+                        round
+                        :type="auditSummaryDisplay.isVerifiedText === '已验证' ? 'success' : 'danger'"
+                      >
+                        {{ auditSummaryDisplay.isVerifiedText }}
+                      </el-tag>
+                    </span>
+                  </div>
                 </div>
-                <div class="meta-item full">
-                  <span class="k">未知用途详情：</span>
-                  <span class="v unknown-list">{{ auditSummaryData.unknownUsages }}</span>
+                <div class="summary-card__audit-append">
+                  <div class="audit-append-block">
+                    <div class="audit-append-label">未知用途详情</div>
+                    <div class="unknown-list">{{ auditSummaryData.unknownUsages }}</div>
+                  </div>
+                  <div class="audit-append-block">
+                    <div class="audit-append-label">验证失败原因</div>
+                    <div class="reason-text">{{ auditSummaryData.verificationErrorReason }}</div>
+                  </div>
+                  <div
+                    v-if="hasVerificationErrorReason"
+                    class="audit-append-block verify-tip-block"
+                  >
+                    <div class="verify-tip-title">排查建议：</div>
+                    <div class="verify-tip-line">1. 请检查解析文件方向。</div>
+                    <div class="verify-tip-line">2. 请审查户室面积对照表的部分数据是否被印章遮盖。</div>
+                  </div>
                 </div>
-                <div class="meta-item full">
-                  <span class="k">验证失败原因：</span>
-                  <span class="v danger reason-text">{{ auditSummaryData.verificationErrorReason }}</span>
-                </div>
-                <div
-                  v-if="hasVerificationErrorReason"
-                  class="meta-item full verify-tip-block"
-                >
-                  <div class="verify-tip-title">排查建议：</div>
-                  <div class="verify-tip-line">1. 请检查解析文件方向。</div>
-                  <div class="verify-tip-line">2. 请审查户室面积对照表的部分数据是否被印章遮盖。</div>
-                </div>
-              </div>
+              </article>
             </div>
           </section>
 
@@ -130,15 +196,6 @@
                 <span class="toolbar-count">共 {{ roomInfoData.length }} 条</span>
               </div>
               <div class="right">
-                <el-button
-                  v-if="isEditing && currentEditingRow"
-                  size="small"
-                  type="primary"
-                  plain
-                  @click="openUsagePicker(currentEditingRow)"
-                >
-                  选择用途
-                </el-button>
                 <el-button
                   size="small"
                   type="primary"
@@ -171,6 +228,8 @@
               element-loading-text="加载户室数据中..."
               row-key="id"
               style="width: 100%;"
+              :header-cell-style="AUDIT_TABLE_HEADER_STYLE"
+              :cell-style="AUDIT_TABLE_CELL_STYLE"
             >
               <el-table-column label="序号" type="index" width="60" align="center" :index="index => index + 1" />
 
@@ -219,31 +278,63 @@
               <el-table-column prop="usageCategory" label="用途类别" width="130" align="center">
                 <template #default="{ row }">
                   <template v-if="!isRowEditing(row)">{{ row.usageCategory || '未知' }}</template>
-                  <el-select
-                    v-else
-                    v-model="row.usageCategory"
-                    size="small"
-                    style="width: 120px"
-                    placeholder="请选择"
-                    @change="handleUsageCategoryChange?.(row)"
-                  >
-                    <el-option-group label="计容面积">
-                      <el-option label="商业" value="商业" />
-                      <el-option label="住宅" value="住宅" />
-                      <el-option label="物管" value="物管" />
-                      <el-option label="其他计容" value="其他计容" />
-                    </el-option-group>
-                    <el-option-group label="不计容面积">
-                      <el-option label="社区用房" value="社区用房" />
-                      <el-option label="其他公用" value="其他公用" />
-                    </el-option-group>
-                  </el-select>
+                  <el-tag v-else size="small" effect="plain" type="info">{{ row.usageCategory || '未选择' }}</el-tag>
                 </template>
               </el-table-column>
 
               <el-table-column prop="roomUsage" label="用途" min-width="120" show-overflow-tooltip align="center">
                 <template #default="{ row }">
-                  <span>{{ row.roomUsage || '-' }}</span>
+                  <template v-if="!isRowEditing(row)">
+                    <span>{{ row.roomUsage || '-' }}</span>
+                  </template>
+                  <div v-else class="usage-edit-inline">
+                    <el-popover
+                      placement="bottom"
+                      trigger="click"
+                      :width="360"
+                      :visible="usageEditorVisibleRowId === String(row.id)"
+                    >
+                      <div class="usage-editor-pop">
+                        <div class="usage-editor-title">选择用途类别与用途</div>
+                        <el-form label-position="top" class="usage-editor-form">
+                          <el-form-item label="用途">
+                            <el-select
+                              v-model="usageEditorDraft.roomUsage"
+                              filterable
+                              clearable
+                              placeholder="请选择用途"
+                              class="usage-editor-field"
+                            >
+                              <el-option
+                                v-for="item in usageEditorOptions"
+                                :key="item.id || `${item.usageCategory}-${item.usagePattern}`"
+                                :label="`${item.usagePattern}（${item.usageCategoryText}）`"
+                                :value="item.usagePattern"
+                              />
+                            </el-select>
+                          </el-form-item>
+                          <el-form-item label="自动匹配类别">
+                            <el-tag v-if="usageEditorMatchedOption" type="info" effect="plain">
+                              {{ usageEditorMatchedOption.usageCategoryText }} / {{ usageEditorMatchedOption.floorAreaTypeText }}
+                            </el-tag>
+                            <span v-else class="usage-auto-tip">选择用途后将自动匹配用途类别与面积类型</span>
+                          </el-form-item>
+                        </el-form>
+                        <div class="usage-editor-actions">
+                          <el-button text size="small" type="primary" @click="openCreateUsageDialogForRow(row)">新增用途</el-button>
+                          <div>
+                            <el-button size="small" @click="closeUsageEditor">取消</el-button>
+                            <el-button size="small" type="primary" @click="applyUsageEditor(row)">应用</el-button>
+                          </div>
+                        </div>
+                      </div>
+                      <template #reference>
+                        <el-button size="small" type="primary" plain @click.stop="openUsageEditor(row)">
+                          {{ row.roomUsage ? '修改用途' : '选择类别与用途' }}
+                        </el-button>
+                      </template>
+                    </el-popover>
+                  </div>
                 </template>
               </el-table-column>
 
@@ -369,6 +460,7 @@
       v-model="usagePickerVisible"
       title="选择用途"
       width="760px"
+      custom-class="usage-picker-dialog"
       append-to-body
       :close-on-click-modal="false"
     >
@@ -413,6 +505,7 @@
       v-model="createUsageDialogVisible"
       title="新增用途"
       width="520px"
+      custom-class="create-usage-dialog"
       append-to-body
       :close-on-click-modal="false"
       @closed="resetCreateUsageForm"
@@ -452,11 +545,13 @@
 
 <script setup>
 import { computed, reactive, ref } from 'vue'
-import { Loading } from '@element-plus/icons-vue'
+import { Loading, CircleCheck } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import CalibrationHeader from '@/components/file-upload/CalibrationHeader.vue'
 import CalibrationPdfToolbar from '@/components/file-upload/CalibrationPdfToolbar.vue'
+import { useAuditSplitPanel } from '@/composables/audit/useAuditSplitPanel'
+import { AUDIT_TABLE_HEADER_STYLE, AUDIT_TABLE_CELL_STYLE } from '@/constants/auditTableStyles'
 
 const props = defineProps({
   modelValue: { type: Boolean, required: true },
@@ -497,6 +592,13 @@ const dialogVisible = computed({
   set: (val) => emit('update:modelValue', val)
 })
 
+const { auditLayoutRef, leftPanelStyle, onSplitterMouseDown } = useAuditSplitPanel({
+  defaultLeftPercent: 50,
+  onSplitEnd: () => {
+    window.dispatchEvent(new Event('resize'))
+  }
+})
+
 const hasVerificationErrorReason = computed(() => {
   const reason = String(props.auditSummaryData?.verificationErrorReason || '').trim()
   return !!reason && reason !== '-' && reason.toLowerCase() !== 'null'
@@ -508,10 +610,6 @@ const isRowEditing = (row) => {
   if (!props.isEditing || !props.editingRowId || !row?.id) return false
   return String(row.id) === String(props.editingRowId)
 }
-const currentEditingRow = computed(() => {
-  if (!props.isEditing || !props.editingRowId) return null
-  return props.roomInfoData.find((item) => String(item?.id) === String(props.editingRowId)) || null
-})
 const toNumber = (value) => Number(value || 0)
 const summaryMetrics = computed(() => [
   {
@@ -672,6 +770,70 @@ const normalizeFloorAreaTypeText = (value) => {
   return floorAreaTypeLabelMap[key] || floorAreaTypeLabelMap.UNKNOWN
 }
 
+const usageCategoryTextToCodeMap = Object.entries(usageCategoryLabelMap).reduce((acc, [key, value]) => {
+  acc[value] = key
+  return acc
+}, {})
+
+const normalizeUsageCategoryCode = (value) => {
+  const raw = String(value || '').trim()
+  if (!raw) return 'UNKNOWN'
+  const upper = raw.toUpperCase()
+  if (usageCategoryLabelMap[upper]) return upper
+  return usageCategoryTextToCodeMap[raw] || 'UNKNOWN'
+}
+
+const ensureUsageOptionsLoaded = async () => {
+  if (usagePickerLoading.value || usagePickerOptions.value.length) return
+  await loadUsagePickerOptions()
+}
+
+const usageEditorVisibleRowId = ref('')
+const usageEditorDraft = reactive({
+  roomUsage: ''
+})
+
+const usageEditorOptions = computed(() => usagePickerOptions.value)
+
+const usageEditorMatchedOption = computed(() => {
+  const usage = String(usageEditorDraft.roomUsage || '').trim()
+  if (!usage) return null
+  return usagePickerOptions.value.find((item) => String(item.usagePattern || '').trim() === usage) || null
+})
+
+const openUsageEditor = async (row) => {
+  usagePickerTargetRow.value = row
+  usageEditorVisibleRowId.value = String(row?.id || '')
+  usageEditorDraft.roomUsage = String(row?.roomUsage || '').trim()
+  await ensureUsageOptionsLoaded()
+}
+
+const closeUsageEditor = () => {
+  usageEditorVisibleRowId.value = ''
+}
+
+const applyUsageEditor = (row) => {
+  if (!usageEditorDraft.roomUsage) {
+    ElMessage.warning('请选择用途')
+    return
+  }
+  const matched = usagePickerOptions.value.find((item) =>
+    String(item.usagePattern || '').trim() === String(usageEditorDraft.roomUsage || '').trim()
+  )
+  if (!matched) {
+    ElMessage.warning('未找到对应用途配置，请先新增用途')
+    return
+  }
+
+  row.usageCategory = matched.usageCategoryText
+  row.roomUsage = matched.usagePattern || usageEditorDraft.roomUsage
+  row.floorAreaType = matched.floorAreaTypeText || row.floorAreaType
+  if (typeof props.handleUsageCategoryChange === 'function') {
+    props.handleUsageCategoryChange(row)
+  }
+  closeUsageEditor()
+}
+
 const filteredUsagePickerOptions = computed(() => {
   const keyword = String(usagePickerKeyword.value || '').trim().toLowerCase()
   if (!keyword) return usagePickerOptions.value
@@ -743,6 +905,16 @@ const resetCreateUsageForm = () => {
 
 const openCreateUsageDialog = () => {
   resetCreateUsageForm()
+  createUsageDialogVisible.value = true
+}
+
+const openCreateUsageDialogForRow = async (row) => {
+  usagePickerTargetRow.value = row
+  await ensureUsageOptionsLoaded()
+  resetCreateUsageForm()
+  createUsageForm.usageCategory = normalizeUsageCategoryCode(row?.usageCategory) === 'UNKNOWN'
+    ? ''
+    : normalizeUsageCategoryCode(row?.usageCategory)
   createUsageDialogVisible.value = true
 }
 
@@ -843,15 +1015,26 @@ const handleSubmitCreateUsage = async () => {
 <style scoped>
 
 
-.split-view{
+.split-view.audit-split-layout {
   flex: 1 1 auto;
   min-height: 0;
   width: 100%;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   overflow: hidden;
   background: #f0f2f5;
-  height: 100%;  
+  height: 100%;
+}
+
+.audit-split-layout--calibration .audit-splitter {
+  background: #94a3b8;
+}
+
+.audit-split-layout--calibration .audit-splitter:hover {
+  background: #7c8aa0;
+}
+
+.audit-split-layout--calibration .audit-splitter::after {
+  background: #e2e8f0;
+  opacity: 0.95;
 }
 
 .left-panel{
@@ -861,7 +1044,6 @@ const handleSubmitCreateUsage = async () => {
   flex-direction: column;
   overflow: hidden;
   background: #525659;
-  border-right: 1px solid #dcdfe6;
 }
 
 .pdf-canvas {
@@ -899,7 +1081,7 @@ const handleSubmitCreateUsage = async () => {
 /* summary 固定在上面 */
 .sum-info-section{
   flex: 0 0 auto;
-  max-height: 320px;
+  max-height: min(560px, 52vh);
   overflow: auto;
   padding-right: 2px;
 }
@@ -940,105 +1122,195 @@ const handleSubmitCreateUsage = async () => {
 
 .sum-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(260px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-content: start;
 }
 
 .sum-layout {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
-  gap: 10px;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+  gap: 14px;
+  align-items: start;
 }
 
-.audit-overview-card {
-  background: #fff;
-  border: 1px solid #e6ebf2;
-  border-radius: 10px;
-  padding: 10px;
+.cali-audit-card {
+  min-height: 0;
+  align-self: stretch;
+}
+
+.summary-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 10px 28px -16px rgba(15, 23, 42, 0.12);
+}
+
+.summary-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 14px 0 0 14px;
+}
+
+.summary-card--manual::before {
+  background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+}
+
+.summary-card--audit::before {
+  background: linear-gradient(180deg, #10b981 0%, #047857 100%);
+}
+
+.summary-card--ocr::before {
+  background: linear-gradient(180deg, #8b5cf6 0%, #6d28d9 100%);
+}
+
+.summary-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 14px 10px 16px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.85);
+}
+
+.summary-card__icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  color: #fff;
+}
+
+.summary-card--manual .summary-card__icon {
+  background: linear-gradient(145deg, #3b82f6 0%, #1d4ed8 100%);
+  box-shadow: 0 6px 14px -6px rgba(29, 78, 216, 0.55);
+}
+
+.summary-card--audit .summary-card__icon {
+  background: linear-gradient(145deg, #10b981 0%, #059669 100%);
+  box-shadow: 0 6px 14px -6px rgba(5, 150, 105, 0.45);
+}
+
+.summary-card--ocr .summary-card__icon {
+  background: linear-gradient(145deg, #a78bfa 0%, #7c3aed 100%);
+  box-shadow: 0 6px 14px -6px rgba(124, 58, 237, 0.45);
+}
+
+.summary-card__head-text {
+  min-width: 0;
+}
+
+.summary-card__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--biz-text, #1f2d3d);
+  line-height: 1.3;
+}
+
+.summary-card__subtitle {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--biz-subtext, #64748b);
+}
+
+.summary-card__body {
+  padding: 10px 12px 12px 16px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-height: 0;
-  overflow: auto;
-}
-
-.overview-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 10px;
-}
-
-.sum-card {
-  background: #fff;
-  border: 1px solid #dde5f0;
-  border-radius: 10px;
-  padding: 8px 10px;
-}
-
-.sum-title {
-  font-size: 12px;
-  color: #4b5563;
-  margin-bottom: 6px;
-  font-weight: 600;
-}
-
-.sum-matrix {
-  display: grid;
   gap: 2px;
 }
 
-.sum-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 22px;
-  font-size: 12px;
+.stat-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  background: rgba(248, 250, 252, 0.65);
 }
 
-.sum-row .label {
-  color: #6b7280;
+.stat-row:nth-child(even) {
+  background: rgba(241, 245, 249, 0.75);
 }
 
-.sum-row .value {
-  color: #1f2937;
-  font-weight: 600;
+.stat-row--tags {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
-.sum-row .value.ocr {
-  color: #2563eb;
-}
-
-.sum-row .value.warn {
-  color: #dc2626;
-}
-
-.sum-row .value.ok {
-  color: #16a34a;
-}
-
-.sum-row .unit {
-  margin-left: 2px;
-  color: #94a3b8;
+.stat-row__label {
+  color: #64748b;
   font-weight: 500;
 }
 
-.sum-row.delta {
-  margin-top: 1px;
-  padding-top: 3px;
-  border-top: 1px dashed #e5e7eb;
+.stat-row__value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+  font-size: 14px;
+  text-align: right;
 }
 
-.meta-item {
-  font-size: 13px;
-  line-height: 1.6;
+.stat-row__value--warn {
+  color: #c2410c;
+}
+
+.stat-row__value--ok {
+  color: #15803d;
+}
+
+.stat-row__value--ocr {
+  color: #2563eb;
+}
+
+.stat-row__unit {
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  min-width: 1.5em;
+  text-align: right;
+}
+
+.stat-row__tags {
   display: flex;
-  gap: 8px;
-  align-items: baseline;
+  justify-content: flex-end;
+  grid-column: 2 / -1;
 }
 
-.meta-item.full {
-  grid-column: 1 / -1;
-  word-break: break-all;
+.stat-row--tags .stat-row__label {
+  align-self: center;
+}
+
+.summary-card__audit-append {
+  padding: 0 12px 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid rgba(226, 232, 240, 0.55);
+  margin-top: 2px;
+  padding-top: 10px;
+}
+
+.audit-append-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 4px;
 }
 
 .unknown-list {
@@ -1063,6 +1335,10 @@ const handleSubmitCreateUsage = async () => {
   padding: 6px 8px;
   border-radius: 6px;
   background: #fff3f2;
+  color: #b42318;
+  font-size: 13px;
+  line-height: 1.5;
+  word-break: break-all;
 }
 
 .verify-tip-block {
@@ -1084,36 +1360,6 @@ const handleSubmitCreateUsage = async () => {
   font-size: 12px;
   line-height: 1.6;
   color: #b54708;
-}
-
-.k {
-  color: #606266;
-  font-weight: 600;
-}
-
-.v {
-  color: #409eff;
-}
-
-.v.warn {
-  color: #e6a23c;
-}
-
-.v.danger {
-  color: #f56c6c;
-}
-
-.v.ok {
-  color: #67c23a;
-}
-
-.v.muted {
-  color: #909399;
-}
-
-.u {
-  color: #909399;
-  margin-left: 2px;
 }
 
 .table-toolbar {
@@ -1166,6 +1412,46 @@ const handleSubmitCreateUsage = async () => {
   align-items: center;
 }
 
+.usage-edit-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  justify-content: center;
+}
+
+.usage-editor-pop {
+  padding: 2px 2px 0;
+}
+
+.usage-editor-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 8px;
+}
+
+.usage-editor-form :deep(.el-form-item) {
+  margin-bottom: 10px;
+}
+
+.usage-editor-field {
+  width: 100%;
+}
+
+.usage-editor-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.usage-auto-tip {
+  color: #64748b;
+  font-size: 12px;
+}
+
 :deep(.table-toolbar .el-button--primary),
 :deep(.el-dialog__footer .el-button--primary) {
   background: #e8f2fc;
@@ -1206,30 +1492,35 @@ const handleSubmitCreateUsage = async () => {
   background: #fff1f0 !important;
 }
 
+:global(.usage-picker-dialog .el-dialog__header),
+:global(.create-usage-dialog .el-dialog__header) {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid #edf2f8;
+}
+
+:global(.usage-picker-dialog .el-dialog__body),
+:global(.create-usage-dialog .el-dialog__body) {
+  padding: 14px 16px;
+}
+
+:global(.usage-picker-dialog .el-dialog__footer),
+:global(.create-usage-dialog .el-dialog__footer) {
+  padding: 10px 16px 14px;
+  border-top: 1px solid #edf2f8;
+}
 
 
 
 
-@media (max-width: 1200px) {
-  .split-view {
-    display: flex;
-    flex-direction: column;
-  }
 
-  .left-panel,
-  .right-panel {
-    width: 100%;
-    max-width: 100%;
-  }
-
-  .left-panel {
+@media (max-width: 1280px) {
+  .split-view.audit-split-layout--calibration .left-panel {
     height: 42%;
     min-height: 320px;
-    border-right: none;
     border-bottom: 1px solid #dcdfe6;
   }
 
-  .right-panel {
+  .split-view.audit-split-layout--calibration .right-panel {
     flex: 1 1 auto;
     height: auto;
     min-height: 0;
@@ -1241,10 +1532,6 @@ const handleSubmitCreateUsage = async () => {
   }
 
   .sum-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .overview-row {
     grid-template-columns: 1fr;
   }
 

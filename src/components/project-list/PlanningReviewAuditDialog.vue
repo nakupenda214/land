@@ -8,8 +8,8 @@
     class="planning-audit-dialog"
     @closed="handleClosed"
   >
-    <div class="audit-shell">
-      <section class="pdf-panel" v-loading="pdfLoading">
+    <div ref="auditLayoutRef" class="audit-split-layout audit-split-layout--responsive planning-audit-shell">
+      <section class="pdf-panel audit-split-layout__left" :style="leftPanelStyle" v-loading="pdfLoading">
         <div class="pdf-toolbar">
           <div class="file-name">{{ fileMeta.originalName || '规划复核文件' }}</div>
           <div class="pdf-actions">
@@ -34,7 +34,15 @@
         <el-empty v-else description="未找到可预览的 PDF 文件" />
       </section>
 
-      <section class="rows-panel">
+      <div
+        class="audit-splitter"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="拖动调节左右区域宽度"
+        @mousedown="onSplitterMouseDown"
+      />
+
+      <section class="rows-panel audit-split-layout__right">
         <div class="summary-card">
           <div class="summary-title">复核基础信息</div>
           <div class="summary-grid">
@@ -71,9 +79,19 @@
         </div>
 
         <div class="rows-table-wrap" v-loading="rowsLoading">
-          <el-table class="rows-table" :data="rows" border stripe height="100%" row-key="id">
-            <el-table-column type="index" label="序号" width="60" align="center" :index="(i) => i + 1" />
-            <el-table-column prop="rowIndex" label="行号" width="100" align="center">
+          <el-table
+            class="rows-table planning-audit-table"
+            :data="rows"
+            border
+            stripe
+            size="small"
+            height="100%"
+            row-key="id"
+            :header-cell-style="AUDIT_TABLE_HEADER_STYLE"
+            :cell-style="AUDIT_TABLE_CELL_STYLE"
+          >
+            <el-table-column type="index" label="#" width="48" align="center" fixed="left" :index="planningRowIndex" />
+            <el-table-column prop="rowIndex" label="行号" width="72" align="center">
               <template #default="{ row }">
                 <template v-if="isEditingRow(row.id)">
                   <el-input-number v-model="editForm.rowIndex" :min="0" controls-position="right" class="cell-input" />
@@ -81,7 +99,7 @@
                 <template v-else>{{ row.rowIndex ?? '-' }}</template>
               </template>
             </el-table-column>
-            <el-table-column prop="engineeringProject" label="工程项目/楼栋" min-width="136" show-overflow-tooltip>
+            <el-table-column prop="engineeringProject" label="工程项目/楼栋" min-width="120" fixed="left" show-overflow-tooltip>
               <template #default="{ row }">
                 <template v-if="isEditingRow(row.id)">
                   <el-input v-model.trim="editForm.engineeringProject" class="cell-input" />
@@ -89,7 +107,7 @@
                 <template v-else>{{ row.engineeringProject || '-' }}</template>
               </template>
             </el-table-column>
-            <el-table-column label="面积类别" width="122" align="center">
+            <el-table-column label="面积类别" width="100" align="center">
               <template #default="{ row }">
                 <template v-if="isEditingRow(row.id)">
                   <el-select v-model="editForm.areaCategory" class="cell-input" placeholder="请选择">
@@ -101,7 +119,7 @@
                 <template v-else>{{ areaCategoryTextMap[row.areaCategory] || row.areaCategory || '-' }}</template>
               </template>
             </el-table-column>
-            <el-table-column prop="constructionNature" label="建设性质" width="122" align="center">
+            <el-table-column prop="constructionNature" label="建设性质" width="100" align="center">
               <template #default="{ row }">
                 <template v-if="isEditingRow(row.id)">
                   <el-input v-model.trim="editForm.constructionNature" class="cell-input" />
@@ -109,7 +127,7 @@
                 <template v-else>{{ row.constructionNature || '-' }}</template>
               </template>
             </el-table-column>
-            <el-table-column prop="buildingCount" label="栋数" width="100" align="center">
+            <el-table-column prop="buildingCount" label="栋数" width="72" align="center">
               <template #default="{ row }">
                 <template v-if="isEditingRow(row.id)">
                   <el-input-number v-model="editForm.buildingCount" :min="0" controls-position="right" class="cell-input" />
@@ -117,59 +135,68 @@
                 <template v-else>{{ row.buildingCount ?? '-' }}</template>
               </template>
             </el-table-column>
-            <el-table-column prop="aboveGroundFloors" label="地上层数" width="114" align="center">
-              <template #default="{ row }">
-                <template v-if="isEditingRow(row.id)">
-                  <el-input-number v-model="editForm.aboveGroundFloors" :min="0" controls-position="right" class="cell-input" />
+
+            <el-table-column label="层数" align="center">
+              <el-table-column prop="aboveGroundFloors" label="地上" width="80" align="center">
+                <template #default="{ row }">
+                  <template v-if="isEditingRow(row.id)">
+                    <el-input-number v-model="editForm.aboveGroundFloors" :min="0" controls-position="right" class="cell-input" />
+                  </template>
+                  <template v-else>{{ row.aboveGroundFloors ?? '-' }}</template>
                 </template>
-                <template v-else>{{ row.aboveGroundFloors ?? '-' }}</template>
-              </template>
-            </el-table-column>
-            <el-table-column prop="belowGroundFloors" label="地下层数" width="114" align="center">
-              <template #default="{ row }">
-                <template v-if="isEditingRow(row.id)">
-                  <el-input-number v-model="editForm.belowGroundFloors" :min="0" controls-position="right" class="cell-input" />
+              </el-table-column>
+              <el-table-column prop="belowGroundFloors" label="地下" width="80" align="center">
+                <template #default="{ row }">
+                  <template v-if="isEditingRow(row.id)">
+                    <el-input-number v-model="editForm.belowGroundFloors" :min="0" controls-position="right" class="cell-input" />
+                  </template>
+                  <template v-else>{{ row.belowGroundFloors ?? '-' }}</template>
                 </template>
-                <template v-else>{{ row.belowGroundFloors ?? '-' }}</template>
-              </template>
+              </el-table-column>
             </el-table-column>
-            <el-table-column prop="totalArea" label="总面积(㎡)" width="142" align="right">
-              <template #default="{ row }">
-                <template v-if="isEditingRow(row.id)">
-                  <el-input-number v-model="editForm.totalArea" :min="0" :precision="2" controls-position="right" class="cell-input" />
+
+            <el-table-column label="面积（㎡）" align="center">
+              <el-table-column prop="totalArea" label="总面积" width="96" align="right">
+                <template #default="{ row }">
+                  <template v-if="isEditingRow(row.id)">
+                    <el-input-number v-model="editForm.totalArea" :min="0" :precision="2" controls-position="right" class="cell-input" />
+                  </template>
+                  <template v-else>{{ formatNum(row.totalArea) }}</template>
                 </template>
-                <template v-else>{{ formatNum(row.totalArea) }}</template>
-              </template>
-            </el-table-column>
-            <el-table-column prop="farAboveGround" label="计容地上(㎡)" width="152" align="right">
-              <template #default="{ row }">
-                <template v-if="isEditingRow(row.id)">
-                  <el-input-number v-model="editForm.farAboveGround" :min="0" :precision="2" controls-position="right" class="cell-input" />
+              </el-table-column>
+              <el-table-column prop="farAboveGround" label="计容地上" width="96" align="right">
+                <template #default="{ row }">
+                  <template v-if="isEditingRow(row.id)">
+                    <el-input-number v-model="editForm.farAboveGround" :min="0" :precision="2" controls-position="right" class="cell-input" />
+                  </template>
+                  <template v-else>{{ formatNum(row.farAboveGround) }}</template>
                 </template>
-                <template v-else>{{ formatNum(row.farAboveGround) }}</template>
-              </template>
-            </el-table-column>
-            <el-table-column prop="farBelowGround" label="计容地下(㎡)" width="152" align="right">
-              <template #default="{ row }">
-                <template v-if="isEditingRow(row.id)">
-                  <el-input-number v-model="editForm.farBelowGround" :min="0" :precision="2" controls-position="right" class="cell-input" />
+              </el-table-column>
+              <el-table-column prop="farBelowGround" label="计容地下" width="96" align="right">
+                <template #default="{ row }">
+                  <template v-if="isEditingRow(row.id)">
+                    <el-input-number v-model="editForm.farBelowGround" :min="0" :precision="2" controls-position="right" class="cell-input" />
+                  </template>
+                  <template v-else>{{ formatNum(row.farBelowGround) }}</template>
                 </template>
-                <template v-else>{{ formatNum(row.farBelowGround) }}</template>
-              </template>
+              </el-table-column>
             </el-table-column>
-            <el-table-column label="操作" width="186" align="center" fixed="right">
+
+            <el-table-column label="操作" width="148" align="center" fixed="right">
               <template #default="{ row }">
                 <template v-if="isEditingRow(row.id)">
-                  <el-button size="small" type="primary" :loading="rowActionLoading" @click="submitRowEdit">保存</el-button>
+                  <el-button class="op-btn parse-btn" size="small" type="primary" :loading="rowActionLoading" @click="submitRowEdit">保存</el-button>
                   <el-button size="small" @click="cancelRowEdit">取消</el-button>
                 </template>
                 <template v-else>
-                  <el-button size="small" type="primary" plain @click="startRowEdit(row)">编辑</el-button>
-                  <el-popconfirm title="确认删除该行？" @confirm="deleteRow(row)">
-                    <template #reference>
-                      <el-button size="small" type="danger" plain :loading="rowActionLoading">删除</el-button>
-                    </template>
-                  </el-popconfirm>
+                  <span class="planning-audit-row-actions">
+                    <el-button class="op-btn audit-btn" size="small" type="primary" plain @click="startRowEdit(row)">编辑</el-button>
+                    <el-popconfirm title="确认删除该行？" width="220" @confirm="deleteRow(row)">
+                      <template #reference>
+                        <el-button class="op-btn delete-btn" size="small" type="danger" plain :loading="rowActionLoading">删除</el-button>
+                      </template>
+                    </el-popconfirm>
+                  </span>
                 </template>
               </template>
             </el-table-column>
@@ -194,11 +221,14 @@
     <el-dialog
       v-model="createDialogVisible"
       title="新增规划复核行"
-      width="760px"
+      width="720px"
+      align-center
+      destroy-on-close
       append-to-body
+      class="planning-create-dialog"
       :close-on-click-modal="false"
     >
-      <el-form :model="createForm" label-width="120px">
+      <el-form :model="createForm" label-position="top" class="planning-create-form">
         <el-row :gutter="12">
           <el-col :span="12">
             <el-form-item label="行号">
@@ -281,6 +311,8 @@ import {
   updatePlanningReviewRow
 } from '@/services/project.service'
 import { downloadGridFsFile, queryFiles } from '@/services/file.service'
+import { useAuditSplitPanel } from '@/composables/audit/useAuditSplitPanel'
+import { AUDIT_TABLE_HEADER_STYLE, AUDIT_TABLE_CELL_STYLE } from '@/constants/auditTableStyles'
 
 const props = defineProps({
   modelValue: {
@@ -303,6 +335,8 @@ const dialogVisible = computed({
   get: () => props.modelValue,
   set: (v) => emit('update:modelValue', v)
 })
+
+const { auditLayoutRef, leftPanelStyle, onSplitterMouseDown } = useAuditSplitPanel()
 
 const areaCategoryTextMap = {
   RESIDENTIAL: '住宅',
@@ -334,6 +368,8 @@ const rowQuery = reactive({
   areaCategory: '',
   engineeringProject: ''
 })
+
+const planningRowIndex = (index) => (rowQuery.pageNum - 1) * rowQuery.pageSize + index + 1
 
 const editForm = reactive({
   id: '',
@@ -660,12 +696,20 @@ onBeforeUnmount(() => {
   padding: 12px;
 }
 
-.audit-shell {
-  display: grid;
-  grid-template-columns: 50% 50%;
-  gap: 12px;
+.planning-audit-shell {
   height: calc(100vh - 120px);
   min-height: 720px;
+  background: #f3f6fa;
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.planning-audit-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .pdf-panel,
@@ -814,15 +858,9 @@ onBeforeUnmount(() => {
   color: #163a5a;
 }
 
-:deep(.el-table th.el-table__cell) {
-  background: #f7f9fc;
-  color: #4b5d74;
-  font-weight: 600;
-}
-
-:deep(.rows-table .el-table__header),
-:deep(.rows-table .el-table__body) {
-  min-width: 1500px;
+:deep(.planning-audit-table .el-table__header),
+:deep(.planning-audit-table .el-table__body) {
+  min-width: 1280px;
 }
 
 :deep(.el-pagination) {
@@ -842,19 +880,27 @@ onBeforeUnmount(() => {
   color: #475569;
 }
 
-@media (max-width: 1440px) {
-  .audit-shell {
-    grid-template-columns: 1fr;
+:deep(.planning-create-dialog .el-dialog__body) {
+  padding: 12px 20px 8px;
+}
+
+.planning-create-form :deep(.el-form-item) {
+  margin-bottom: 14px;
+}
+
+@media (max-width: 1280px) {
+  .planning-audit-shell {
     height: auto;
     min-height: 0;
   }
 
-  .pdf-panel {
+  .planning-audit-shell .pdf-panel {
     height: 560px;
   }
 
-  .rows-panel {
+  .planning-audit-shell .rows-panel {
     height: 640px;
+    min-width: 0;
   }
 }
 </style>

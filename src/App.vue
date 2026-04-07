@@ -42,54 +42,7 @@ body {
   border-color: var(--biz-border);
 }
 
-:deep(.el-button--primary) {
-  background: var(--biz-btn-soft-bg);
-  border-color: #c8ddf1;
-  color: var(--biz-btn-soft-text);
-}
-
-:deep(.el-button--primary:hover),
-:deep(.el-button--primary:focus) {
-  background: var(--biz-btn-soft-bg-hover);
-  border-color: #b8d3ec;
-  color: #163a5a;
-}
-
-:deep(.el-button--default) {
-  background: #ffffff;
-  border-color: #cbd5e1;
-  color: #475569;
-}
-
-:deep(.el-button--default:hover),
-:deep(.el-button--default:focus) {
-  background: #f8fafc;
-  border-color: #94a3b8;
-  color: #334155;
-}
-
-:deep(.el-button--danger) {
-  background: var(--biz-btn-danger-bg);
-  border-color: #fecaca;
-  color: var(--biz-btn-danger-text);
-}
-
-:deep(.el-button--danger:hover),
-:deep(.el-button--danger:focus) {
-  background: var(--biz-btn-danger-bg-hover);
-  border-color: #fca5a5;
-  color: #b91c1c;
-}
-
-:deep(.el-button--primary.is-text),
-:deep(.el-button--primary.is-link) {
-  color: var(--biz-btn-soft-text);
-}
-
-:deep(.el-button--danger.is-text),
-:deep(.el-button--danger.is-link) {
-  color: var(--biz-btn-danger-text);
-}
+/* 按钮全局样式见 @/styles/app-button-system.css */
 
 :deep(.el-table th.el-table__cell) {
   background: var(--biz-header-bg);

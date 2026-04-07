@@ -2,17 +2,17 @@
   <el-dialog
     v-model="visible"
     title="合同信息编辑"
-    width="96vw"
-    top="2vh"
+    fullscreen
+    append-to-body
     class="contract-workspace-dialog"
     :close-on-click-modal="false"
     :destroy-on-close="false"
   >
-    <div class="workspace-shell">
+    <div class="contract-workspace-root">
       <div class="workspace-topbar">
         <div class="topbar-left">
           <span class="topbar-title">合同工作区</span>
-          <span class="topbar-sub"></span>
+          <span class="topbar-sub">全屏工作区 · 可拖动中间分隔条调整左右宽度</span>
         </div>
         <div class="topbar-right">
           <el-tag type="info" effect="plain" class="meta-tag" :title="fileName || '未关联合同文件'">
@@ -35,56 +35,62 @@
         </div>
       </div>
 
-      <div class="workspace">
-      <section class="pdf-panel" v-loading="pdfLoading">
-        <iframe
-          v-if="pdfUrl"
-          class="pdf-frame"
-          :src="pdfUrl"
-          title="合同预览"
-        />
-        <el-empty v-else description="暂无可预览PDF" />
-      </section>
+      <div
+        ref="auditLayoutRef"
+        class="audit-split-layout audit-split-layout--responsive contract-workspace-split"
+      >
+        <section class="pdf-panel audit-split-layout__left" :style="leftPanelStyle" v-loading="pdfLoading">
+          <iframe v-if="pdfUrl" class="pdf-frame" :src="pdfUrl" title="合同预览" />
+          <el-empty v-else description="暂无可预览PDF" />
+        </section>
 
-      <section class="form-panel">
-        <div class="panel-title">合同字段</div>
-        <div class="form-meta">
-          <div class="meta-item">
-            <span class="k">合同编号</span>
-            <span class="v">{{ form.contractNumber || '-' }}</span>
+        <div
+          class="audit-splitter"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="拖动调节左右区域宽度"
+          @mousedown="onSplitterMouseDown"
+        />
+
+        <section class="form-panel audit-split-layout__right">
+          <div class="panel-title">合同字段</div>
+          <div class="form-meta">
+            <div class="meta-item">
+              <span class="k">合同编号</span>
+              <span class="v">{{ form.contractNumber || '-' }}</span>
+            </div>
+            <div class="meta-item">
+              <span class="k">合同类型</span>
+              <span class="v">{{ form.contractType || '-' }}</span>
+            </div>
+            <div class="meta-item">
+              <span class="k">出让方</span>
+              <span class="v">{{ form.transferor || '-' }}</span>
+            </div>
+            <div class="meta-item">
+              <span class="k">受让方</span>
+              <span class="v">{{ form.transferee || '-' }}</span>
+            </div>
           </div>
-          <div class="meta-item">
-            <span class="k">合同类型</span>
-            <span class="v">{{ form.contractType || '-' }}</span>
-          </div>
-          <div class="meta-item">
-            <span class="k">出让方</span>
-            <span class="v">{{ form.transferor || '-' }}</span>
-          </div>
-          <div class="meta-item">
-            <span class="k">受让方</span>
-            <span class="v">{{ form.transferee || '-' }}</span>
-          </div>
-        </div>
-        <el-form :ref="setFormRef" :model="form" :rules="rules" label-position="top" class="contract-form">
-          <el-form-item label="合同编号" prop="contractNumber">
-            <el-input v-model="form.contractNumber" placeholder="请输入合同编号" />
-          </el-form-item>
-          <el-form-item label="合同类型" prop="contractType">
-            <el-input v-model="form.contractType" placeholder="请输入合同类型" />
-          </el-form-item>
-          <el-form-item label="出让方" prop="transferor">
-            <el-input v-model="form.transferor" placeholder="请输入出让方" />
-          </el-form-item>
-          <el-form-item label="受让方" prop="transferee">
-            <el-input v-model="form.transferee" placeholder="请输入受让方" />
-          </el-form-item>
-          <el-form-item label="备注" prop="remark">
-            <el-input v-model="form.remark" type="textarea" :rows="4" placeholder="请输入备注" />
-          </el-form-item>
-        </el-form>
-      </section>
-    </div>
+          <el-form :ref="setFormRef" :model="form" :rules="rules" label-position="top" class="contract-form contract-form-scroll">
+            <el-form-item label="合同编号" prop="contractNumber">
+              <el-input v-model="form.contractNumber" placeholder="请输入合同编号" />
+            </el-form-item>
+            <el-form-item label="合同类型" prop="contractType">
+              <el-input v-model="form.contractType" placeholder="请输入合同类型" />
+            </el-form-item>
+            <el-form-item label="出让方" prop="transferor">
+              <el-input v-model="form.transferor" placeholder="请输入出让方" />
+            </el-form-item>
+            <el-form-item label="受让方" prop="transferee">
+              <el-input v-model="form.transferee" placeholder="请输入受让方" />
+            </el-form-item>
+            <el-form-item label="备注" prop="remark">
+              <el-input v-model="form.remark" type="textarea" :rows="4" placeholder="请输入备注" />
+            </el-form-item>
+          </el-form>
+        </section>
+      </div>
     </div>
 
     <template #footer>
@@ -96,6 +102,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useAuditSplitPanel } from '@/composables/audit/useAuditSplitPanel'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -117,32 +124,42 @@ const visible = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value)
 })
+
+const { auditLayoutRef, leftPanelStyle, onSplitterMouseDown } = useAuditSplitPanel({
+  defaultLeftPercent: 55,
+  onSplitEnd: () => {
+    window.dispatchEvent(new Event('resize'))
+  }
+})
 </script>
 
 <style scoped>
-.workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
-  gap: 12px;
-  height: calc(100vh - 250px);
-  min-height: 560px;
-  max-height: 76vh;
+.contract-workspace-root {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.workspace-shell {
-  border: 1px solid #e8edf6;
-  border-radius: 12px;
-  padding: 10px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+.contract-workspace-split {
+  flex: 1;
+  min-height: 240px;
+  background: #f3f6fa;
+  border-radius: 10px;
+  padding: 8px;
+  overflow: hidden;
 }
 
 .workspace-topbar {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  margin-bottom: 10px;
+  margin-bottom: 0;
   border: 1px solid #e9eef7;
   border-radius: 10px;
   background: #ffffff;
@@ -216,6 +233,12 @@ const visible = computed({
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.pdf-panel {
+  position: relative;
 }
 
 .panel-title {
@@ -226,15 +249,16 @@ const visible = computed({
 }
 
 .pdf-frame {
+  flex: 1 1 auto;
+  min-height: 0;
   width: 100%;
-  height: 100%;
-  min-height: 100%;
   border: none;
   border-radius: 8px;
 }
 
-.form-panel :deep(.el-form) {
-  height: calc(100% - 156px);
+.contract-form-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
   padding-right: 6px;
 }
@@ -300,24 +324,53 @@ const visible = computed({
     white-space: normal;
   }
 
-  .workspace {
-    grid-template-columns: 1fr;
-    height: calc(100vh - 250px);
-    min-height: 0;
-    max-height: 78vh;
+  .contract-workspace-split .pdf-panel {
+    min-height: 360px;
+    height: 46vh;
   }
 
-  .pdf-panel,
-  .form-panel {
-    height: 42vh;
-  }
-
-  .form-panel :deep(.el-form) {
-    height: calc(100% - 24px);
+  .contract-workspace-split .form-panel {
+    min-height: 280px;
   }
 
   .form-meta {
     grid-template-columns: 1fr;
   }
+}
+</style>
+
+<style>
+.contract-workspace-dialog.el-dialog {
+  display: flex;
+  flex-direction: column;
+  margin: 0 !important;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  border-radius: 0;
+}
+
+.contract-workspace-dialog .el-dialog__header {
+  flex-shrink: 0;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e4ebf4;
+}
+
+.contract-workspace-dialog .el-dialog__body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px;
+  box-sizing: border-box;
+}
+
+.contract-workspace-dialog .el-dialog__footer {
+  flex-shrink: 0;
+  padding: 10px 16px 12px;
+  margin: 0;
+  border-top: 1px solid #eef2f7;
 }
 </style>
