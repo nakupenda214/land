@@ -73,6 +73,41 @@
           <el-table-column prop="phase" label="期数" width="90" align="center" />
           <el-table-column prop="propertyCertificateNumber" label="不动产权证编号" min-width="170" show-overflow-tooltip />
           <el-table-column prop="contractApprovalNumber" label="合同/批文编号" min-width="170" show-overflow-tooltip />
+
+          <el-table-column label="声明汇总·建面(㎡)" align="center">
+            <el-table-column label="合同约定" width="102" align="right">
+              <template #default="{ row }">{{ formatNum(row.declaredTotals?.contractAgreedTotalBuildingArea) }}</template>
+            </el-table-column>
+            <el-table-column label="计容" width="102" align="right">
+              <template #default="{ row }">{{ formatNum(row.declaredTotals?.buildableTotalBuildingArea) }}</template>
+            </el-table-column>
+            <el-table-column label="差值" width="102" align="right">
+              <template #default="{ row }">{{ formatNum(row.declaredTotals?.differenceTotalBuildingArea) }}</template>
+            </el-table-column>
+          </el-table-column>
+          <el-table-column label="声明汇总·商业(㎡)" align="center">
+            <el-table-column label="合同约定" width="102" align="right">
+              <template #default="{ row }">{{ formatNum(row.declaredTotals?.contractAgreedCommercialArea) }}</template>
+            </el-table-column>
+            <el-table-column label="计容" width="102" align="right">
+              <template #default="{ row }">{{ formatNum(row.declaredTotals?.buildableCommercialArea) }}</template>
+            </el-table-column>
+            <el-table-column label="差值" width="102" align="right">
+              <template #default="{ row }">{{ formatNum(row.declaredTotals?.differenceCommercialArea) }}</template>
+            </el-table-column>
+          </el-table-column>
+          <el-table-column label="声明汇总·住宅(㎡)" align="center">
+            <el-table-column label="合同约定" width="102" align="right">
+              <template #default="{ row }">{{ formatNum(row.declaredTotals?.contractAgreedResidentialArea) }}</template>
+            </el-table-column>
+            <el-table-column label="计容" width="102" align="right">
+              <template #default="{ row }">{{ formatNum(row.declaredTotals?.buildableResidentialArea) }}</template>
+            </el-table-column>
+            <el-table-column label="差值" width="102" align="right">
+              <template #default="{ row }">{{ formatNum(row.declaredTotals?.differenceResidentialArea) }}</template>
+            </el-table-column>
+          </el-table-column>
+
           <el-table-column label="解析状态" width="110" align="center">
             <template #default="{ row }">
               <el-tag size="small" effect="light" :type="parseStatusTagType[row.parseStatus] || 'info'">
@@ -273,70 +308,20 @@
       :project-id="projectId"
       :file-record-id="currentAuditFileRecordId"
       :initial-file="currentAuditFile"
+      :variant="partySummaryDialogVariant"
+      :main-form-draft="partySummaryMainFormDraft"
+      @main-form-saved="onPartySummaryMainFormSaved"
     />
-
-    <el-dialog v-model="formEditVisible" title="编辑项目方实测汇总主表" width="760px" append-to-body>
-      <el-form label-position="top">
-        <el-row :gutter="12">
-          <el-col :span="6"><el-form-item label="期数"><el-input-number v-model="formEdit.phase" :min="1" controls-position="right" class="w100" /></el-form-item></el-col>
-          <el-col :span="9"><el-form-item label="不动产权证编号"><el-input v-model.trim="formEdit.propertyCertificateNumber" /></el-form-item></el-col>
-          <el-col :span="9"><el-form-item label="合同/批文编号"><el-input v-model.trim="formEdit.contractApprovalNumber" /></el-form-item></el-col>
-        </el-row>
-
-        <el-row :gutter="12">
-          <el-col :span="8"><el-form-item label="合同约定建筑面积"><el-input-number v-model="formEdit.declaredTotals.contractAgreedTotalBuildingArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="计容建筑面积"><el-input-number v-model="formEdit.declaredTotals.buildableTotalBuildingArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="建筑面积差值"><el-input-number v-model="formEdit.declaredTotals.differenceTotalBuildingArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
-        </el-row>
-
-        <el-row :gutter="12">
-          <el-col :span="8"><el-form-item label="合同约定商业面积"><el-input-number v-model="formEdit.declaredTotals.contractAgreedCommercialArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="计容商业面积"><el-input-number v-model="formEdit.declaredTotals.buildableCommercialArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="商业面积差值"><el-input-number v-model="formEdit.declaredTotals.differenceCommercialArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
-        </el-row>
-
-        <el-row :gutter="12">
-          <el-col :span="8"><el-form-item label="合同约定住宅面积"><el-input-number v-model="formEdit.declaredTotals.contractAgreedResidentialArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="计容住宅面积"><el-input-number v-model="formEdit.declaredTotals.buildableResidentialArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="住宅面积差值"><el-input-number v-model="formEdit.declaredTotals.differenceResidentialArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
-        </el-row>
-
-        <el-row :gutter="12">
-          <el-col :span="8">
-            <el-form-item label="解析状态">
-              <el-select v-model="formEdit.parseStatus" clearable class="w100">
-                <el-option label="成功" value="SUCCESS" />
-                <el-option label="失败" value="FAILED" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="是否已解析">
-              <el-select v-model="formEdit.isParsed" clearable class="w100">
-                <el-option label="已解析" :value="1" />
-                <el-option label="未解析" :value="0" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-form-item label="备注">
-          <el-input v-model.trim="formEdit.remark" type="textarea" :rows="2" maxlength="500" show-word-limit />
-        </el-form-item>
-      </el-form>
-
-      <template #footer>
-        <el-button @click="formEditVisible = false">取消</el-button>
-        <el-button type="primary" :loading="formEditLoading" @click="submitFormEdit">保存</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { computed, reactive, ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { clampTableBodyHeight, clampMainListTableHeight } from '@/composables/project-list/useElTableHeightClamp.js'
+import {
+  clampTableBodyHeight,
+  clampMainListTableHeightMultiLevel
+} from '@/composables/project-list/useElTableHeightClamp.js'
 import {
   Document,
   Files,
@@ -347,11 +332,7 @@ import {
   DArrowRight,
   Grid
 } from '@element-plus/icons-vue'
-import {
-  queryProjectPartySummaryForms,
-  queryProjectPartySummaryRows,
-  updateProjectPartySummaryForm
-} from '@/services/project.service'
+import { queryProjectPartySummaryForms, queryProjectPartySummaryRows } from '@/services/project.service'
 import { useSummaryTableHorizontalScroll } from '@/composables/project-list/useSummaryTableHorizontalScroll'
 import ProjectPartySummaryAuditDialog from '@/components/project-list/ProjectPartySummaryAuditDialog.vue'
 
@@ -373,28 +354,11 @@ const currentAuditFileRecordId = ref('')
 const currentAuditFile = ref(null)
 const activeFileRecordId = ref('')
 
-const formEditVisible = ref(false)
-const formEditLoading = ref(false)
-const formEdit = reactive({
-  id: null,
-  phase: null,
-  propertyCertificateNumber: '',
-  contractApprovalNumber: '',
-  isParsed: null,
-  parseStatus: '',
-  remark: '',
-  declaredTotals: {
-    contractAgreedTotalBuildingArea: null,
-    buildableTotalBuildingArea: null,
-    differenceTotalBuildingArea: null,
-    contractAgreedCommercialArea: null,
-    buildableCommercialArea: null,
-    differenceCommercialArea: null,
-    contractAgreedResidentialArea: null,
-    buildableResidentialArea: null,
-    differenceResidentialArea: null
-  }
-})
+const PARTY_AUDIT_VARIANT_AUDIT = 'audit'
+const PARTY_AUDIT_VARIANT_MAIN_FORM = 'mainFormEdit'
+
+const partySummaryDialogVariant = ref(PARTY_AUDIT_VARIANT_AUDIT)
+const partySummaryMainFormDraft = ref(null)
 
 const parseStatusText = {
   SUCCESS: '成功',
@@ -451,7 +415,7 @@ function measureAllPartySummaryCaps() {
   measureRowsTableCap()
 }
 
-const formsTableHeight = computed(() => clampMainListTableHeight(forms.value.length))
+const formsTableHeight = computed(() => clampMainListTableHeightMultiLevel(forms.value.length))
 const rowsTableHeight = computed(() => clampTableBodyHeight(rowsTableCap.value, rows.value.length))
 
 const activeFormSelectionText = computed(() => {
@@ -513,12 +477,6 @@ const formatNum = (num) => {
   if (num === null || num === undefined || num === '') return '-'
   const value = Number(num)
   return Number.isNaN(value) ? '-' : value.toFixed(2)
-}
-
-const toNullableNumber = (v) => {
-  if (v === '' || v === null || v === undefined) return null
-  const n = Number(v)
-  return Number.isNaN(n) ? null : n
 }
 
 const buildFormPayload = () => ({
@@ -692,6 +650,8 @@ const handleFormRowClick = (row) => {
 }
 
 const openAudit = (row) => {
+  partySummaryDialogVariant.value = PARTY_AUDIT_VARIANT_AUDIT
+  partySummaryMainFormDraft.value = null
   currentAuditFileRecordId.value = String(row?.fileRecordId || '')
   currentAuditFile.value = {
     id: row?.fileRecordId,
@@ -703,68 +663,39 @@ const openAudit = (row) => {
 }
 
 const openFormEdit = (row) => {
-  formEdit.id = row?.id || null
-  formEdit.phase = row?.phase ?? null
-  formEdit.propertyCertificateNumber = row?.propertyCertificateNumber || ''
-  formEdit.contractApprovalNumber = row?.contractApprovalNumber || ''
-  formEdit.isParsed = row?.isParsed ?? null
-  formEdit.parseStatus = row?.parseStatus || ''
-  formEdit.remark = row?.remark || ''
-  formEdit.declaredTotals = {
-    contractAgreedTotalBuildingArea: row?.declaredTotals?.contractAgreedTotalBuildingArea ?? null,
-    buildableTotalBuildingArea: row?.declaredTotals?.buildableTotalBuildingArea ?? null,
-    differenceTotalBuildingArea: row?.declaredTotals?.differenceTotalBuildingArea ?? null,
-    contractAgreedCommercialArea: row?.declaredTotals?.contractAgreedCommercialArea ?? null,
-    buildableCommercialArea: row?.declaredTotals?.buildableCommercialArea ?? null,
-    differenceCommercialArea: row?.declaredTotals?.differenceCommercialArea ?? null,
-    contractAgreedResidentialArea: row?.declaredTotals?.contractAgreedResidentialArea ?? null,
-    buildableResidentialArea: row?.declaredTotals?.buildableResidentialArea ?? null,
-    differenceResidentialArea: row?.declaredTotals?.differenceResidentialArea ?? null
+  partySummaryDialogVariant.value = PARTY_AUDIT_VARIANT_MAIN_FORM
+  partySummaryMainFormDraft.value = {
+    id: row?.id ?? null,
+    phase: row?.phase ?? null,
+    propertyCertificateNumber: row?.propertyCertificateNumber || '',
+    contractApprovalNumber: row?.contractApprovalNumber || '',
+    isParsed: row?.isParsed ?? null,
+    parseStatus: row?.parseStatus || '',
+    remark: row?.remark || '',
+    declaredTotals: {
+      contractAgreedTotalBuildingArea: row?.declaredTotals?.contractAgreedTotalBuildingArea ?? null,
+      buildableTotalBuildingArea: row?.declaredTotals?.buildableTotalBuildingArea ?? null,
+      differenceTotalBuildingArea: row?.declaredTotals?.differenceTotalBuildingArea ?? null,
+      contractAgreedCommercialArea: row?.declaredTotals?.contractAgreedCommercialArea ?? null,
+      buildableCommercialArea: row?.declaredTotals?.buildableCommercialArea ?? null,
+      differenceCommercialArea: row?.declaredTotals?.differenceCommercialArea ?? null,
+      contractAgreedResidentialArea: row?.declaredTotals?.contractAgreedResidentialArea ?? null,
+      buildableResidentialArea: row?.declaredTotals?.buildableResidentialArea ?? null,
+      differenceResidentialArea: row?.declaredTotals?.differenceResidentialArea ?? null
+    }
   }
-  formEditVisible.value = true
+  currentAuditFileRecordId.value = String(row?.fileRecordId || '')
+  currentAuditFile.value = {
+    id: row?.fileRecordId,
+    fileRecordId: row?.fileRecordId,
+    originalName: `项目方实测汇总表-${row?.fileRecordId || '-'}`,
+    fileType: 'XLSX'
+  }
+  auditDialogVisible.value = true
 }
 
-const submitFormEdit = async () => {
-  if (!formEdit.id) {
-    ElMessage.warning('缺少主表ID，无法更新')
-    return
-  }
-  formEditLoading.value = true
-  try {
-    const payload = {
-      id: Number(formEdit.id),
-      phase: toNullableNumber(formEdit.phase),
-      propertyCertificateNumber: formEdit.propertyCertificateNumber || null,
-      contractApprovalNumber: formEdit.contractApprovalNumber || null,
-      isParsed: toNullableNumber(formEdit.isParsed),
-      parseStatus: formEdit.parseStatus || null,
-      remark: formEdit.remark || null,
-      declaredTotals: {
-        contractAgreedTotalBuildingArea: toNullableNumber(formEdit.declaredTotals.contractAgreedTotalBuildingArea),
-        buildableTotalBuildingArea: toNullableNumber(formEdit.declaredTotals.buildableTotalBuildingArea),
-        differenceTotalBuildingArea: toNullableNumber(formEdit.declaredTotals.differenceTotalBuildingArea),
-        contractAgreedCommercialArea: toNullableNumber(formEdit.declaredTotals.contractAgreedCommercialArea),
-        buildableCommercialArea: toNullableNumber(formEdit.declaredTotals.buildableCommercialArea),
-        differenceCommercialArea: toNullableNumber(formEdit.declaredTotals.differenceCommercialArea),
-        contractAgreedResidentialArea: toNullableNumber(formEdit.declaredTotals.contractAgreedResidentialArea),
-        buildableResidentialArea: toNullableNumber(formEdit.declaredTotals.buildableResidentialArea),
-        differenceResidentialArea: toNullableNumber(formEdit.declaredTotals.differenceResidentialArea)
-      }
-    }
-    const res = await updateProjectPartySummaryForm(payload)
-    if (res.data?.code !== 200) {
-      ElMessage.error(res.data?.msg || '更新失败')
-      return
-    }
-    ElMessage.success(res.data?.msg || '更新成功')
-    formEditVisible.value = false
-    await fetchForms()
-  } catch (error) {
-    console.error('更新项目方汇总主表失败:', error)
-    ElMessage.error('更新失败，请稍后重试')
-  } finally {
-    formEditLoading.value = false
-  }
+const onPartySummaryMainFormSaved = () => {
+  fetchForms()
 }
 
 watch(

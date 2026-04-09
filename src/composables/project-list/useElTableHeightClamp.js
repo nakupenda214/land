@@ -30,6 +30,28 @@ export function clampMainListTableHeight(rowCount) {
 }
 
 /**
+ * 主表含 Element Plus 多级表头（两行 thead）时，单行 {@link EL_TABLE_HEADER_H} 会低估总高度，
+ * 导致 max-height 过小、表体被裁切。本函数按双行表头估算，并与 {@link MAIN_LIST_TABLE_VISIBLE_ROWS} 封顶。
+ */
+export function mainListTableMaxHeightPxMultiLevel(visibleRows = MAIN_LIST_TABLE_VISIBLE_ROWS) {
+  const headerH = EL_TABLE_HEADER_H * 2
+  return headerH + visibleRows * EL_TABLE_ROW_H + 4
+}
+
+export function clampMainListTableHeightMultiLevel(rowCount) {
+  const cap = mainListTableMaxHeightPxMultiLevel()
+  if (!cap || cap < 40) return 260
+  const headerH = EL_TABLE_HEADER_H * 2
+  if (rowCount <= 0) {
+    return Math.min(cap, Math.max(EL_TABLE_EMPTY_MIN, headerH + 72))
+  }
+  // 多级表头下列高、标签单元格常高于 EL_TABLE_ROW_H，额外留出余量避免表体被裁切
+  const natural =
+    headerH + rowCount * EL_TABLE_ROW_H + 4 + MAIN_LIST_TABLE_NATURAL_SLACK_PX + 28
+  return Math.min(cap, natural)
+}
+
+/**
  * @param {number} capPx 表格外层可用高度（像素）
  * @param {number} rowCount 数据行数
  */

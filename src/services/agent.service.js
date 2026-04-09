@@ -1,19 +1,32 @@
 ﻿import axios from 'axios'
 
+/** 将 SSE kind 统一为小写字符串。 */
+function normalizeStreamKind(payloadData) {
+  if (!payloadData || typeof payloadData !== 'object') return ''
+  const raw = payloadData.kind
+  if (raw !== undefined && raw !== null && String(raw).trim() !== '') {
+    return String(raw).toLowerCase()
+  }
+  return ''
+}
+
 export const chatAgent = (payload) =>
   axios.post('/api/agent/chat', payload)
 
+/**
+ * 与后端 AgentStreamEvent.Kind 对齐：ingress（DTO 预留）、llm、tool_call、tool_result、final_answer、error。
+ * 当前服务端流式首包为 kind=llm 且常带 payload.phase=start，不单独发 ingress。
+ */
 export const chatAgentStream = async ({
   payload,
   signal,
-  onMeta,
-  onDelta,
-  onDone,
-  onStage,
+  onFinal,
   onToolCall,
   onToolResult,
-  onGuardrail,
-  onEvent
+  onEvent,
+  onIngress,
+  onLlm,
+  onError
 }) => {
   const response = await fetch('/api/agent/chat/stream', {
     method: 'POST',
@@ -43,18 +56,36 @@ export const chatAgentStream = async ({
     if (!dataText) return
     try {
       const payloadData = JSON.parse(dataText)
-      const kind = String(payloadData?.kind || '').toLowerCase()
+      const kind = normalizeStreamKind(payloadData)
+
+      // 总线：原始事件始终透出，便于调试或自定义处理
       onEvent?.(payloadData)
-      if (kind === 'meta') onMeta?.(payloadData)
-      if (kind === 'delta') onDelta?.(payloadData)
-      if (kind === 'done') onDone?.(payloadData)
-      if (kind === 'stage') onStage?.(payloadData)
-      if (kind === 'progress') onStage?.(payloadData)
-      if (kind === 'tool_call') onToolCall?.(payloadData)
-      if (kind === 'tool_result') onToolResult?.(payloadData)
-      if (kind === 'guardrail') onGuardrail?.(payloadData)
+
+      // 硬切换：仅分发新协议事件
+      switch (kind) {
+        case 'ingress':
+          onIngress?.(payloadData)
+          break
+        case 'llm':
+          onLlm?.(payloadData)
+          break
+        case 'tool_call':
+          onToolCall?.(payloadData)
+          break
+        case 'tool_result':
+          onToolResult?.(payloadData)
+          break
+        case 'final_answer':
+          onFinal?.(payloadData)
+          break
+        case 'error':
+          onError?.(payloadData)
+          break
+        default:
+          break
+      }
     } catch {
-      // ignore malformed chunk
+      // 忽略损坏分片
     }
   }
 

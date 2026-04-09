@@ -4,7 +4,6 @@
       <div class="comparison-head">
         <div class="comparison-head__title-wrap">
           <div class="comparison-head__title">面积核算对比</div>
-          <div class="comparison-head__sub">来源于后端三组口径数据（系统计算 / 项目方声明 / 规划复核）</div>
         </div>
         <el-checkbox-group v-model="checkedGroupKeys" class="comparison-group-picker">
           <el-checkbox v-for="group in groupMeta" :key="group.key" :label="group.key">
@@ -130,12 +129,6 @@ const displayGroups = computed(() =>
   font-size: 17px;
   font-weight: 700;
   color: #0f172a;
-}
-
-.comparison-head__sub {
-  margin-top: 4px;
-  font-size: 12px;
-  color: #64748b;
 }
 
 .comparison-group-picker {

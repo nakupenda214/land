@@ -193,74 +193,16 @@ const summarizeArgs = (value) => {
   }
 }
 
-const extractFunctionCallBlocks = (text) => {
-  if (!text) return { visibleText: '', calls: [], carry: '' }
-  const calls = []
-  const pattern = /<\|FunctionCallBegin\|>([\s\S]*?)<\|FunctionCallEnd\|>/g
-  let visible = text
-  visible = visible.replace(pattern, (_, payload) => {
-    calls.push(payload)
-    return ''
-  })
-  const beginIndex = visible.lastIndexOf('<|FunctionCallBegin|>')
-  if (beginIndex !== -1) {
-    return {
-      visibleText: visible.slice(0, beginIndex),
-      calls,
-      carry: visible.slice(beginIndex)
-    }
+/** 终态正文以 final_answer 事件为准；优先 text，其次 payload。 */
+const extractFinalAnswerText = (evt) => {
+  if (!evt) return ''
+  if (typeof evt.text === 'string' && evt.text.length) return evt.text
+  const p = evt.payload
+  if (p && typeof p === 'object') {
+    if (typeof p.text === 'string' && p.text.length) return p.text
+    if (typeof p.answer === 'string' && p.answer.length) return p.answer
   }
-  return { visibleText: visible, calls, carry: '' }
-}
-
-const parseFunctionCallPayload = (payload) => {
-  if (!payload) return null
-  try {
-    const parsed = JSON.parse(payload)
-    return {
-      name: parsed?.name || parsed?.toolName || 'unknown',
-      args: parsed?.parameters || parsed?.args || {}
-    }
-  } catch {
-    return { name: 'unknown', args: payload }
-  }
-}
-
-const getMetaText = (meta) => {
-  const candidates = [
-    meta?.title,
-    meta?.phase,
-    meta?.status,
-    meta?.message,
-    meta?.content,
-    meta?.text
-  ]
-  const hit = candidates.find((x) => typeof x === 'string' && x.trim())
-  return hit ? hit.trim() : '模型正在分析问题...'
-}
-
-const mapStageLabel = (stage) => {
-  const key = String(stage || '').toLowerCase()
-  if (key.includes('understand') || key.includes('analy')) return '理解问题'
-  if (key.includes('retrieve') || key.includes('search')) return '检索信息'
-  if (key.includes('tool')) return '调用工具'
-  if (key.includes('answer') || key.includes('compose')) return '组织答案'
-  if (key.includes('done') || key.includes('finish')) return '完成'
-  return stage || '阶段更新'
-}
-
-const resolveStageText = (stageEvt) => {
-  const direct = [stageEvt?.text, stageEvt?.message, stageEvt?.title].find(
-    (x) => typeof x === 'string' && x.trim()
-  )
-  if (direct) return direct.trim()
-  if (stageEvt?.payload && typeof stageEvt.payload === 'object') {
-    const payloadText = [stageEvt.payload.text, stageEvt.payload.message, stageEvt.payload.title].find(
-      (x) => typeof x === 'string' && x.trim()
-    )
-    if (payloadText) return payloadText.trim()
-  }
-  return mapStageLabel(stageEvt?.stage || stageEvt?.payload?.stage)
+  return ''
 }
 
 const extractSyncAnswer = (res) => {
@@ -294,15 +236,19 @@ const handleSend = async () => {
 
   sending.value = true
   inputText.value = ''
-  const userMsg = makeMessage('user', text)
-  const assistantMsg = makeMessage('assistant', '')
-  messages.value.push(userMsg, assistantMsg)
-  appendReasoningEvent(assistantMsg, '开始处理问题，正在建立流式连接...', {
-    level: 'running',
-    typeLabel: '阶段'
-  })
+  messages.value.push(makeMessage('user', text), makeMessage('assistant', ''))
+  // 关键：后续流式更新必须写入响应式数组中的对象引用，否则 UI 可能只在最后一次重渲染时整体出现。
+  const assistantMsg = messages.value[messages.value.length - 1]
   await scrollToBottom()
-  let callCarry = ''
+  /** CC-STREAM-PROTOCOL：同轮内连续重复的工具/阶段日志只保留一条，压缩噪声 */
+  let lastReasoningDedup = ''
+  const appendDedup = (msg, body, opts) => {
+    if (!body || !String(body).trim()) return
+    const key = `${opts.typeLabel || ''}|${String(body).trim()}`
+    if (key === lastReasoningDedup) return
+    lastReasoningDedup = key
+    appendReasoningEvent(msg, String(body).trim(), opts)
+  }
 
   try {
     streamAbortController = new AbortController()
@@ -310,73 +256,51 @@ const handleSend = async () => {
     await chatAgentStream({
       payload: { sessionId: sessionId.value, message: text },
       signal: streamAbortController.signal,
-      onMeta: (meta) => {
-        appendReasoningEvent(assistantMsg, getMetaText(meta), {
-          level: 'running',
-          typeLabel: '阶段'
-        })
-        const sid = String(meta?.sessionId || '').trim()
-        if (sid) {
-          sessionId.value = sid
-          localStorage.setItem(SESSION_KEY, sid)
-        }
-      },
-      onDelta: async (delta) => {
-        const chunk = String(delta?.text || '')
-        const merged = `${callCarry}${chunk}`
-        const { visibleText, calls, carry } = extractFunctionCallBlocks(merged)
-        callCarry = carry
-        if (visibleText) assistantMsg.content += visibleText
-        for (const rawPayload of calls) {
-          const call = parseFunctionCallPayload(rawPayload)
-          appendReasoningEvent(
-            assistantMsg,
-            `调用工具 ${call.name}，参数：${summarizeArgs(call.args)}`,
-            { level: 'running', typeLabel: '工具调用' }
-          )
-        }
-        await scrollToBottom()
-      },
-      onStage: (stageEvt) => {
-        appendReasoningEvent(assistantMsg, resolveStageText(stageEvt), {
-          level: 'running',
-          typeLabel: '阶段'
+      onLlm: (evt) => {
+        const piece = String(evt?.text || '').trim()
+        if (!piece) return
+        const phase = evt?.payload && typeof evt.payload === 'object'
+          ? (evt.payload.phase ?? evt.payload.stage)
+          : null
+        const isStreamStart = phase === 'start' || phase === 'stream.start'
+        appendDedup(assistantMsg, piece, {
+          level: isStreamStart ? 'info' : 'running',
+          typeLabel: isStreamStart ? '接入' : '推理'
         })
       },
       onToolCall: (evt) => {
         const payload = evt?.payload && typeof evt.payload === 'object' ? evt.payload : {}
         const toolName = evt?.toolName || evt?.name || payload.toolName || 'unknown'
-        appendReasoningEvent(
+        const stepHint = payload.stepId != null ? ` #${payload.stepId}` : ''
+        appendDedup(
           assistantMsg,
-          `调用工具 ${toolName}，参数：${summarizeArgs(evt?.args ?? evt?.parameters ?? payload.args)}`,
+          `调用工具 ${toolName}${stepHint}，参数：${summarizeArgs(evt?.args ?? evt?.parameters ?? payload.args)}`,
           { level: 'running', typeLabel: '工具调用' }
         )
       },
       onToolResult: (evt) => {
         const payload = evt?.payload && typeof evt.payload === 'object' ? evt.payload : {}
         const toolName = evt?.toolName || evt?.name || payload.toolName || 'unknown'
-        const brief = evt?.resultSummary || evt?.summary || payload.resultSummary || summarizeArgs(evt?.result ?? payload.result)
-        appendReasoningEvent(
-          assistantMsg,
-          `工具 ${toolName} 返回：${brief}`,
-          { level: 'done', typeLabel: '工具结果' }
-        )
-      },
-      onGuardrail: (evt) => {
-        const action = evt?.action || '已应用'
-        const rule = evt?.rule || evt?.name || '安全规则'
-        appendReasoningEvent(assistantMsg, `${rule}：${action}`, {
-          level: 'warning',
-          typeLabel: '安全策略'
-        })
-      },
-      onDone: (done) => {
-        appendReasoningEvent(assistantMsg, '回答生成完成。', {
+        const stepHint = payload.stepId != null ? ` #${payload.stepId}` : ''
+        const brief =
+          evt?.resultSummary || evt?.summary || payload.resultSummary || summarizeArgs(evt?.result ?? payload.result)
+        appendDedup(assistantMsg, `工具 ${toolName}${stepHint} 返回：${brief}`, {
           level: 'done',
-          typeLabel: '阶段'
+          typeLabel: '工具结果'
         })
-        if (done?.text && !assistantMsg.content) assistantMsg.content = String(done.text)
-        const sid = String(done?.sessionId || '').trim()
+      },
+      onError: (evt) => {
+        const msg = String(
+          evt?.text || evt?.message || evt?.payload?.message || evt?.payload?.error || '流式发生错误'
+        ).trim()
+        if (msg) appendDedup(assistantMsg, msg, { level: 'error', typeLabel: '错误' })
+        const ans = extractFinalAnswerText(evt)
+        if (ans) assistantMsg.content = ans
+      },
+      onFinal: (finalEvt) => {
+        const finalText = extractFinalAnswerText(finalEvt)
+        if (finalText) assistantMsg.content = finalText
+        const sid = String(finalEvt?.sessionId || '').trim()
         if (sid) {
           sessionId.value = sid
           localStorage.setItem(SESSION_KEY, sid)
