@@ -3,6 +3,9 @@ import { reactive, ref } from 'vue'
 export function useCalibrationState() {
   const roomInfoLoading = ref(false)
   const roomInfoData = ref([])
+  const roomInfoTotal = ref(0)
+  const roomInfoPageNum = ref(1)
+  const roomInfoPageSize = ref(50)
   const roomSumInfo = reactive({
     buildingAreaSum: '0.00',
     innerAreaSum: '0.00',
@@ -34,6 +37,9 @@ export function useCalibrationState() {
   return {
     roomInfoLoading,
     roomInfoData,
+    roomInfoTotal,
+    roomInfoPageNum,
+    roomInfoPageSize,
     roomSumInfo,
     showCalibration,
     calibrationLoading,

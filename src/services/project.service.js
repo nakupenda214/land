@@ -1,6 +1,25 @@
 import axios from 'axios'
 
-export const getProjectList = () => axios.get('/api/project/list')
+export const getProjectList = async () => {
+  const res = await axios.post('/api/project/projects/query', {
+    pageNum: 1,
+    pageSize: 500,
+    sortField: 'updateTime',
+    sortDirection: 'desc'
+  })
+  const code = Number(res?.data?.code)
+  if (code !== 200) {
+    return res
+  }
+  const records = Array.isArray(res?.data?.data?.records) ? res.data.data.records : []
+  return {
+    ...res,
+    data: {
+      ...res.data,
+      data: records
+    }
+  }
+}
 
 export const queryProjects = (payload) =>
   axios.post('/api/project/projects/query', payload)
@@ -21,6 +40,9 @@ export const queryProjectAreaComparison = (projectId) =>
 
 export const getSurveyRoomInfo = (projectId, reportId) =>
   axios.get(`/api/project/${projectId}/survey-reports/${reportId}/room-info`)
+
+/** 户室分页查询（审核页懒加载） */
+export const queryRoomInfos = (payload) => axios.post('/api/project/room-info/query', payload)
 
 export const querySurveyReports = (payload) =>
   axios.post('/api/project/survey-reports/query', payload)

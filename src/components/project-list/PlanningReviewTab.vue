@@ -80,7 +80,6 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="fileRecordId" label="文件ID" width="120" align="center" />
           <el-table-column label="操作" width="80" align="center" fixed="right">
             <template #default="{ row }">
               <el-button class="op-btn audit-btn" type="primary" size="small" plain @click.stop="openAudit(row)">
@@ -190,7 +189,6 @@
           scrollbar-always-on
         >
           <el-table-column type="index" width="52" label="序号" align="center" fixed="left" />
-          <el-table-column prop="fileRecordId" label="文件ID" width="120" align="center" fixed="left" />
           <el-table-column prop="engineeringProject" label="工程项目/楼栋" min-width="150" show-overflow-tooltip />
           <el-table-column label="面积类别" width="180" align="center">
             <template #default="{ row }">{{ areaCategoryTextMap[row.areaCategory] || row.areaCategory || '-' }}</template>

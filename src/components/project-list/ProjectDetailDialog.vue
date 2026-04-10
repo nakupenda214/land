@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <el-dialog
     v-model="visible"
     title="楼栋实测明细"
@@ -543,26 +543,28 @@ onBeforeUnmount(() => {
 }
 
 .table-shell {
-  border: 1px solid #e6ebf3;
-  border-radius: 12px;
+  border: 1px solid var(--home-soft-border, #dbe4ef);
+  border-radius: 16px;
   background: #fff;
   overflow: hidden;
   margin-top: 14px;
+  box-shadow: var(--home-soft-shadow, 0 14px 36px -24px rgba(15, 23, 42, 0.2));
 }
 
 .table-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #edf1f7;
-  padding: 10px 12px;
-  background: #fbfcff;
+  border-bottom: 1px solid rgba(219, 228, 239, 0.9);
+  padding: 12px 14px;
+  background: linear-gradient(180deg, var(--home-header-grad-start, #f8fbff) 0%, var(--home-header-grad-end, #f1f6fc) 100%);
 }
 
 .table-toolbar .title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1f2937;
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: 0.2px;
 }
 
 .toolbar-right {
@@ -573,39 +575,57 @@ onBeforeUnmount(() => {
 
 .table-toolbar .count {
   font-size: 12px;
-  color: #6b7280;
+  color: #64748b;
 }
 
 :deep(.jump-btn.el-button) {
-  border: 1px solid #c8ddf1;
-  background: #e8f2fc;
-  color: #1f4e79;
-  border-radius: 8px;
-  font-weight: 600;
-  padding: 6px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.9);
+  color: #0f172a;
+  border-radius: 10px;
+  font-weight: 700;
+  height: 32px;
+  padding: 0 14px;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease, background-color 0.12s ease;
 }
 
 :deep(.jump-btn.el-button:hover) {
-  border-color: #b8d3ec;
-  background: #d7e7f8;
-  color: #163a5a;
+  border-color: rgba(148, 163, 184, 0.5);
+  background: #ffffff;
+  box-shadow: 0 12px 26px -22px rgba(15, 23, 42, 0.32);
+  transform: translateY(-1px);
 }
 
 .table-container {
   height: 500px;
   min-height: 280px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.7) 0%, rgba(241, 245, 249, 0.55) 100%);
+}
+
+.table-container :deep(.el-table) {
+  background: transparent;
+}
+
+.table-container :deep(.el-table__header-wrapper th.el-table__cell) {
+  background: rgba(241, 246, 252, 0.95);
+  color: #445468;
+  font-weight: 700;
+}
+
+.table-container :deep(.el-table__row:hover > td.el-table__cell) {
+  background: rgba(240, 247, 255, 0.9) !important;
 }
 
 .resize-handle-bottom {
   height: 8px;
   cursor: ns-resize;
-  background: linear-gradient(180deg, #f3f5f9 0%, #e9edf4 100%);
-  border-top: 1px solid #edf1f7;
+  background: linear-gradient(180deg, rgba(241, 246, 252, 0.9) 0%, rgba(233, 237, 244, 0.95) 100%);
+  border-top: 1px solid rgba(219, 228, 239, 0.9);
 }
 
 .red-text {
-  color: #f56c6c;
-  font-weight: 600;
+  color: #b42318;
+  font-weight: 700;
 }
 
 @media (max-width: 1280px) {

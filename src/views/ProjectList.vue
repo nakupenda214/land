@@ -1,5 +1,5 @@
-﻿<template>
-  <div class="archive-container ">
+<template>
+  <div class="archive-container">
     
     <ProjectFilterBar
       v-model="filterProject"
@@ -25,7 +25,7 @@
             :initial-archive-id="initialArchiveId"
             :pending-audit-file-id="pendingAuditFileId"
             :active="activeTab === 'archives'"
-            @audit-consumed="pendingAuditFileId = ''"
+            @audit-consumed="handlePendingAuditConsumed"
           />
         </el-tab-pane>
 
@@ -88,7 +88,7 @@
         <el-tab-pane name="planningReview" class="no-print">
           <template #label>
             <span class="custom-tab-label">
-              <el-icon><Document /></el-icon> 规划复核表
+              <el-icon><DocumentChecked /></el-icon> 规划复核表
             </span>
           </template>
           <PlanningReviewTab
@@ -100,7 +100,7 @@
         <el-tab-pane name="projectPartySummary" class="no-print">
           <template #label>
             <span class="custom-tab-label">
-              <el-icon><Document /></el-icon> 项目方汇总表
+              <el-icon><DocumentCopy /></el-icon> 项目方汇总表
             </span>
           </template>
           <ProjectPartySummaryTab
@@ -112,7 +112,7 @@
         <el-tab-pane name="operationAudit" class="no-print">
           <template #label>
             <span class="custom-tab-label">
-              <el-icon><Tickets /></el-icon> 审计日志
+              <el-icon><List /></el-icon> 审计日志
             </span>
           </template>
           <OperationAuditTab
@@ -125,7 +125,7 @@
         <el-tab-pane name="projectEdit" class="no-print">
           <template #label>
             <span class="custom-tab-label">
-              <el-icon><Document /></el-icon> 项目信息更新
+              <el-icon><EditPen /></el-icon> 项目信息更新
             </span>
           </template>
           <ProjectEditForm
@@ -139,6 +139,7 @@
         </el-tab-pane>
       </el-tabs>
     </div>
+
     <PrintSummaryBlock
       :is-printing="isPrinting"
       :current-project-info="currentProjectInfo"
@@ -237,7 +238,7 @@
 <script setup>
 import { ref, onMounted, computed, watch , onUnmounted, nextTick} from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { DataAnalysis, Document, Tickets } from '@element-plus/icons-vue'
+import { DataAnalysis, DocumentChecked, DocumentCopy, Tickets, FolderOpened, Location, List, EditPen } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { createProject } from '@/services/project.service'
 
@@ -266,8 +267,6 @@ import { useUnknownUsagePolicy } from '@/composables/project-list/useUnknownUsag
 import { useProjectFileCollections } from '@/composables/project-list/useProjectFileCollections'
 import { useProjectExport } from '@/composables/project-list/useProjectExport'
 import { useProjectDetailDialog } from '@/composables/project-list/useProjectDetailDialog'
-
-import { FolderOpened, Location } from '@element-plus/icons-vue'
 
 
 
@@ -299,7 +298,7 @@ onUnmounted(() => {
 })
 
 // 页面状态
-const activeTab = ref('summary')
+const activeTab = ref('archives')
 const showCreateProjectDialog = ref(false)
 const createProjectLoading = ref(false)
 const newProjectForm = ref({
@@ -352,6 +351,39 @@ const {
   fetchProjects: fetchProjectList,
   fetchProjectDetail
 } = useProjectSelector({ fetchProjectData, fetchSurveyReports })
+
+const handlePendingAuditConsumed = () => {
+  pendingAuditFileId.value = ''
+  const q = { ...route.query }
+  if (q.openAuditFileId) {
+    delete q.openAuditFileId
+    router.replace({ query: q })
+  }
+}
+
+watch(
+  () => ({
+    openFid: route.query.openAuditFileId,
+    qPid: route.query.projectId,
+    filterPid: filterProject.value,
+    cid: currentProjectInfo.id
+  }),
+  async ({ openFid, qPid, filterPid, cid }) => {
+    const fid = String(openFid || '')
+    if (!fid) return
+    const expectPid = String(qPid || '')
+    if (!expectPid || String(filterPid) !== expectPid) return
+    if (!cid || String(cid) !== expectPid) return
+    activeTab.value = 'archives'
+    await nextTick()
+    pendingAuditFileId.value = fid
+    const q = { ...route.query }
+    delete q.openAuditFileId
+    await router.replace({ query: q })
+  },
+  { flush: 'post' }
+)
+
 const {
   roomSumInfo,
   detailDialogVisible,
@@ -643,8 +675,10 @@ onMounted(async () => {
   if (initialReturnTab.value && ['summary', 'contractLandEdit', 'projectEdit', 'archives', 'planningReview', 'projectPartySummary', 'operationAudit'].includes(initialReturnTab.value)) {
     activeTab.value = initialReturnTab.value
     initialReturnTab.value = ''
+  } else if (String(route.query.openAuditFileId || '').trim()) {
+    activeTab.value = 'archives'
   } else {
-    activeTab.value = 'summary'
+    activeTab.value = 'archives'
   }
 
   // B. 决定选中哪个项目

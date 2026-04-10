@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { downloadGridFsFile } from '@/services/file.service'
+import { queryRoomInfos } from '@/services/project.service'
 
 export function useCalibrationViewer({
   currentProject,
@@ -10,6 +11,9 @@ export function useCalibrationViewer({
   calibrationLoading,
   roomInfoLoading,
   roomInfoData,
+  roomInfoTotal,
+  roomInfoPageNum,
+  roomInfoPageSize,
   roomSumInfo,
   auditSummaryData,
   usageCategoryMap
@@ -119,6 +123,8 @@ export function useCalibrationViewer({
       roomInfoSharedAreaSumFromOcr: '0.00'
     })
     roomInfoData.value = []
+    if (roomInfoTotal) roomInfoTotal.value = 0
+    if (roomInfoPageNum) roomInfoPageNum.value = 1
   }
 
   const openCalibration = async (row) => {
@@ -207,36 +213,79 @@ export function useCalibrationViewer({
           return
         }
 
+        if (roomInfoPageNum) roomInfoPageNum.value = 1
+
         roomInfoLoading.value = true
         try {
-          const roomRes = await axios.get(
-            `/api/project/${currentProject.value}/survey-reports/${realSurveyReportId.value}/room-info`
-          )
-          if (roomRes.data.code === 200 && Array.isArray(roomRes.data.data)) {
-            roomInfoData.value = roomRes.data.data.map((item) => ({
+          const pid = Number(currentProject.value)
+          const sid = Number(realSurveyReportId.value)
+          const pageSize = Number(roomInfoPageSize?.value || 50)
+          let page = 1
+
+          let roomRes
+          let body
+          let records
+          let total
+
+          for (let guard = 0; guard < 8; guard++) {
+            roomRes = await queryRoomInfos({
+              projectId: pid,
+              surveyReportInfoId: sid,
+              pageNum: page,
+              pageSize,
+              sortField: 'id',
+              sortDirection: 'asc'
+            })
+            if (roomRes.data.code !== 200) {
+              roomInfoData.value = []
+              if (roomInfoTotal) roomInfoTotal.value = 0
+              ElMessage.warning('暂无户室面积数据')
+              break
+            }
+            body = roomRes.data.data || {}
+            records = Array.isArray(body.records) ? body.records : []
+            total = Number(body.total ?? 0)
+            if (records.length > 0 || total === 0 || page <= 1) {
+              break
+            }
+            page -= 1
+          }
+
+          if (roomRes.data.code === 200) {
+            if (roomInfoPageNum && page !== roomInfoPageNum.value) {
+              roomInfoPageNum.value = page
+            }
+            if (roomInfoTotal) {
+              roomInfoTotal.value = total
+            }
+            roomInfoData.value = records.map((item) => ({
               id: item.id,
               roomLevel: item.roomLevel || '-',
               roomNumber: item.roomNumber || '-',
-              buildingArea: (item.buildingArea || 0).toFixed(2),
-              innerArea: (item.innerArea || 0).toFixed(2),
-              balconyArea: (item.balconyArea || 0).toFixed(2),
-              sharedArea: (item.sharedArea || 0).toFixed(2),
-              isCalculate: item.isCalculate || 0,
+              buildingArea: Number(item.buildingArea || 0).toFixed(2),
+              innerArea: Number(item.innerArea || 0).toFixed(2),
+              balconyArea: Number(item.balconyArea || 0).toFixed(2),
+              sharedArea: Number(item.sharedArea || 0).toFixed(2),
+              isCalculate: Number(item.isCalculate ?? 0),
               usageCategory: usageCategoryMap[item.usageCategory] || '未知',
               roomUsage: item.roomUsage || '-',
-              floorAreaType: item.floorAreaType === 'BUILDABLE' ? '计容' : '不计容'
+              floorAreaType:
+                item.floorAreaType === 'BUILDABLE'
+                  ? '计容'
+                  : item.floorAreaType === 'NON_BUILDABLE'
+                    ? '不计容'
+                    : '未知',
+              remark: item.remark || ''
             }))
 
             if (!auditSummaryData.roomInfoBuildingAreaSum && roomInfoData.value.length > 0) {
               const buildingAreaTotal = roomInfoData.value.reduce((sum, item) => sum + Number(item.buildingArea), 0)
               auditSummaryData.roomInfoBuildingAreaSum = buildingAreaTotal.toFixed(2)
             }
-          } else {
-            roomInfoData.value = []
-            ElMessage.warning('暂无户室面积数据')
           }
         } catch (error) {
           roomInfoData.value = []
+          if (roomInfoTotal) roomInfoTotal.value = 0
           ElMessage.warning('户室数据加载失败')
           console.error('户室数据接口异常:', error)
         } finally {
@@ -254,7 +303,7 @@ export function useCalibrationViewer({
     }
   }
 
-  const pdfLoaded = () => {}
+  const pdfLoaded = () => { }
 
   const pdfLoadError = () => {
     ElMessage.warning('PDF预览失败，可通过下载接口查看文件')

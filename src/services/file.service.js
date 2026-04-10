@@ -39,3 +39,23 @@ export const deleteProjectArchive = (projectId, archiveId) =>
 
 export const auditPassByFileId = (fileId) =>
   axios.post(`/api/file/audit/pass/${fileId}`)
+
+export const getTaskPoolStatus = () =>
+  axios.get('/api/file/task/status')
+
+export const getTaskDetailByTaskId = (taskId) =>
+  axios.get(`/api/file/task/detail/${taskId}`)
+
+export const getParseJobFlow = (parseJobId) =>
+  axios.get(`/api/file/parse-job/${parseJobId}/flow`)
+
+export const cancelTaskByTaskId = (taskId, reason = '用户主动取消') =>
+  axios.post(`/api/file/task/cancel/${taskId}`, null, {
+    params: { reason }
+  })
+
+export const getSystemRuntimeStatus = () =>
+  axios.get('/api/file/task/system-status')
+
+export const updateTaskPoolSize = (payload) =>
+  axios.post('/api/file/task/pool-size', payload)

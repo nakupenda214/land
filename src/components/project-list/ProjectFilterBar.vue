@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="global-filter-card no-print">
     <div class="filter-glow" aria-hidden="true" />
     <div class="filter-inner">
@@ -12,52 +12,50 @@
             <span v-if="projectCount > 0" class="count-pill">{{ projectCount }} 个项目</span>
           </div>
           <p class="brand-desc">搜索或选择项目，加载该项目的档案、合同与实测汇总数据</p>
+          <div class="current-project" :class="{ empty: !selectedProjectName }">
+            <el-icon class="hint-icon"><InfoFilled /></el-icon>
+            <span v-if="selectedProjectName">当前查看：{{ selectedProjectName }}</span>
+            <span v-else>未选择项目，请先在右侧输入关键词并选择项目</span>
+          </div>
         </div>
       </div>
 
       <div class="filter-toolbar">
         <div class="selector-block">
-          <label class="field-label" for="project-workspace-select">
-            <el-icon class="field-label-icon"><Search /></el-icon>
-            快速定位项目
-          </label>
           <div class="selector-field">
-            <el-select
-              id="project-workspace-select"
-              :model-value="modelValue"
-              placeholder="输入名称、编号或关键词筛选…"
-              class="project-select"
-              size="large"
-              filterable
-              clearable
-              no-match-text="未找到匹配项目，请调整关键词"
-              teleported
-              popper-class="project-filter-select-dropdown"
-              @update:model-value="(val) => $emit('update:modelValue', val)"
-            >
-              <el-option
-                v-for="p in projectOptions"
-                :key="p.id"
-                :label="p.name"
-                :value="p.id"
+            <div class="selector-input">
+              <el-icon class="selector-search-icon"><Search /></el-icon>
+              <el-autocomplete
+                id="project-workspace-select"
+                v-model="projectSearchText"
+                placeholder="输入名称、编号或关键词筛选…"
+                class="project-select has-leading-icon"
+                size="large"
+                clearable
+                :debounce="0"
+                :fetch-suggestions="fetchProjectSuggestions"
+                :trigger-on-focus="true"
+                value-key="name"
+                highlight-first-item
+                teleported
+                popper-class="project-filter-select-dropdown"
+                @select="handleSelectProject"
+                @clear="handleClearProject"
               >
-                <div class="opt-cell">
-                  <div class="opt-main">
-                    <span class="opt-name">{{ p.name }}</span>
-                    <span class="opt-code">{{ p.code }}</span>
+                <template #default="{ item }">
+                  <div class="opt-cell">
+                    <div class="opt-main">
+                      <span class="opt-name">{{ item.name }}</span>
+                      <span class="opt-code">{{ item.code }}</span>
+                    </div>
+                    <div v-if="item.projectTime || item.updateTime" class="opt-meta">
+                      <span v-if="item.projectTime" class="opt-chip">{{ item.projectTime }}</span>
+                      <span v-if="item.updateTime" class="opt-updated">更新 {{ formatShortTime(item.updateTime) }}</span>
+                    </div>
                   </div>
-                  <div v-if="p.projectTime || p.updateTime" class="opt-meta">
-                    <span v-if="p.projectTime" class="opt-chip">{{ p.projectTime }}</span>
-                    <span v-if="p.updateTime" class="opt-updated">更新 {{ formatShortTime(p.updateTime) }}</span>
-                  </div>
-                </div>
-              </el-option>
-            </el-select>
-          </div>
-          <div class="selection-hint" :class="{ empty: !selectedProjectName }">
-            <el-icon class="hint-icon"><InfoFilled /></el-icon>
-            <span v-if="selectedProjectName">当前已选：{{ selectedProjectName }}</span>
-            <span v-else>未选择项目，请先在上方输入关键词并选择项目</span>
+                </template>
+              </el-autocomplete>
+            </div>
           </div>
         </div>
 
@@ -80,13 +78,14 @@
             </el-button>
           </el-tooltip>
         </div>
+
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { FolderOpened, Search, Plus, Promotion, InfoFilled } from '@element-plus/icons-vue'
 
 const props = defineProps({
@@ -104,13 +103,100 @@ const props = defineProps({
   }
 })
 
-defineEmits(['update:modelValue', 'search', 'create-project'])
+const emit = defineEmits(['update:modelValue', 'search', 'create-project'])
 
 const projectCount = computed(() => props.projectOptions?.length ?? 0)
+const projectSearchText = ref('')
+const suppressInputEmit = ref(false)
+
 const selectedProjectName = computed(() => {
   const target = props.projectOptions?.find((item) => String(item.id) === String(props.modelValue || ''))
   return target?.name || ''
 })
+
+watch(
+  () => props.modelValue,
+  () => {
+    suppressInputEmit.value = true
+    projectSearchText.value = selectedProjectName.value || ''
+    Promise.resolve().then(() => {
+      suppressInputEmit.value = false
+    })
+  },
+  { immediate: true }
+)
+
+const RECENT_KEY = 'recent_project_ids'
+
+function getRecentProjectIds() {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY)
+    const arr = JSON.parse(raw || '[]')
+    return Array.isArray(arr) ? arr.map((v) => String(v)) : []
+  } catch {
+    return []
+  }
+}
+
+function setRecentProjectIds(nextIds) {
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(nextIds.slice(0, 12)))
+  } catch {
+  }
+}
+
+function pushRecentProjectId(id) {
+  const sid = String(id || '')
+  if (!sid) return
+  const current = getRecentProjectIds().filter((x) => x !== sid)
+  current.unshift(sid)
+  setRecentProjectIds(current)
+}
+
+function fetchProjectSuggestions(queryString, cb) {
+  const keyword = String(queryString || '').trim().toLowerCase()
+  const list = Array.isArray(props.projectOptions) ? props.projectOptions : []
+
+  const recentIds = getRecentProjectIds()
+  if (!keyword) {
+    const recent = recentIds
+      .map((id) => list.find((p) => String(p.id) === id))
+      .filter(Boolean)
+    const fallback = list.filter((p) => !recentIds.includes(String(p.id))).slice(0, 12)
+    cb([...recent, ...fallback].slice(0, 18))
+    return
+  }
+
+  const matched = list
+    .filter((p) => {
+      const name = String(p.name || '').toLowerCase()
+      const code = String(p.code || '').toLowerCase()
+      return name.includes(keyword) || code.includes(keyword)
+    })
+    .slice(0, 30)
+  cb(matched)
+}
+
+function handleSelectProject(item) {
+  const id = item?.id
+  if (id == null) return
+  pushRecentProjectId(id)
+  projectSearchText.value = item?.name || ''
+  emit('update:modelValue', id)
+}
+
+function handleClearProject() {
+  projectSearchText.value = ''
+  emit('update:modelValue', '')
+}
+
+watch(
+  () => projectSearchText.value,
+  (v) => {
+    if (suppressInputEmit.value) return
+    if (!String(v || '').trim()) emit('update:modelValue', '')
+  }
+)
 
 function formatShortTime(val) {
   if (val == null) return ''
@@ -229,39 +315,73 @@ function formatShortTime(val) {
   color: var(--biz-subtext, #5f6b7a);
 }
 
+.current-project {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  color: #334155;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.14);
+}
+
+.current-project.empty {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.22);
+  color: #475569;
+}
+
+.hint-icon {
+  font-size: 16px;
+  color: #1d4ed8;
+}
+
+.current-project.empty .hint-icon {
+  color: #64748b;
+}
+
 .filter-toolbar {
   flex: 1;
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   gap: 16px 20px;
   min-width: 0;
 }
 
 .selector-block {
-  flex: 1;
   min-width: 240px;
-}
-
-.field-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 0 8px 2px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: #475569;
-  letter-spacing: 0.03em;
-  text-transform: none;
-}
-
-.field-label-icon {
-  font-size: 14px;
-  color: #64748b;
+  flex: 1;
 }
 
 .selector-field {
   width: 100%;
+}
+
+.selector-input {
+  position: relative;
+  width: 100%;
+}
+
+.selector-search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 16px;
+  color: #1f4e79;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(232, 242, 252, 0.95);
+  border: 1px solid rgba(200, 221, 241, 0.9);
+  pointer-events: none;
 }
 
 .selection-hint {
@@ -298,7 +418,6 @@ function formatShortTime(val) {
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
-  padding-bottom: 2px;
 }
 
 .btn-ico {
@@ -342,7 +461,8 @@ function formatShortTime(val) {
   color: #0f172a;
 }
 
-:deep(.project-select .el-select__wrapper) {
+:deep(.project-select .el-select__wrapper),
+:deep(.project-select .el-input__wrapper) {
   border-radius: 10px;
   min-height: 40px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
@@ -350,11 +470,17 @@ function formatShortTime(val) {
   background: rgba(255, 255, 255, 0.95);
 }
 
-:deep(.project-select .el-select__wrapper:hover) {
+:deep(.project-select.has-leading-icon .el-input__inner) {
+  padding-left: 38px;
+}
+
+:deep(.project-select .el-select__wrapper:hover),
+:deep(.project-select .el-input__wrapper:hover) {
   border-color: rgba(59, 130, 246, 0.45);
 }
 
-:deep(.project-select.is-focused .el-select__wrapper) {
+:deep(.project-select.is-focused .el-select__wrapper),
+:deep(.project-select .el-input__wrapper:focus-within) {
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
@@ -425,6 +551,7 @@ function formatShortTime(val) {
     width: 100%;
   }
 
+
   :deep(.primary-cta),
   :deep(.ghost-cta) {
     flex: 1;
@@ -435,13 +562,15 @@ function formatShortTime(val) {
 
 <style>
 /* 下拉层挂在 body，需非 scoped */
-.project-filter-select-dropdown.el-select-dropdown {
+.project-filter-select-dropdown.el-select-dropdown,
+.project-filter-select-dropdown.el-autocomplete-suggestion {
   border-radius: 12px;
   border: 1px solid rgba(148, 163, 184, 0.35);
   box-shadow: 0 16px 48px -12px rgba(15, 23, 42, 0.22);
 }
 
-.project-filter-select-dropdown .el-select-dropdown__item {
+.project-filter-select-dropdown .el-select-dropdown__item,
+.project-filter-select-dropdown .el-autocomplete-suggestion__list li {
   height: auto;
   min-height: 48px;
   padding: 8px 14px;
@@ -451,5 +580,9 @@ function formatShortTime(val) {
 .project-filter-select-dropdown .el-select-dropdown__item.is-selected {
   font-weight: 600;
   background: rgba(239, 246, 255, 0.85);
+}
+
+.project-filter-select-dropdown .el-autocomplete-suggestion__list li:hover {
+  background: rgba(239, 246, 255, 0.65);
 }
 </style>

@@ -12,10 +12,7 @@ export default defineConfig({
     }
   },
   define: {
-    'process.env': {},
-    // 优化：不仅暴露 Buffer，还直接绑定到 window.Buffer，确保全局可访问
-    'Buffer': 'window.Buffer',
-    'window.Buffer': 'window.Buffer'
+    'process.env': {}
   },
   optimizeDeps: {
     exclude: ['xlsx-populate'],

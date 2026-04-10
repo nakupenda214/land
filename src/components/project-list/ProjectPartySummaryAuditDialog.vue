@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <el-dialog
     v-model="dialogVisible"
     :title="dialogTitle"
@@ -142,7 +142,6 @@
             :cell-style="AUDIT_TABLE_CELL_STYLE"
           >
             <el-table-column type="index" label="#" width="48" align="center" fixed="left" />
-            <el-table-column prop="rowIndex" label="行号" width="56" align="center" fixed="left" />
             <el-table-column prop="engineeringProject" label="工程项目/楼栋" min-width="140" fixed="left" show-overflow-tooltip />
             <el-table-column prop="propertyCertificateNumber" label="不动产权证编号" min-width="130" show-overflow-tooltip />
             <el-table-column prop="contractApprovalNumber" label="合同/批文编号" min-width="120" show-overflow-tooltip />

@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <el-container class="layout-container">
     <el-aside width="220px" class="aside no-print">
       <div class="logo">
@@ -26,6 +26,11 @@
         <el-menu-item index="/fields">
           <el-icon><MapLocation /></el-icon>
           <span>土地类型管理</span>
+        </el-menu-item>
+
+        <el-menu-item index="/notifications">
+          <el-icon><Bell /></el-icon>
+          <span>通知订阅管理</span>
         </el-menu-item>
 
         <el-menu-item index="/users">
@@ -64,15 +69,18 @@
         <router-view v-if="!$route.meta.keepAlive" />
       </el-main>
       <GlobalAgentAssistant />
+      <FloatingTaskPoolStatus v-if="route.path === '/projects'" />
     </el-container>
   </el-container>
 </template>
 
 <script setup>
-import { useRouter } from 'vue-router'
-import { DataAnalysis, ArrowDown, Odometer, UserFilled, MapLocation } from '@element-plus/icons-vue'
+import { useRoute, useRouter } from 'vue-router'
+import { DataAnalysis, ArrowDown, Odometer, UserFilled, MapLocation, Bell } from '@element-plus/icons-vue'
 import GlobalAgentAssistant from '@/components/layout/GlobalAgentAssistant.vue'
+import FloatingTaskPoolStatus from '@/components/layout/FloatingTaskPoolStatus.vue'
 
+const route = useRoute()
 const router = useRouter()
 
 const handleLogout = () => {
@@ -84,6 +92,7 @@ const handleLogout = () => {
 <style scoped>
 .layout-container {
   height: 100vh;
+  --app-aside-w: 220px;
 }
 
 .aside {

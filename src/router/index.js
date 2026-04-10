@@ -41,13 +41,23 @@ const routes = [
         name: 'FieldManagement',
         component: () => import('../views/FieldManagement.vue'),
         meta: { title: '土地类型管理' }
+      },
+      {
+        path: 'notifications',
+        name: 'NotificationManagement',
+        component: () => import('../views/NotificationManagement.vue'),
+        meta: { title: '通知订阅管理' }
       }
     ]
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    redirect: '/'
   }
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes
 })
 

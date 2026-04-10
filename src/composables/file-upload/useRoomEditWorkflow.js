@@ -1,6 +1,7 @@
 ﻿import { ref } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { queryRoomInfos } from '@/services/project.service'
 
 export function useRoomEditWorkflow(options = {}) {
   const {
@@ -9,6 +10,9 @@ export function useRoomEditWorkflow(options = {}) {
     currentFile,
     roomInfoData,
     roomInfoLoading,
+    roomInfoTotal,
+    roomInfoPageNum,
+    roomInfoPageSize,
     isEditing,
     editingRowId,
     batchUpdateLoading,
@@ -106,20 +110,75 @@ export function useRoomEditWorkflow(options = {}) {
     const { projectId, surveyReportId } = ensureContext()
     if (!projectId || !surveyReportId) return
 
+    const pageSize = Number(roomInfoPageSize?.value || 50)
+    let page = Math.max(1, Number(roomInfoPageNum?.value || 1))
+
     roomInfoLoading.value = true
     try {
-      const roomRes = await axios.get(`/api/project/${projectId}/survey-reports/${surveyReportId}/room-info`)
-      if (roomRes.data?.code === 200 && Array.isArray(roomRes.data?.data)) {
-        roomInfoData.value = mapRoomInfoList(roomRes.data.data)
-      } else {
-        roomInfoData.value = []
+      let roomRes
+      let body
+      let records
+      let total
+
+      for (let guard = 0; guard < 8; guard++) {
+        roomRes = await queryRoomInfos({
+          projectId,
+          surveyReportInfoId: surveyReportId,
+          pageNum: page,
+          pageSize,
+          sortField: 'id',
+          sortDirection: 'asc'
+        })
+        if (roomRes.data?.code !== 200) {
+          roomInfoData.value = []
+          if (roomInfoTotal) roomInfoTotal.value = 0
+          return
+        }
+        body = roomRes.data.data || {}
+        records = Array.isArray(body.records) ? body.records : []
+        total = Number(body.total ?? 0)
+        if (records.length > 0 || total === 0 || page <= 1) {
+          break
+        }
+        page -= 1
       }
+
+      if (roomInfoPageNum && page !== roomInfoPageNum.value) {
+        roomInfoPageNum.value = page
+      }
+      if (roomInfoTotal) {
+        roomInfoTotal.value = total
+      }
+      roomInfoData.value = mapRoomInfoList(records)
     } catch (error) {
       console.error('重新加载户室数据失败:', error)
       throw error
     } finally {
       roomInfoLoading.value = false
     }
+  }
+
+  const goRoomInfoPage = async (nextPage) => {
+    if (!roomInfoPageNum) return
+    roomInfoPageNum.value = Math.max(1, Number(nextPage || 1))
+    await reloadRoomOnly()
+  }
+
+  const goRoomInfoPageSizeChange = async (nextSize) => {
+    if (!roomInfoPageSize || !roomInfoPageNum) return
+    roomInfoPageSize.value = Math.max(10, Math.min(200, Number(nextSize || 50)))
+    roomInfoPageNum.value = 1
+    await reloadRoomOnly()
+  }
+
+  /** 新增户室后跳到最后一页（依赖上一次 reloadRoomOnly 已写入 roomInfoTotal） */
+  const goLastRoomInfoPageAfterMutation = async () => {
+    if (!roomInfoPageNum || !roomInfoPageSize || !roomInfoTotal) return
+    const total = Number(roomInfoTotal.value || 0)
+    const size = Number(roomInfoPageSize.value || 50)
+    const pages = total === 0 ? 1 : Math.ceil(total / size)
+    roomInfoPageNum.value = Math.max(1, pages)
+    await reloadRoomOnly()
   }
 
   const reloadSummaryOnly = async () => {
@@ -245,7 +304,7 @@ export function useRoomEditWorkflow(options = {}) {
         }
         clearEditingState()
       })
-      .catch(() => {})
+      .catch(() => { })
   }
 
   const handleSaveData = async () => {
@@ -346,6 +405,7 @@ export function useRoomEditWorkflow(options = {}) {
 
       clearEditingState()
       await reloadRoomAndSummaryData({ refreshReport: true, silentRefresh: true })
+      await goLastRoomInfoPageAfterMutation()
       ElMessage.success('新增户室成功，已刷新实测报告')
       return true
     } catch (error) {
@@ -427,6 +487,8 @@ export function useRoomEditWorkflow(options = {}) {
     handleDeleteRoom,
     roomCreateLoading,
     roomDeleteLoading,
-    reportRefreshLoading
+    reportRefreshLoading,
+    goRoomInfoPage,
+    goRoomInfoPageSizeChange
   }
 }

@@ -69,11 +69,13 @@
 
     <CalibrationWorkspaceDialog
       v-model="showCalibration"
+      :project-id="currentProject"
       :current-file="currentFile"
       :is-editing="isEditing"
       :enter-edit-mode="enterEditMode"
       :exit-edit-mode="exitEditMode"
       :handle-save-data="handleSaveData"
+      :handle-refresh-survey-report="handleRefreshSurveyReport"
       :handle-audit-pass="handleAuditPass"
       :calibration-loading="calibrationLoading"
       :current-view-type="currentViewType"
@@ -89,6 +91,11 @@
       :audit-summary-display="auditSummaryDisplay"
       :room-info-data="roomInfoData"
       :room-info-loading="roomInfoLoading"
+      :room-info-total="roomInfoTotal"
+      :room-info-page-num="roomInfoPageNum"
+      :room-info-page-size="roomInfoPageSize"
+      :go-room-info-page="goRoomInfoPage"
+      :go-room-info-page-size-change="goRoomInfoPageSizeChange"
       @back="handleCalibrationBack"
       @closed="handleCalibrationClosed"
     />
@@ -155,6 +162,7 @@ const {
   enterEditMode,
   exitEditMode,
   handleSaveData,
+  handleRefreshSurveyReport,
   handleAuditPass,
   calibrationLoading,
   currentViewType,
@@ -169,7 +177,12 @@ const {
   auditSummaryData,
   auditSummaryDisplay,
   roomInfoData,
-  roomInfoLoading
+  roomInfoLoading,
+  roomInfoTotal,
+  roomInfoPageNum,
+  roomInfoPageSize,
+  goRoomInfoPage,
+  goRoomInfoPageSizeChange
 } = useFileUploadPage()
 
 const isAuditOnlyMode = computed(() => String(route.query.returnTo || '') === 'projects')

@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="field-mgmt-container">
     <div class="page-header">
       <div class="header-left">
@@ -11,95 +11,129 @@
     </div>
 
     <el-card class="section-card" shadow="never">
-      <div class="simple-section-head">
-        <span class="label">已知用途</span>
-        <span class="count">：{{ standardFields.length }} 条</span>
+      <div class="table-toolbar">
+        <span class="title">已知用途</span>
+        <span class="count">共 {{ standardFields.length }} 条</span>
       </div>
-      <el-table
-        :data="standardFields"
-        border
-        stripe
-        table-layout="fixed"
-        :max-height="tableMaxHeight"
-        v-loading="loading"
-      >
-        <el-table-column type="index" label="序号" width="100" align="center" />
-        <el-table-column prop="usagePattern" label="用途匹配模式" min-width="220" show-overflow-tooltip />
-        <el-table-column prop="usageCategory" label="用途类别" width="300" align="center" show-overflow-tooltip />
-        <el-table-column label="面积类型" width="300" align="center">
-          <template #default="{ row }">
-            <el-tag size="small" effect="plain">{{ row.floorAreaType === 'BUILDABLE' ? '计容' : '不计容' }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="正则" width="140" align="center">
-          <template #default="{ row }">{{ Number(row.isRegex) === 1 ? '是' : '否' }}</template>
-        </el-table-column>
-        <el-table-column prop="priority" label="优先级" width="140" align="center" />
-        <el-table-column label="状态" width="140" align="center">
-          <template #default="{ row }">{{ Number(row.status) === 1 ? '启用' : '禁用' }}</template>
-        </el-table-column>
-        <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip />
-        <el-table-column label="操作" width="300" align="center" fixed="right">
-          <template #default="{ row }">
-            <span class="field-table-actions">
-              <el-button class="op-btn audit-btn" type="primary" size="small" plain :icon="Edit" @click="openEditDialog(row)">编辑</el-button>
-              <el-popconfirm title="确认删除该映射？" @confirm="handleDelete(row)">
-                <template #reference>
-                  <el-button class="op-btn delete-btn" type="danger" size="small" plain :icon="Delete">删除</el-button>
-                </template>
-              </el-popconfirm>
-            </span>
-          </template>
-        </el-table-column>
-      </el-table>
+      <div class="table-container">
+        <el-table
+          class="compact-table"
+          :data="standardFields"
+          border
+          stripe
+          size="small"
+          table-layout="fixed"
+          :max-height="tableMaxHeight"
+          v-loading="loading"
+        >
+          <el-table-column type="index" label="序号" width="60" align="center" />
+          <el-table-column prop="usagePattern" label="用途匹配模式" min-width="180" show-overflow-tooltip />
+          <el-table-column prop="usageCategory" label="用途类别" width="160" align="center" show-overflow-tooltip />
+          <el-table-column label="面积类型" width="120" align="center">
+            <template #default="{ row }">
+              <el-tag size="small" effect="plain">{{ row.floorAreaType === 'BUILDABLE' ? '计容' : '不计容' }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="正则" width="90" align="center">
+            <template #default="{ row }">{{ Number(row.isRegex) === 1 ? '是' : '否' }}</template>
+          </el-table-column>
+          <el-table-column prop="priority" label="优先级" width="90" align="center" />
+          <el-table-column label="状态" width="90" align="center">
+            <template #default="{ row }">{{ Number(row.status) === 1 ? '启用' : '禁用' }}</template>
+          </el-table-column>
+          <el-table-column prop="remark" label="备注" min-width="140" show-overflow-tooltip />
+          <el-table-column label="操作" width="220" align="center" fixed="right">
+            <template #default="{ row }">
+              <span class="field-table-actions">
+                <el-button class="op-btn audit-btn" type="primary" size="small" plain :icon="Edit" @click="openEditDialog(row)">编辑</el-button>
+                <el-popconfirm title="确认删除该映射？" @confirm="handleDelete(row)">
+                  <template #reference>
+                    <el-button class="op-btn delete-btn" type="danger" size="small" plain :icon="Delete">删除</el-button>
+                  </template>
+                </el-popconfirm>
+              </span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
     </el-card>
 
     <el-card class="section-card" shadow="never">
-      <div class="simple-section-head">
-        <span class="label">未知用途</span>
-        <span class="count">：{{ specialFields.length }} 条</span>
+      <div class="table-toolbar">
+        <span class="title">未知用途</span>
+        <span class="count">共 {{ specialFields.length }} 条</span>
       </div>
-      <el-table
-        :data="specialFields"
-        border
-        stripe
-        table-layout="fixed"
-        :max-height="tableMaxHeight"
-        v-loading="loading"
-      >
-        <el-table-column type="index" label="序号" width="100" align="center" />
-        <el-table-column prop="usageName" label="未知用途名称" min-width="220" show-overflow-tooltip />
-        <el-table-column prop="occurrenceCount" label="出现次数" width="300" align="center" />
-        <el-table-column label="归属类别" min-width="220">
-          <template #default="{ row }">
-            <el-select
-              v-model="row.targetCategory"
-              size="small"
-              placeholder="请选择归属类别"
-              style="width: 100%"
-            >
-              <el-option-group label="计容面积">
-                <el-option label="商业" value="calcCommercial" />
-                <el-option label="住宅" value="calcResidential" />
-                <el-option label="物管" value="calcPropMgmt" />
-                <el-option label="其他计容" value="calcOther" />
-              </el-option-group>
-              <el-option-group label="不计容面积">
-                <el-option label="社区用房" value="nonCalcCommunity" />
-                <el-option label="其他公用" value="nonCalcOther" />
-              </el-option-group>
-            </el-select>
-          </template>
-        </el-table-column>
-        <el-table-column prop="updateTime" label="更新时间" width="300" align="center">
-          <template #default="{ row }">{{ formatTime(row.updateTime) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="300" align="center" fixed="right">
-          <template #default="{ row }">
-            <el-button class="op-btn parse-btn" type="primary" size="small" :icon="Check" @click="saveSpecialConfig(row)">保存</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <div class="table-container">
+        <el-table
+          class="compact-table"
+          :data="specialFields"
+          border
+          stripe
+          size="small"
+          table-layout="fixed"
+          :max-height="tableMaxHeight"
+          v-loading="loading"
+        >
+          <el-table-column type="index" label="序号" width="60" align="center" />
+          <el-table-column prop="usageName" label="未知用途名称" min-width="160" show-overflow-tooltip />
+          <el-table-column prop="occurrenceCount" label="出现次数" width="100" align="center" />
+          <el-table-column label="最近来源" min-width="200">
+            <template #default="{ row }">
+              <div v-if="row.recentProjectName || row.recentFileName" class="unknown-source-cell">
+                <div v-if="row.recentProjectName" class="unknown-source-line" :title="row.recentProjectName">
+                  项目：{{ row.recentProjectName }}
+                </div>
+                <div v-if="row.recentFileName" class="unknown-source-line" :title="row.recentFileName">
+                  文件：{{ row.recentFileName }}
+                </div>
+              </div>
+              <span v-else class="unknown-source-empty">-</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="归属类别" min-width="200">
+            <template #default="{ row }">
+              <el-select
+                v-model="row.targetCategory"
+                size="small"
+                placeholder="请选择归属类别"
+                style="width: 100%"
+              >
+                <el-option-group label="计容面积">
+                  <el-option label="商业" value="calcCommercial" />
+                  <el-option label="住宅" value="calcResidential" />
+                  <el-option label="物管" value="calcPropMgmt" />
+                  <el-option label="其他计容" value="calcOther" />
+                </el-option-group>
+                <el-option-group label="不计容面积">
+                  <el-option label="社区用房" value="nonCalcCommunity" />
+                  <el-option label="其他公用" value="nonCalcOther" />
+                </el-option-group>
+              </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column prop="updateTime" label="更新时间" width="170" align="center">
+            <template #default="{ row }">{{ formatTime(row.updateTime) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="240" align="center" fixed="right">
+            <template #default="{ row }">
+              <span class="field-table-actions">
+                <el-button
+                  class="op-btn audit-btn"
+                  type="primary"
+                  size="small"
+                  plain
+                  :icon="View"
+                  :disabled="!row.fileRecordId || !row.projectId"
+                  @click="goOpenSourceAudit(row)"
+                >
+                  打开审核
+                </el-button>
+                <el-button class="op-btn parse-btn" type="primary" size="small" :icon="Check" @click="saveSpecialConfig(row)">保存</el-button>
+              </span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
     </el-card>
 
     <el-dialog v-model="addDialogVisible" title="新增用途映射" width="560px" @close="resetAddForm">
@@ -206,9 +240,12 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { Check, CollectionTag, Delete, Edit, Plus, Refresh } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
+import { Check, CollectionTag, Delete, Edit, Plus, Refresh, View } from '@element-plus/icons-vue'
 import { ElLoading, ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
+
+const router = useRouter()
 
 const loading = ref(false)
 const standardFields = ref([])
@@ -314,6 +351,9 @@ const fetchUnknownUsageList = async () => {
         updateTime: item.updateTime,
         targetCategory: item.suggestedCategory || '',
         projectId: item.projectId,
+        fileRecordId: item.fileRecordId,
+        recentFileName: item.recentFileName || '',
+        recentProjectName: item.recentProjectName || '',
         handleRemark: item.handleRemark || ''
       }))
     }
@@ -369,6 +409,21 @@ const refreshProjectSurveyReports = async (projectId) => {
   } catch {
     return false
   }
+}
+
+const goOpenSourceAudit = (row) => {
+  if (!row?.fileRecordId || !row?.projectId) {
+    ElMessage.warning('缺少文件或项目信息，无法打开审核')
+    return
+  }
+  router.push({
+    name: 'ProjectList',
+    query: {
+      projectId: String(row.projectId),
+      tab: 'archives',
+      openAuditFileId: String(row.fileRecordId)
+    }
+  })
 }
 
 const createUsageConfigFromUnknown = async (row) => {
@@ -571,23 +626,38 @@ onMounted(async () => {
 
 .section-card {
   margin-bottom: 0;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  border: 1px solid var(--home-soft-border, #dbe4ef);
+  overflow: hidden;
+  box-shadow: var(--home-soft-shadow, 0 14px 36px -24px rgba(15, 23, 42, 0.2));
 }
 
-.simple-section-head {
-  display: inline-flex;
+.table-toolbar {
+  display: flex;
   align-items: center;
-  gap: 4px;
-  margin: 0 0 10px;
-  font-size: 14px;
-  font-weight: 700;
-  color: #1f2937;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(219, 228, 239, 0.9);
+  background: linear-gradient(180deg, var(--home-header-grad-start, #f8fbff) 0%, var(--home-header-grad-end, #f1f6fc) 100%);
 }
 
-.simple-section-head .count {
-  color: #4b5563;
-  font-weight: 600;
+.table-toolbar .title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: 0.2px;
+}
+
+.table-toolbar .count {
+  font-size: 12px;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.table-container {
+  padding: 10px 12px 12px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.7) 0%, rgba(241, 245, 249, 0.55) 100%);
 }
 
 .field-table-actions {
@@ -599,7 +669,7 @@ onMounted(async () => {
 }
 
 :deep(.el-card__body) {
-  padding: 10px 12px;
+  padding: 0;
   overflow: hidden;
 }
 
@@ -611,6 +681,45 @@ onMounted(async () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+:deep(.compact-table.el-table th.el-table__cell) {
+  background: rgba(241, 246, 252, 0.95);
+  color: #445468;
+  font-weight: 700;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+:deep(.compact-table.el-table td.el-table__cell) {
+  padding-top: 7px;
+  padding-bottom: 7px;
+  font-size: 13px;
+}
+
+:deep(.compact-table.el-table .el-table__row:hover > td.el-table__cell) {
+  background: rgba(240, 247, 255, 0.9) !important;
+}
+
+.unknown-source-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  line-height: 1.35;
+}
+
+.unknown-source-line {
+  font-size: 12px;
+  color: #334155;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unknown-source-empty {
+  color: #94a3b8;
+  font-size: 13px;
 }
 
 </style>

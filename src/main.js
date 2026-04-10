@@ -1,4 +1,4 @@
-﻿import { createApp } from 'vue'
+import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
 import ElementPlus from 'element-plus'
@@ -12,7 +12,7 @@ import '@/styles/project-home-modern.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import { Buffer } from 'buffer'
 
-window.Buffer = Buffer
+globalThis.Buffer = globalThis.Buffer || Buffer
 
 const app = createApp(App)
 

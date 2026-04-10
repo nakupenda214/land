@@ -78,6 +78,8 @@ export function useProjectStomp({ projectIdRef, activeRef, onFileUpdate, onBatch
 
     const fileTopic = `/topic/project/${projectId}/file-updates`
     const batchTopic = `/topic/project/${projectId}/batch-upload-updates`
+    const globalFileTopic = '/topic/file-updates'
+    const globalBatchTopic = '/topic/batch-upload-updates'
 
     subscriptions.push(
       client.subscribe(fileTopic, (message) => {
@@ -90,6 +92,25 @@ export function useProjectStomp({ projectIdRef, activeRef, onFileUpdate, onBatch
 
     subscriptions.push(
       client.subscribe(batchTopic, (message) => {
+        const payload = safeParseMessage(message.body)
+        if (payload && typeof onBatchUploadUpdate === 'function') {
+          onBatchUploadUpdate(payload)
+        }
+      })
+    )
+
+    // 兜底订阅全局 topic：当后端广播缺失 projectId 时，避免前端完全收不到状态更新
+    subscriptions.push(
+      client.subscribe(globalFileTopic, (message) => {
+        const payload = safeParseMessage(message.body)
+        if (payload && typeof onFileUpdate === 'function') {
+          onFileUpdate(payload)
+        }
+      })
+    )
+
+    subscriptions.push(
+      client.subscribe(globalBatchTopic, (message) => {
         const payload = safeParseMessage(message.body)
         if (payload && typeof onBatchUploadUpdate === 'function') {
           onBatchUploadUpdate(payload)
@@ -130,7 +151,7 @@ export function useProjectStomp({ projectIdRef, activeRef, onFileUpdate, onBatch
         heartbeatIncoming: 10000,
         heartbeatOutgoing: 10000,
         webSocketFactory: () => new SockJS('/api/ws'),
-        debug: () => {}
+        debug: () => { }
       })
 
       client.onConnect = () => {

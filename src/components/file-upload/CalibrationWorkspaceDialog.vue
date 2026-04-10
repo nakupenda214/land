@@ -169,6 +169,49 @@
                     <div class="audit-append-label">未知用途详情</div>
                     <div class="unknown-list">{{ auditSummaryData.unknownUsages }}</div>
                   </div>
+                  <div v-if="calibrationUnknownPolicyVisible" class="audit-append-block calibration-unknown-policy">
+                    <div class="audit-append-label">将未知用途归为已知</div>
+                    <div v-loading="calibrationUnknownLoading" class="calibration-unknown-policy__body">
+                      <div
+                        v-if="!calibrationUnknownLoading && calibrationUnknownRows.length === 0"
+                        class="calibration-unknown-policy__hint"
+                      >
+                        未找到待处理的未知用途记录（可能已在土地类型管理中处理）。
+                      </div>
+                      <div
+                        v-for="row in calibrationUnknownRows"
+                        :key="row.id"
+                        class="calibration-unknown-policy__row"
+                      >
+                        <span class="calibration-unknown-policy__name" :title="row.usageName">{{ row.usageName }}</span>
+                        <el-select
+                          v-model="row.selectedTarget"
+                          size="small"
+                          placeholder="归属分类"
+                          class="calibration-unknown-policy__select"
+                        >
+                          <el-option-group label="计容面积">
+                            <el-option label="商业" value="calcCommercial" />
+                            <el-option label="住宅" value="calcResidential" />
+                            <el-option label="物管" value="calcPropMgmt" />
+                            <el-option label="其他计容" value="calcOther" />
+                          </el-option-group>
+                          <el-option-group label="不计容面积">
+                            <el-option label="社区用房" value="nonCalcCommunity" />
+                            <el-option label="其他公用" value="nonCalcOther" />
+                          </el-option-group>
+                        </el-select>
+                        <el-button
+                          type="primary"
+                          size="small"
+                          :loading="savingCalibrationUnknownId === row.id"
+                          @click="saveCalibrationUnknownRule(row)"
+                        >
+                          保存
+                        </el-button>
+                      </div>
+                    </div>
+                  </div>
                   <div class="audit-append-block">
                     <div class="audit-append-label">验证失败原因</div>
                     <div class="reason-text">{{ auditSummaryData.verificationErrorReason }}</div>
@@ -193,7 +236,7 @@
                 <el-tag size="small" effect="plain" :type="isEditing ? 'warning' : 'info'">
                   {{ isEditing ? '编辑模式' : '查看模式' }}
                 </el-tag>
-                <span class="toolbar-count">共 {{ roomInfoData.length }} 条</span>
+                <span class="toolbar-count">共 {{ roomInfoTotal > 0 ? roomInfoTotal : roomInfoData.length }} 条</span>
               </div>
               <div class="right">
                 <el-button
@@ -231,7 +274,7 @@
               :header-cell-style="AUDIT_TABLE_HEADER_STYLE"
               :cell-style="AUDIT_TABLE_CELL_STYLE"
             >
-              <el-table-column label="序号" type="index" width="60" align="center" :index="index => index + 1" />
+              <el-table-column label="序号" type="index" width="60" align="center" :index="roomTableRowIndex" />
 
               <el-table-column prop="roomLevel" label="楼层" width="80" align="center">
                 <template #default="{ row }">
@@ -381,6 +424,23 @@
                 </template>
               </el-table-column>
             </el-table>
+
+            <div
+              v-if="showRoomInfoPagination"
+              class="room-table-pagination"
+            >
+              <el-pagination
+                :current-page="roomInfoPageNum"
+                :page-size="roomInfoPageSize"
+                :total="roomInfoTotal"
+                :page-sizes="[20, 50, 100, 200]"
+                layout="total, sizes, prev, pager, next"
+                small
+                background
+                @current-change="handleRoomInfoPageChange"
+                @size-change="handleRoomInfoPageSizeChange"
+              />
+            </div>
 
             <el-empty v-if="!roomInfoLoading && roomInfoData.length === 0" description="暂无户室面积数据" />
           </section>
@@ -545,6 +605,7 @@
 
 <script setup>
 import { computed, reactive, ref } from 'vue'
+import { useCalibrationUnknownUsagePolicy, parseUnknownUsageNames } from '@/composables/file-upload/useCalibrationUnknownUsagePolicy'
 import { Loading, CircleCheck } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
@@ -582,7 +643,13 @@ const props = defineProps({
   auditSummaryData: { type: Object, required: true },
   auditSummaryDisplay: { type: Object, required: true },
   roomInfoData: { type: Array, required: true },
-  roomInfoLoading: { type: Boolean, default: false }
+  roomInfoLoading: { type: Boolean, default: false },
+  projectId: { type: [String, Number], default: '' },
+  roomInfoTotal: { type: Number, default: 0 },
+  roomInfoPageNum: { type: Number, default: 1 },
+  roomInfoPageSize: { type: Number, default: 50 },
+  goRoomInfoPage: { type: Function, default: null },
+  goRoomInfoPageSizeChange: { type: Function, default: null }
 })
 
 const emit = defineEmits(['update:modelValue', 'closed', 'back'])
@@ -591,6 +658,43 @@ const dialogVisible = computed({
   get: () => props.modelValue,
   set: (val) => emit('update:modelValue', val)
 })
+
+const auditSummaryDataRef = computed(() => props.auditSummaryData)
+const projectIdRef = computed(() => props.projectId)
+const handleRefreshSurveyReportRef = computed(() => props.handleRefreshSurveyReport)
+
+const {
+  calibrationUnknownRows,
+  calibrationUnknownLoading,
+  savingCalibrationUnknownId,
+  saveCalibrationUnknownRule
+} = useCalibrationUnknownUsagePolicy({
+  dialogOpen: dialogVisible,
+  projectId: projectIdRef,
+  auditSummaryData: auditSummaryDataRef,
+  handleRefreshSurveyReport: handleRefreshSurveyReportRef
+})
+
+const calibrationUnknownPolicyVisible = computed(() => {
+  if (!dialogVisible.value) return false
+  if (!String(props.projectId || '').trim()) return false
+  return parseUnknownUsageNames(props.auditSummaryData?.unknownUsages).length > 0
+})
+
+const showRoomInfoPagination = computed(
+  () => typeof props.goRoomInfoPage === 'function' && Number(props.roomInfoTotal || 0) > 0
+)
+
+const roomTableRowIndex = (index) =>
+  (Number(props.roomInfoPageNum) - 1) * Number(props.roomInfoPageSize) + index + 1
+
+const handleRoomInfoPageChange = (page) => {
+  props.goRoomInfoPage?.(page)
+}
+
+const handleRoomInfoPageSizeChange = (size) => {
+  props.goRoomInfoPageSizeChange?.(size)
+}
 
 const { auditLayoutRef, leftPanelStyle, onSplitterMouseDown } = useAuditSplitPanel({
   defaultLeftPercent: 50,
@@ -1325,6 +1429,54 @@ const handleSubmitCreateUsage = async () => {
   color: #2563eb;
   white-space: pre-wrap;
   line-height: 1.5;
+}
+
+.calibration-unknown-policy__body {
+  min-height: 32px;
+}
+
+.calibration-unknown-policy__hint {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+  padding: 4px 0;
+}
+
+.calibration-unknown-policy__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.7);
+}
+
+.calibration-unknown-policy__row:last-child {
+  border-bottom: none;
+}
+
+.calibration-unknown-policy__name {
+  flex: 1 1 120px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calibration-unknown-policy__select {
+  flex: 1 1 160px;
+  min-width: 140px;
+}
+
+.room-table-pagination {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 4px 4px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .reason-text {

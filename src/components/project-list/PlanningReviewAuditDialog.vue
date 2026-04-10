@@ -91,14 +91,6 @@
             :cell-style="AUDIT_TABLE_CELL_STYLE"
           >
             <el-table-column type="index" label="#" width="48" align="center" fixed="left" :index="planningRowIndex" />
-            <el-table-column prop="rowIndex" label="行号" width="72" align="center">
-              <template #default="{ row }">
-                <template v-if="isEditingRow(row.id)">
-                  <el-input-number v-model="editForm.rowIndex" :min="0" controls-position="right" class="cell-input" />
-                </template>
-                <template v-else>{{ row.rowIndex ?? '-' }}</template>
-              </template>
-            </el-table-column>
             <el-table-column prop="engineeringProject" label="工程项目/楼栋" min-width="120" fixed="left" show-overflow-tooltip>
               <template #default="{ row }">
                 <template v-if="isEditingRow(row.id)">

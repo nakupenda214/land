@@ -76,6 +76,9 @@ export function useFileUploadPage() {
   const {
     roomInfoLoading,
     roomInfoData,
+    roomInfoTotal,
+    roomInfoPageNum,
+    roomInfoPageSize,
     roomSumInfo,
     showCalibration,
     calibrationLoading,
@@ -105,6 +108,9 @@ export function useFileUploadPage() {
     calibrationLoading,
     roomInfoLoading,
     roomInfoData,
+    roomInfoTotal,
+    roomInfoPageNum,
+    roomInfoPageSize,
     roomSumInfo,
     auditSummaryData,
     usageCategoryMap
@@ -131,12 +137,22 @@ export function useFileUploadPage() {
     realSurveyReportId
   })
 
-  const { enterEditMode, exitEditMode, handleSaveData } = useRoomEditWorkflow({
+  const {
+    enterEditMode,
+    exitEditMode,
+    handleSaveData,
+    handleRefreshSurveyReport,
+    goRoomInfoPage,
+    goRoomInfoPageSizeChange
+  } = useRoomEditWorkflow({
     currentProject,
     realSurveyReportId,
     currentFile,
     roomInfoData,
     roomInfoLoading,
+    roomInfoTotal,
+    roomInfoPageNum,
+    roomInfoPageSize,
     isEditing,
     batchUpdateLoading,
     usageCategoryMap,
@@ -225,6 +241,7 @@ export function useFileUploadPage() {
     enterEditMode,
     exitEditMode,
     handleSaveData,
+    handleRefreshSurveyReport,
     calibrationLoading,
     currentViewType,
     isPreprocessAvailable,
@@ -239,6 +256,11 @@ export function useFileUploadPage() {
     auditSummaryDisplay,
     roomInfoData,
     roomInfoLoading,
+    roomInfoTotal,
+    roomInfoPageNum,
+    roomInfoPageSize,
+    goRoomInfoPage,
+    goRoomInfoPageSizeChange,
     handleAuditPass
   }
 }

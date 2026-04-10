@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div ref="partySummaryTabRef" class="party-summary-tab">
     <section
       class="forms-panel planning-panel planning-panel--modern project-tab-panel"
@@ -69,7 +69,6 @@
           @row-click="handleFormRowClick"
         >
           <el-table-column type="index" width="52" label="序号" align="center" fixed="left" />
-          <el-table-column prop="fileRecordId" label="文件ID" width="100" align="center" fixed="left" />
           <el-table-column prop="phase" label="期数" width="90" align="center" />
           <el-table-column prop="propertyCertificateNumber" label="不动产权证编号" min-width="170" show-overflow-tooltip />
           <el-table-column prop="contractApprovalNumber" label="合同/批文编号" min-width="170" show-overflow-tooltip />
@@ -232,7 +231,6 @@
           scrollbar-always-on
         >
           <el-table-column type="index" width="52" label="序号" align="center" fixed="left" />
-          <el-table-column prop="rowIndex" label="行号" width="76" align="center" fixed="left" />
           <el-table-column prop="engineeringProject" label="工程项目/楼栋" min-width="160" show-overflow-tooltip />
           <el-table-column prop="contractApprovalNumber" label="合同/批文编号" min-width="160" show-overflow-tooltip />
           <el-table-column prop="phase" label="期数" width="90" align="center" />
