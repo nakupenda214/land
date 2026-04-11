@@ -1,6 +1,32 @@
 ﻿import axios from 'axios'
 
-/** 将 SSE kind 统一为小写字符串。 */
+/** landcheck lc-agent：节点英文名 → 界面展示 */
+export const AGENT_NODE_LABELS = {
+  IntentClassifyNode: '意图识别',
+  SchemaRetrieveNode: 'Schema 检索',
+  MqlGenerateNode: '生成查询（MQL）',
+  MqlValidateNode: '安全校验',
+  MongoExecuteNode: '执行数据查询',
+  ChartGenerateNode: '生成图表',
+  AnswerWrapNode: '组织回答',
+  FallbackReActNode: '智能修正',
+  snapshot: '状态检查点'
+}
+
+function labelForNode(node) {
+  if (!node) return '流程'
+  return AGENT_NODE_LABELS[node] || node.replace(/Node$/, '')
+}
+
+/** 将 NODE 事件格式化为一条可读过程说明（供 UI「执行过程」使用） */
+export function formatAgentNodeLine(evt) {
+  if (!evt || evt.status === 'complete') return ''
+  const detail = evt.payload?.detail != null ? String(evt.payload.detail) : ''
+  const label = labelForNode(evt.node)
+  return detail ? `${label}：${detail}` : `${label}（${evt.status || '进行中'}）`
+}
+
+/** 旧版流式协议（kind 字段） */
 function normalizeStreamKind(payloadData) {
   if (!payloadData || typeof payloadData !== 'object') return ''
   const raw = payloadData.kind
@@ -10,16 +36,35 @@ function normalizeStreamKind(payloadData) {
   return ''
 }
 
-export const chatAgent = (payload) =>
-  axios.post('/api/agent/chat', payload)
+function isLandAgentEvent(obj) {
+  if (!obj || typeof obj !== 'object') return false
+  const t = obj.type
+  return typeof t === 'string' && ['THINK', 'NODE', 'RESULT', 'ERROR'].includes(t)
+}
 
 /**
- * 与后端 AgentStreamEvent.Kind 对齐：ingress（DTO 预留）、llm、tool_call、tool_result、final_answer、error。
- * 当前服务端流式首包为 kind=llm 且常带 payload.phase=start，不单独发 ingress。
+ * 对接 lc-agent：`POST /agent/chat/stream`（开发环境经 Vite 写为 `/api/agent/chat/stream`）。
+ * 事件体为 JSON：`type`, `node`, `status`, `timestamp`, `payload`。
+ *
+ * @param {object} options
+ * @param {{ query: string, threadId?: string }} options.payload
+ * @param {AbortSignal} [options.signal]
+ * @param {(chunk: string) => void} [options.onStreamChunk] — streamChannel=main 的 chunk（主答复）
+ * @param {(chunk: string, meta: { node?: string }) => void} [options.onStreamTrace] — streamChannel=trace 的 chunk
+ * @param {(evt: object) => void} [options.onThink] — THINK
+ * @param {(evt: object) => void} [options.onNode] — NODE（节点阶段）
+ * @param {(evt: object) => void} [options.onError] — ERROR
+ * @param {(info: { threadId?: string, ok?: boolean }) => void} [options.onComplete] — NODE complete
+ * @param 其余 onLlm/onFinal/onEvent 等兼容旧调用方
  */
 export const chatAgentStream = async ({
   payload,
   signal,
+  onStreamChunk,
+  onStreamTrace,
+  onThink,
+  onNode,
+  onComplete,
   onFinal,
   onToolCall,
   onToolResult,
@@ -28,23 +73,87 @@ export const chatAgentStream = async ({
   onLlm,
   onError
 }) => {
+  const body = {
+    query: payload?.query ?? payload?.message ?? '',
+    threadId: payload?.threadId ?? payload?.sessionId ?? undefined
+  }
+  if (!String(body.query).trim()) {
+    throw new Error('query 不能为空')
+  }
+
   const response = await fetch('/api/agent/chat/stream', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream'
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      query: body.query,
+      ...(body.threadId ? { threadId: body.threadId } : {})
+    }),
     signal,
-    credentials: 'same-origin'
+    credentials: 'include'
   })
 
   if (!response.ok || !response.body) {
-    throw new Error(`SSE请求失败: ${response.status}`)
+    throw new Error(`智能助手请求失败: ${response.status}`)
   }
+
+  const threadIdFromHeader = response.headers.get('X-Thread-Id')
 
   const reader = response.body.getReader()
   const decoder = new TextDecoder('utf-8')
   let buffer = ''
+
+  const dispatchLand = (data) => {
+    onEvent?.(data)
+    const { type, node, status, payload: pl } = data
+
+    switch (type) {
+      case 'THINK': {
+        onThink?.(data)
+        break
+      }
+      case 'NODE': {
+        onNode?.(data)
+        if (status === 'complete' && pl && pl.ok === true) {
+          onComplete?.({ threadId: threadIdFromHeader || undefined, ok: true })
+          onFinal?.({
+            threadId: threadIdFromHeader,
+            text: '',
+            payload: { ok: true }
+          })
+        }
+        // 非 complete 的 NODE 仅交给 onNode，避免与 onLlm 重复刷「执行过程」
+        break
+      }
+      case 'RESULT': {
+        if (status === 'stream' && pl?.chunk != null) {
+          const chunk = String(pl.chunk)
+          const ch = pl.streamChannel
+          const isMain =
+            ch === 'main' ||
+            (ch == null && data.node === 'AnswerWrapNode')
+          const isTrace = ch === 'trace' || (ch == null && data.node && data.node !== 'AnswerWrapNode')
+          if (isMain) {
+            onStreamChunk?.(chunk)
+            onLlm?.({ text: chunk, payload: { phase: 'stream', streamChannel: 'main' } })
+          } else if (isTrace) {
+            onStreamTrace?.(chunk, { node: data.node })
+            onLlm?.({ text: chunk, payload: { phase: 'stream', streamChannel: 'trace', node: data.node } })
+          }
+        }
+        break
+      }
+      case 'ERROR': {
+        const msg = pl?.message != null ? String(pl.message) : '发生错误'
+        onError?.({ ...data, text: msg, message: msg })
+        break
+      }
+      default:
+        break
+    }
+  }
 
   const consumeEvent = (rawEvent) => {
     if (!rawEvent) return
@@ -56,12 +165,14 @@ export const chatAgentStream = async ({
     if (!dataText) return
     try {
       const payloadData = JSON.parse(dataText)
+
+      if (isLandAgentEvent(payloadData)) {
+        dispatchLand(payloadData)
+        return
+      }
+
       const kind = normalizeStreamKind(payloadData)
-
-      // 总线：原始事件始终透出，便于调试或自定义处理
       onEvent?.(payloadData)
-
-      // 硬切换：仅分发新协议事件
       switch (kind) {
         case 'ingress':
           onIngress?.(payloadData)
@@ -101,4 +212,15 @@ export const chatAgentStream = async ({
   if (buffer.trim()) {
     consumeEvent(buffer.trim())
   }
+
+  return { threadId: threadIdFromHeader || body.threadId || null }
 }
+
+/**
+ * 同步兜底（若后端未提供非流式接口会失败；保留以兼容旧代码）。
+ */
+export const chatAgent = (payload) =>
+  axios.post('/api/agent/chat', {
+    query: payload?.message ?? payload?.query,
+    threadId: payload?.sessionId ?? payload?.threadId
+  })

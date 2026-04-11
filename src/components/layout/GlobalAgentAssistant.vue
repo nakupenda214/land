@@ -5,95 +5,187 @@
       class="agent-fab"
       type="button"
       title="智能助手"
+      aria-label="打开智能助手"
       @click="visible = true"
     >
+      <span class="fab-glow" aria-hidden="true" />
       <span class="fab-core">
-        <span class="icon-ripple r1" />
-        <span class="icon-ripple r2" />
         <el-icon class="fab-icon"><ChatDotRound /></el-icon>
       </span>
     </button>
 
     <el-drawer
       v-model="visible"
-      :size="640"
+      :size="drawerWidth"
       append-to-body
       class="agent-drawer"
-      title="智能助手"
+      direction="rtl"
+      :show-close="false"
+      :with-header="false"
+      :destroy-on-close="false"
     >
-      <div class="agent-body">
-        <div class="quick-questions">
-          <button
-            v-for="q in displayedQuickQuestions"
-            :key="q"
-            type="button"
-            class="quick-chip"
-            @click="applyQuickQuestion(q)"
-          >
-            {{ q }}
-          </button>
-        </div>
-
-        <div ref="messageContainerRef" class="message-list">
-          <div v-if="messages.length === 0" class="empty-tip">
-            请输入明确问题，例如“上传文件在哪里上传”“合同及地块在哪里查询”。
-          </div>
-          <div
-            v-for="item in messages"
-            :key="item.id"
-            class="msg-row"
-            :class="item.role === 'user' ? 'is-user' : 'is-assistant'"
-          >
-            <div class="msg-bubble">
-              <template v-if="item.role === 'assistant' && item.reasoningLogs?.length">
-                <details class="reasoning-block" :open="item.reasoningOpen">
-                  <summary>思考</summary>
-                  <ul class="reasoning-list">
-                    <li v-for="log in item.reasoningLogs" :key="log.id" class="reasoning-item">
-                      <span class="reasoning-dot" :class="`is-${log.level || 'info'}`" />
-                      <span class="reasoning-type">{{ log.typeLabel || '过程' }}</span>
-                      <span class="reasoning-time">{{ log.time }}</span>
-                      <span class="reasoning-text">{{ log.text }}</span>
-                    </li>
-                  </ul>
-                </details>
-              </template>
-              <pre>{{ item.content }}</pre>
+      <div class="agent-shell">
+        <header class="agent-header">
+          <div class="agent-header-main">
+            <div class="agent-header-mark" aria-hidden="true">
+              <AgentAssistantGlyph size="md" />
+            </div>
+            <div class="agent-header-copy">
+              <div class="agent-header-title-row">
+                <h2 class="agent-title">智能助手</h2>
+                <span v-if="streaming" class="agent-header-live">应答中</span>
+              </div>
+              <p class="agent-subtitle">
+                <span class="agent-subtag">土地评估 · 数据查询</span>
+                <span class="agent-subsep" aria-hidden="true" />
+                <span class="agent-subtag">多轮会话 · SSE 流式</span>
+              </p>
             </div>
           </div>
-        </div>
+          <button type="button" class="agent-header-close" aria-label="关闭" @click="visible = false">
+            <el-icon><Close /></el-icon>
+          </button>
+        </header>
 
-        <div class="agent-toolbar">
-          <el-button class="tool-btn" @click="clearMessages">清空</el-button>
-          <el-button
-            v-if="streaming"
-            class="tool-btn stop-btn"
-            type="warning"
-            @click="stopStreaming"
-          >
-            停止生成
-          </el-button>
-        </div>
+        <div class="agent-body">
+          <el-scrollbar ref="scrollbarRef" class="message-scroll" wrap-class="message-scroll-wrap">
+            <div ref="messageContainerRef" class="message-list">
+              <div v-if="messages.length === 0" class="empty-state">
+                <div class="empty-icon" aria-hidden="true">
+                  <AgentAssistantGlyph size="xl" />
+                </div>
+                <p class="empty-title">开始对话</p>
+                <p class="empty-desc">
+                  例如询问「合同及地块在哪里查询」「2025 年有多少个项目」等；支持多轮，将自动关联本会话。
+                </p>
+              </div>
 
-        <div class="input-area">
-          <el-input
-            v-model="inputText"
-            type="textarea"
-            :rows="7"
-            placeholder="请输入问题，Enter发送，Shift+Enter换行"
-            @keydown.enter.exact.prevent="handleSend"
-            @keydown.shift.enter.stop
-          />
-          <div class="input-actions">
-            <el-button
-              class="send-btn"
-              :disabled="sending || !inputText.trim()"
-              type="primary"
-              @click="handleSend"
-            >
-              {{ streaming ? '生成中...' : '发送' }}
-            </el-button>
-          </div>
+              <div
+                v-for="item in messages"
+                :key="item.id"
+                class="msg-row"
+                :class="item.role === 'user' ? 'is-user' : 'is-assistant'"
+              >
+                <div class="msg-avatar" :class="item.role === 'user' ? 'is-user' : 'is-bot'" aria-hidden="true">
+                  <el-icon v-if="item.role === 'user'"><User /></el-icon>
+                  <AgentAssistantGlyph v-else size="sm" />
+                </div>
+                <div class="msg-main">
+                  <div class="msg-meta">
+                    <span class="msg-role">{{ item.role === 'user' ? '我' : '助手' }}</span>
+                    <span v-if="item.streaming" class="msg-streaming">
+                      <span class="typing-dot" />
+                      <span class="typing-dot" />
+                      <span class="typing-dot" />
+                    </span>
+                  </div>
+                  <div class="msg-bubble">
+                    <!-- 主流助手布局：过程（阶段 + 可折叠原始流式）→ 最终回答 -->
+                    <template
+                      v-if="
+                        item.role === 'assistant' &&
+                        (item.reasoningLogs?.length || item.traceStream || item.streaming)
+                      "
+                    >
+                      <details
+                        class="reasoning-block"
+                        :open="item.reasoningOpen"
+                        @toggle="onReasoningToggle(item, $event)"
+                      >
+                        <summary>
+                          <el-icon class="reasoning-chev"><ArrowRight /></el-icon>
+                          <span class="reasoning-summary-text">执行过程</span>
+                          <span v-if="item.reasoningLogs?.length" class="reasoning-count">{{
+                            item.reasoningLogs.length
+                          }}</span>
+                          <span v-if="item.streaming" class="reasoning-live">进行中</span>
+                        </summary>
+                        <div class="reasoning-body">
+                          <ul v-if="item.reasoningLogs?.length" class="reasoning-list">
+                            <li v-for="log in item.reasoningLogs" :key="log.id" class="reasoning-item">
+                              <span class="reasoning-dot" :class="`is-${log.level || 'info'}`" />
+                              <span class="reasoning-type">{{ log.typeLabel || '过程' }}</span>
+                              <span class="reasoning-time">{{ log.time }}</span>
+                              <span class="reasoning-text">{{ log.text }}</span>
+                            </li>
+                          </ul>
+                          <p
+                            v-else-if="item.streaming"
+                            class="reasoning-placeholder"
+                          >
+                            正在接收节点与模型事件…
+                          </p>
+                          <details
+                            v-if="item.traceStream"
+                            class="trace-stream-block trace-stream-nested"
+                            @toggle.stop
+                          >
+                            <summary>
+                              <el-icon class="trace-chev"><ArrowRight /></el-icon>
+                              模型流式输出
+                            </summary>
+                            <pre class="trace-pre">{{ item.traceStream }}</pre>
+                          </details>
+                        </div>
+                      </details>
+                    </template>
+                    <!-- 流式中：纯文本避免半句 Markdown 闪烁 -->
+                    <div v-if="item.role === 'assistant' && item.streaming" class="msg-text msg-text-plain msg-answer">
+                      {{ item.content }}
+                    </div>
+                    <div
+                      v-else-if="item.role === 'assistant'"
+                      class="msg-text agent-md msg-answer"
+                      v-html="renderAssistantHtml(item.content)"
+                    />
+                    <div v-else class="msg-text msg-text-plain">{{ item.content }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </el-scrollbar>
+
+          <footer class="agent-footer">
+            <div class="toolbar-row">
+              <el-button text class="toolbar-link" @click="clearMessages">清空对话</el-button>
+              <el-button
+                v-if="streaming"
+                type="warning"
+                plain
+                round
+                size="small"
+                class="stop-btn"
+                @click="stopStreaming"
+              >
+                停止生成
+              </el-button>
+            </div>
+            <div class="composer">
+              <el-input
+                v-model="inputText"
+                type="textarea"
+                :autosize="{ minRows: 3, maxRows: 8 }"
+                :placeholder="composerPlaceholder"
+                resize="none"
+                class="composer-input"
+                @keydown.enter.exact.prevent="handleSend"
+                @keydown.shift.enter.stop
+              />
+              <div class="composer-actions">
+                <span class="composer-hint">Enter 发送 · Shift+Enter 换行</span>
+                <el-button
+                  type="primary"
+                  round
+                  class="send-btn"
+                  :loading="streaming"
+                  :disabled="sending || !inputText.trim()"
+                  @click="handleSend"
+                >
+                  {{ streaming ? '生成中…' : '发送' }}
+                </el-button>
+              </div>
+            </div>
+          </footer>
         </div>
       </div>
     </el-drawer>
@@ -101,57 +193,93 @@
 </template>
 
 <script setup>
-import { nextTick, ref, watch } from 'vue'
-import { ChatDotRound } from '@element-plus/icons-vue'
+import { computed, nextTick, ref } from 'vue'
+import { marked } from 'marked'
+import { ArrowRight, ChatDotRound, Close, User } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { chatAgent, chatAgentStream } from '@/services/agent.service'
+import AgentAssistantGlyph from '@/components/layout/AgentAssistantGlyph.vue'
+import { chatAgentStream, formatAgentNodeLine } from '@/services/agent.service'
+
+marked.setOptions({ breaks: true, gfm: true })
+
+/**
+ * 模型常把「### 标题」与正文写在同一行，marked 会把整行当成一个 <h3>，列表/段落全部丢失。
+ * 对首行做轻量拆分：常见短标题词后若紧接正文，则插入换行。
+ */
+const RUNIN_TITLE_MARKERS = [
+  '查询结果摘要',
+  '结果摘要',
+  '查询结果说明',
+  '查询结果',
+  '答复说明',
+  '结果说明',
+  '详细说明',
+  '主要结论',
+  '结论',
+  '风险提示',
+  '数据说明',
+  '图表说明',
+  '概述'
+].sort((a, b) => b.length - a.length)
+
+/** 正文常以「本次/具体/如下/共/1.」等开头；允许标点后直接接正文 */
+const RUNIN_BODY_START = /^[\u4e00-\u9fff0-9（(一1这那以从经根据共具如下、，：。.；\d]/
+
+function fixRunInAtxHeadingLine(line) {
+  // 必须兼容「###查询结果摘要」无空格，否则正则不匹配、整行会被 marked 当成一个标题
+  const hm = line.match(/^(#{1,6})(\s*)(.*)$/)
+  if (!hm) return null
+  const hashes = hm[1]
+  const rest = hm[3] ?? ''
+  if (rest.length < 18) return null
+  for (const title of RUNIN_TITLE_MARKERS) {
+    if (!rest.startsWith(title)) continue
+    const tail = rest.slice(title.length)
+    const trimmed = tail.trimStart()
+    if (trimmed.length >= 4 && RUNIN_BODY_START.test(trimmed)) {
+      return `${hashes} ${title}\n\n${trimmed}`
+    }
+  }
+  return null
+}
+
+function fixRunInAtxHeadingMarkdown(markdown) {
+  const s = String(markdown ?? '')
+  const lines = s.split(/\r?\n/)
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].trim()) continue
+    const fixed = fixRunInAtxHeadingLine(lines[i].trim())
+    if (fixed) {
+      lines[i] = fixed
+      break
+    }
+  }
+  return lines.join('\n')
+}
 
 const visible = ref(false)
+const drawerWidth = computed(() => (typeof window !== 'undefined' && window.innerWidth < 720 ? '100%' : 'min(640px, 92vw)'))
 const inputText = ref('')
 const messages = ref([])
 const sending = ref(false)
 const streaming = ref(false)
 const messageContainerRef = ref(null)
+const scrollbarRef = ref(null)
 let streamAbortController = null
 
-const quickQuestionPool = [
-  '上传文件在哪里上传？',
-  '想要修改户室面积对照表怎么修改？',
-  '合同及地块信息在哪里查询？',
-  '归档文件查询里如何开始解析文件？',
-  '解析失败后先看哪个字段定位问题？',
-  '审核页面如何进入编辑并保存修改？',
-  '项目创建后为什么看不到最新汇总数据？',
-  '如何在归档里按文件名快速定位某个文件？',
-  '土地类型管理里如何把未知用途归类到已知用途？',
-  '打印报表和导出Excel入口分别在哪里？'
-]
-const displayedQuickQuestions = ref([])
+const composerPlaceholder =
+  '请输入问题，例如「合同及地块在哪里查询」「帮我查 2025 年项目数量」…'
 
-const SESSION_KEY = 'global_agent_session_id'
-const createSessionId = () => `s_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
-const sessionId = ref(localStorage.getItem(SESSION_KEY) || createSessionId())
-localStorage.setItem(SESSION_KEY, sessionId.value)
-
-const pickQuickQuestions = () => {
-  const pool = [...quickQuestionPool]
-  for (let i = pool.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[pool[i], pool[j]] = [pool[j], pool[i]]
-  }
-  displayedQuickQuestions.value = pool.slice(0, Math.random() > 0.5 ? 5 : 4)
-}
-
-watch(
-  () => visible.value,
-  (v) => {
-    if (v) pickQuickQuestions()
-  },
-  { immediate: true }
-)
+const THREAD_KEY = 'global_agent_thread_id'
+const threadId = ref(localStorage.getItem(THREAD_KEY) || '')
 
 const scrollToBottom = async () => {
   await nextTick()
+  const wrap = scrollbarRef.value?.wrapRef
+  if (wrap) {
+    wrap.scrollTop = wrap.scrollHeight
+    return
+  }
   const el = messageContainerRef.value
   if (el) el.scrollTop = el.scrollHeight
 }
@@ -160,6 +288,8 @@ const makeMessage = (role, content = '') => ({
   id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
   role,
   content,
+  traceStream: role === 'assistant' ? '' : undefined,
+  streaming: false,
   reasoningLogs: role === 'assistant' ? [] : undefined,
   reasoningOpen: role === 'assistant'
 })
@@ -170,6 +300,13 @@ const formatNow = () => {
   const mm = String(now.getMinutes()).padStart(2, '0')
   const ss = String(now.getSeconds()).padStart(2, '0')
   return `${hh}:${mm}:${ss}`
+}
+
+const onReasoningToggle = (item, evt) => {
+  if (!item || item.role !== 'assistant') return
+  const el = evt?.target
+  if (!el?.classList?.contains('reasoning-block') || typeof el.open !== 'boolean') return
+  item.reasoningOpen = el.open
 }
 
 const appendReasoningEvent = (assistantMsg, text, { level = 'info', typeLabel = '过程' } = {}) => {
@@ -193,25 +330,12 @@ const summarizeArgs = (value) => {
   }
 }
 
-/** 终态正文以 final_answer 事件为准；优先 text，其次 payload。 */
-const extractFinalAnswerText = (evt) => {
-  if (!evt) return ''
-  if (typeof evt.text === 'string' && evt.text.length) return evt.text
-  const p = evt.payload
-  if (p && typeof p === 'object') {
-    if (typeof p.text === 'string' && p.text.length) return p.text
-    if (typeof p.answer === 'string' && p.answer.length) return p.answer
-  }
-  return ''
-}
-
-const extractSyncAnswer = (res) => {
-  const data = res?.data?.data
-  if (typeof data === 'string') return data
-  if (typeof data?.text === 'string') return data.text
-  if (typeof data?.message === 'string') return data.message
-  if (typeof data?.answer === 'string') return data.answer
-  return res?.data?.msg || '已收到，但返回内容为空。'
+function renderAssistantHtml(raw) {
+  const s = raw == null ? '' : String(raw)
+  if (!s.trim()) return '<p class="agent-md-empty">暂无内容</p>'
+  const normalized = fixRunInAtxHeadingMarkdown(s)
+  const html = marked.parse(normalized)
+  return String(html).replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
 }
 
 const stopStreaming = () => {
@@ -226,10 +350,6 @@ const clearMessages = () => {
   messages.value = []
 }
 
-const applyQuickQuestion = (question) => {
-  inputText.value = question
-}
-
 const handleSend = async () => {
   const text = inputText.value.trim()
   if (!text || sending.value) return
@@ -237,10 +357,10 @@ const handleSend = async () => {
   sending.value = true
   inputText.value = ''
   messages.value.push(makeMessage('user', text), makeMessage('assistant', ''))
-  // 关键：后续流式更新必须写入响应式数组中的对象引用，否则 UI 可能只在最后一次重渲染时整体出现。
   const assistantMsg = messages.value[messages.value.length - 1]
+  assistantMsg.streaming = true
   await scrollToBottom()
-  /** CC-STREAM-PROTOCOL：同轮内连续重复的工具/阶段日志只保留一条，压缩噪声 */
+
   let lastReasoningDedup = ''
   const appendDedup = (msg, body, opts) => {
     if (!body || !String(body).trim()) return
@@ -253,19 +373,36 @@ const handleSend = async () => {
   try {
     streamAbortController = new AbortController()
     streaming.value = true
-    await chatAgentStream({
-      payload: { sessionId: sessionId.value, message: text },
+    const streamResult = await chatAgentStream({
+      payload: { query: text, threadId: threadId.value || undefined },
       signal: streamAbortController.signal,
+      onStreamChunk: (chunk) => {
+        if (chunk) assistantMsg.content += chunk
+        scrollToBottom()
+      },
+      onStreamTrace: (chunk) => {
+        if (chunk) {
+          assistantMsg.traceStream = (assistantMsg.traceStream || '') + chunk
+          scrollToBottom()
+        }
+      },
+      onThink: (evt) => {
+        const msg = evt?.payload?.message
+        if (msg) appendDedup(assistantMsg, msg, { level: 'info', typeLabel: '分析' })
+      },
+      onNode: (evt) => {
+        const line = formatAgentNodeLine(evt)
+        if (line) appendDedup(assistantMsg, line, { level: 'running', typeLabel: '阶段' })
+      },
       onLlm: (evt) => {
+        const phase = evt?.payload && typeof evt.payload === 'object' ? evt.payload.phase : null
+        if (phase === 'stream') return
         const piece = String(evt?.text || '').trim()
         if (!piece) return
-        const phase = evt?.payload && typeof evt.payload === 'object'
-          ? (evt.payload.phase ?? evt.payload.stage)
-          : null
-        const isStreamStart = phase === 'start' || phase === 'stream.start'
+        const isThink = phase === 'think'
         appendDedup(assistantMsg, piece, {
-          level: isStreamStart ? 'info' : 'running',
-          typeLabel: isStreamStart ? '接入' : '推理'
+          level: isThink ? 'info' : 'running',
+          typeLabel: isThink ? '分析' : '阶段'
         })
       },
       onToolCall: (evt) => {
@@ -275,7 +412,7 @@ const handleSend = async () => {
         appendDedup(
           assistantMsg,
           `调用工具 ${toolName}${stepHint}，参数：${summarizeArgs(evt?.args ?? evt?.parameters ?? payload.args)}`,
-          { level: 'running', typeLabel: '工具调用' }
+          { level: 'running', typeLabel: '工具' }
         )
       },
       onToolResult: (evt) => {
@@ -286,7 +423,7 @@ const handleSend = async () => {
           evt?.resultSummary || evt?.summary || payload.resultSummary || summarizeArgs(evt?.result ?? payload.result)
         appendDedup(assistantMsg, `工具 ${toolName}${stepHint} 返回：${brief}`, {
           level: 'done',
-          typeLabel: '工具结果'
+          typeLabel: '工具'
         })
       },
       onError: (evt) => {
@@ -294,49 +431,40 @@ const handleSend = async () => {
           evt?.text || evt?.message || evt?.payload?.message || evt?.payload?.error || '流式发生错误'
         ).trim()
         if (msg) appendDedup(assistantMsg, msg, { level: 'error', typeLabel: '错误' })
-        const ans = extractFinalAnswerText(evt)
-        if (ans) assistantMsg.content = ans
       },
-      onFinal: (finalEvt) => {
-        const finalText = extractFinalAnswerText(finalEvt)
-        if (finalText) assistantMsg.content = finalText
-        const sid = String(finalEvt?.sessionId || '').trim()
-        if (sid) {
-          sessionId.value = sid
-          localStorage.setItem(SESSION_KEY, sid)
+      onFinal: () => {
+        assistantMsg.streaming = false
+      },
+      onComplete: ({ threadId: tid }) => {
+        if (tid) {
+          threadId.value = tid
+          localStorage.setItem(THREAD_KEY, tid)
         }
+        assistantMsg.streaming = false
       }
     })
+
+    const tid = streamResult?.threadId
+    if (tid) {
+      threadId.value = tid
+      localStorage.setItem(THREAD_KEY, tid)
+    }
   } catch (error) {
     const aborted = error?.name === 'AbortError'
     if (aborted) {
-      appendReasoningEvent(assistantMsg, '已停止生成。', {
-        level: 'warning',
-        typeLabel: '状态'
-      })
+      appendReasoningEvent(assistantMsg, '已停止生成。', { level: 'warning', typeLabel: '状态' })
       assistantMsg.content = assistantMsg.content || '已停止生成。'
     } else {
-      try {
-        appendReasoningEvent(assistantMsg, '流式失败，切换为同步模式重试。', {
-          level: 'warning',
-          typeLabel: '状态'
-        })
-        const res = await chatAgent({ sessionId: sessionId.value, message: text })
-        assistantMsg.content = extractSyncAnswer(res)
-        appendReasoningEvent(assistantMsg, '同步模式已返回结果。', {
-          level: 'done',
-          typeLabel: '阶段'
-        })
-      } catch {
-        appendReasoningEvent(assistantMsg, '请求失败，请稍后重试。', {
-          level: 'error',
-          typeLabel: '错误'
-        })
-        assistantMsg.content = '助手暂时不可用，请稍后重试。'
-        ElMessage.error('助手请求失败')
-      }
+      appendReasoningEvent(assistantMsg, error?.message || '请求失败', {
+        level: 'error',
+        typeLabel: '错误'
+      })
+      assistantMsg.content = assistantMsg.content || '助手暂时不可用，请检查网络或稍后重试。'
+      ElMessage.error('智能助手请求失败')
     }
   } finally {
+    assistantMsg.streaming = false
+    assistantMsg.reasoningOpen = false
     streaming.value = false
     streamAbortController = null
     sending.value = false
@@ -346,278 +474,738 @@ const handleSend = async () => {
 </script>
 
 <style scoped>
+.global-agent {
+  --agent-accent: #4f46e5;
+  --agent-accent-soft: rgba(79, 70, 229, 0.12);
+  --agent-surface: #f8fafc;
+  --agent-ink: #0f172a;
+  --agent-muted: #64748b;
+  --agent-border: #e2e8f0;
+  --agent-user-bg: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  --agent-bot-bg: #ffffff;
+}
+
 .agent-fab {
   position: fixed;
   right: 24px;
   bottom: 92px;
   z-index: 2100;
-  width: 60px;
-  height: 60px;
+  width: 58px;
+  height: 58px;
   border-radius: 50%;
-  border: 1px solid #8ea2bf;
-  background: linear-gradient(145deg, #f7fbff 0%, #dce8f7 100%);
-  color: #2d4463;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  border: none;
+  padding: 0;
   cursor: pointer;
-  box-shadow: 0 10px 20px rgba(36, 55, 82, 0.2);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  background: linear-gradient(145deg, #6366f1 0%, #4f46e5 55%, #4338ca 100%);
+  color: #fff;
+  box-shadow:
+    0 4px 14px rgba(79, 70, 229, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+  transition:
+    transform 0.22s ease,
+    box-shadow 0.22s ease;
 }
 
 .agent-fab:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 14px 28px rgba(36, 55, 82, 0.28);
+  transform: translateY(-3px) scale(1.03);
+  box-shadow:
+    0 12px 28px rgba(79, 70, 229, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.18) inset;
+}
+
+.fab-glow {
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.35) 0%, transparent 70%);
+  pointer-events: none;
+  animation: fabPulse 3s ease-in-out infinite;
+}
+
+@keyframes fabPulse {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
 }
 
 .fab-core {
   position: relative;
-  width: 34px;
-  height: 34px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.fab-icon {
+  font-size: 26px;
+}
+
+.agent-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: linear-gradient(180deg, #f1f5f9 0%, #f8fafc 32%, #fff 100%);
+}
+
+.agent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--agent-border);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.97) 0%, rgba(248, 250, 252, 0.98) 48%, rgba(241, 245, 249, 0.95) 100%);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+}
+
+.agent-header-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.agent-header-mark {
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(150deg, #eef2ff 0%, #ffffff 42%, #e0e7ff 100%);
+  border: 1px solid rgba(165, 180, 252, 0.55);
+  box-shadow:
+    0 2px 8px rgba(79, 70, 229, 0.12),
+    0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+}
+
+.agent-header-copy {
+  min-width: 0;
+}
+
+.agent-header-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+
+.agent-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
+  color: var(--agent-ink);
+}
+
+.agent-header-live {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #b45309;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.16);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  animation: headerLivePulse 1.4s ease-in-out infinite;
+}
+
+@keyframes headerLivePulse {
+  0%,
+  100% {
+    opacity: 0.88;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.agent-subtitle {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--agent-muted);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+
+.agent-subtag {
+  font-weight: 500;
+  color: #64748b;
+}
+
+.agent-subsep {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  flex-shrink: 0;
+}
+
+.agent-header-close {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--agent-border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--agent-muted);
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.agent-header-close:hover {
+  background: #fff;
+  color: var(--agent-ink);
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+
+.agent-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px 16px;
+  gap: 12px;
+}
+
+.message-scroll {
+  flex: 1;
+  min-height: 200px;
+  border-radius: 16px;
+  border: 1px solid var(--agent-border);
+  background: var(--agent-surface);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+}
+
+.message-scroll :deep(.message-scroll-wrap) {
+  overflow-x: hidden;
+}
+
+.message-list {
+  padding: 16px 14px 20px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 36px 20px 28px;
+}
+
+.empty-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 14px;
+  border-radius: 16px;
+  background: linear-gradient(150deg, #eef2ff 0%, #ffffff 45%, #e0e7ff 100%);
+  border: 1px solid rgba(165, 180, 252, 0.45);
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.1);
+  display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.fab-icon {
-  font-size: 22px;
-  position: relative;
-  z-index: 3;
+.empty-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--agent-ink);
 }
 
-.icon-ripple {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 1px solid rgba(120, 149, 187, 0.7);
-  pointer-events: none;
-}
-
-.r1 {
-  animation: rippleA 4.2s infinite;
-}
-
-.r2 {
-  animation: rippleB 4.2s infinite;
-}
-
-@keyframes rippleA {
-  0% { transform: scale(1); opacity: 0.62; }
-  100% { transform: scale(1.5); opacity: 0; }
-}
-
-@keyframes rippleB {
-  0% { transform: scale(1); opacity: 0; }
-  45% { opacity: 0.34; }
-  100% { transform: scale(1.8); opacity: 0; }
-}
-
-.agent-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  height: 100%;
-}
-
-.quick-questions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.quick-chip {
-  border: 1px solid #c5d4e8;
-  background: linear-gradient(180deg, #ffffff 0%, #f4f8ff 100%);
-  color: #3f5776;
-  border-radius: 16px;
-  padding: 6px 10px;
-  font-size: 12px;
-  line-height: 1.2;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.quick-chip:hover {
-  border-color: #aac2e2;
-  background: #e9f2ff;
-  color: #27486e;
-}
-
-.message-list {
-  flex: 1;
-  min-height: 300px;
-  overflow-y: auto;
-  padding: 10px 8px;
-  border: 1px solid #d9e1ec;
-  border-radius: 10px;
-  background: #f7f9fc;
-}
-
-.empty-tip {
-  color: #5f6e84;
+.empty-desc {
+  margin: 0;
   font-size: 13px;
-  line-height: 1.7;
-  padding: 10px 12px;
+  line-height: 1.65;
+  color: var(--agent-muted);
+  max-width: 320px;
+  margin-inline: auto;
 }
 
 .msg-row {
   display: flex;
-  margin-bottom: 10px;
+  gap: 10px;
+  margin-bottom: 16px;
+  align-items: flex-start;
 }
 
 .msg-row.is-user {
-  justify-content: flex-end;
+  flex-direction: row-reverse;
 }
 
-.msg-row.is-assistant {
-  justify-content: flex-start;
+.msg-avatar {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.msg-avatar.is-user {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #fff;
+}
+
+.msg-avatar.is-bot {
+  background: linear-gradient(150deg, #f5f3ff 0%, #ffffff 50%, #eef2ff 100%);
+  border: 1px solid rgba(199, 210, 254, 0.9);
+  box-shadow: 0 1px 4px rgba(79, 70, 229, 0.07);
+}
+
+.msg-main {
+  min-width: 0;
+  max-width: calc(100% - 44px);
+}
+
+.msg-row.is-user .msg-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.msg-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--agent-muted);
+}
+
+.msg-row.is-user .msg-meta {
+  flex-direction: row-reverse;
+}
+
+.msg-role {
+  font-weight: 600;
+  color: #475569;
+}
+
+.msg-streaming {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.typing-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--agent-accent);
+  animation: typingBounce 1.2s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes typingBounce {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
 }
 
 .msg-bubble {
-  max-width: 92%;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid #d4dcea;
-  background: #fff;
+  border-radius: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--agent-border);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
 }
 
 .msg-row.is-user .msg-bubble {
-  border-color: #a8bfdc;
-  background: #edf4ff;
+  background: var(--agent-user-bg);
+  border-color: #c7d2fe;
 }
 
-.msg-bubble pre {
-  margin: 0;
-  font-family: inherit;
-  white-space: pre-wrap;
+.msg-row.is-assistant .msg-bubble {
+  background: var(--agent-bot-bg);
+}
+
+.msg-text {
+  font-size: 14px;
+  line-height: 1.65;
+  color: #1e293b;
   word-break: break-word;
-  line-height: 1.68;
-  color: #2f3b4d;
+}
+
+.msg-text-plain {
+  white-space: pre-wrap;
+}
+
+.agent-md :deep(p) {
+  margin: 0 0 0.65em;
+}
+
+.agent-md :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.agent-md :deep(ul),
+.agent-md :deep(ol) {
+  margin: 0.4em 0;
+  padding-left: 1.25em;
+}
+
+.agent-md :deep(code) {
+  font-size: 0.9em;
+  padding: 0.12em 0.35em;
+  border-radius: 6px;
+  background: #f1f5f9;
+}
+
+.agent-md :deep(pre code) {
+  display: block;
+  padding: 10px 12px;
+  overflow-x: auto;
+}
+
+.agent-md-empty {
+  margin: 0;
+  color: var(--agent-muted);
+  font-size: 13px;
 }
 
 .reasoning-block {
-  margin-bottom: 8px;
-  border: 1px solid #d7e1ef;
-  border-radius: 8px;
-  background: #f8fbff;
-  padding: 6px 8px;
+  margin-bottom: 10px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #f8fafc 0%, #fff 100%);
+  overflow: hidden;
 }
 
 .reasoning-block summary {
   cursor: pointer;
-  color: #365174;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
   font-size: 12px;
   font-weight: 600;
-  outline: none;
+  color: #475569;
+  user-select: none;
+}
+
+.reasoning-summary-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.reasoning-live {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #b45309;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.14);
+  animation: reasoningPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes reasoningPulse {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.reasoning-body {
+  padding: 0 10px 12px;
+}
+
+.reasoning-placeholder {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #94a3b8;
+}
+
+.trace-stream-block {
+  margin-top: 10px;
+  border-radius: 10px;
+  border: 1px dashed #cbd5e1;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.reasoning-block .trace-stream-nested {
+  margin-top: 8px;
+  margin-bottom: 0;
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid #a5b4fc;
+  background: linear-gradient(180deg, #fafafa 0%, #f8fafc 100%);
+}
+
+.reasoning-block .trace-stream-nested .trace-pre {
+  max-height: 200px;
+  font-size: 11px;
+  border-top-color: #e2e8f0;
+}
+
+.trace-stream-block summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  user-select: none;
+}
+
+.trace-stream-block summary::-webkit-details-marker {
+  display: none;
+}
+
+.trace-chev {
+  font-size: 14px;
+  transition: transform 0.2s;
+}
+
+.trace-stream-block[open] .trace-chev {
+  transform: rotate(90deg);
+}
+
+.trace-pre {
+  margin: 0;
+  padding: 8px 10px 10px;
+  max-height: 220px;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #475569;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-top: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+.reasoning-block summary::-webkit-details-marker {
+  display: none;
+}
+
+.reasoning-chev {
+  transition: transform 0.2s;
+  font-size: 14px;
+}
+
+.reasoning-block[open] .reasoning-chev {
+  transform: rotate(90deg);
+}
+
+.reasoning-count {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--agent-accent-soft);
+  color: var(--agent-accent);
 }
 
 .reasoning-list {
   list-style: none;
-  margin: 8px 0 0;
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+}
+
+.msg-bubble > .msg-answer {
+  margin-top: 12px;
+}
+
+.msg-bubble > .msg-answer:first-child {
+  margin-top: 0;
 }
 
 .reasoning-item {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 8px auto 52px 1fr;
   gap: 8px;
+  align-items: start;
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.45;
 }
 
 .reasoning-type {
-  min-width: 56px;
-  text-align: center;
-  border-radius: 10px;
-  font-size: 11px;
-  line-height: 18px;
-  padding: 0 6px;
-  background: #edf3fb;
-  color: #3b5b84;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #475569;
+  width: fit-content;
 }
 
 .reasoning-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  display: inline-block;
-  flex: 0 0 8px;
+  margin-top: 4px;
 }
 
 .reasoning-dot.is-info {
-  background: #8aa1be;
+  background: #94a3b8;
 }
 
 .reasoning-dot.is-running {
-  background: #5d86bb;
-  box-shadow: 0 0 0 3px rgba(93, 134, 187, 0.15);
+  background: var(--agent-accent);
+  box-shadow: 0 0 0 3px var(--agent-accent-soft);
 }
 
 .reasoning-dot.is-done {
-  background: #5a9d74;
+  background: #10b981;
 }
 
 .reasoning-dot.is-warning {
-  background: #c28a36;
+  background: #f59e0b;
 }
 
 .reasoning-dot.is-error {
-  background: #c15d5d;
+  background: #ef4444;
 }
 
 .reasoning-time {
-  color: #6d7f99;
-  min-width: 56px;
+  color: #94a3b8;
   font-variant-numeric: tabular-nums;
+  font-size: 11px;
 }
 
 .reasoning-text {
-  color: #455b79;
+  color: #475569;
+  grid-column: 2 / -1;
 }
 
-.agent-toolbar {
+@media (min-width: 400px) {
+  .reasoning-item {
+    grid-template-columns: 8px auto 52px minmax(0, 1fr);
+  }
+  .reasoning-text {
+    grid-column: 4;
+  }
+}
+
+.agent-footer {
+  flex-shrink: 0;
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.tool-btn {
-  border-radius: 9px;
-  min-width: 70px;
+.toolbar-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.toolbar-link {
+  color: var(--agent-muted);
+  font-size: 13px;
 }
 
 .stop-btn {
-  color: #8a2d10;
-  border-color: #efb9a7;
-  background: #fff2ee;
+  font-weight: 600;
 }
 
-.stop-btn:hover {
-  color: #6d2007;
-  border-color: #e89e89;
-  background: #ffe7df;
-}
-
-.input-area {
-  border: 1px solid #d8e0ec;
-  border-radius: 12px;
-  padding: 10px;
+.composer {
+  border-radius: 16px;
+  border: 1px solid var(--agent-border);
   background: #fff;
+  padding: 12px 14px 10px;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.06);
 }
 
-.input-actions {
+.composer-input :deep(.el-textarea__inner) {
+  border: none;
+  box-shadow: none;
+  padding: 4px 2px;
+  font-size: 14px;
+  line-height: 1.55;
+  min-height: 72px !important;
+  background: transparent;
+}
+
+.composer-input :deep(.el-textarea__inner):focus {
+  box-shadow: none;
+}
+
+.composer-actions {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.composer-hint {
+  font-size: 11px;
+  color: #94a3b8;
 }
 
 .send-btn {
   min-width: 96px;
-  height: 36px;
-  border-radius: 18px;
-  box-shadow: 0 6px 14px rgba(72, 110, 160, 0.26);
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35);
+}
+</style>
+
+<style>
+/* 抽屉全宽样式（非 scoped，作用到 teleport 后的抽屉根节点） */
+.agent-drawer.el-drawer.rtl.open {
+  border-radius: 16px 0 0 16px;
+  box-shadow: -12px 0 40px rgba(15, 23, 42, 0.12);
+}
+
+.agent-drawer .el-drawer__body {
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
 }
 </style>
