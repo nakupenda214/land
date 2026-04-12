@@ -2,6 +2,7 @@
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import { getParsedSurveyReportsByProject, queryProjectAreaComparison } from '@/services/project.service'
+import { getApiErrorMessage } from '@/utils/apiErrorMessage'
 import { queryFiles } from '@/services/file.service'
 
 function normalizeVerifiedFlag(value) {
@@ -180,7 +181,7 @@ export function useSurveySummary({ reportList }) {
         fetchUploadedSurveyReportTotal(projectId),
         queryProjectAreaComparison(projectId)
       ])
-      if (currentSeq !== requestSeq.value) return
+      if (currentSeq !== requestSeq.value) return true
 
       uploadedSurveyReportTotal.value = uploadedTotal
       areaComparison.value =
@@ -190,7 +191,7 @@ export function useSurveySummary({ reportList }) {
 
       if (surveyRes.data?.code !== 200 || !Array.isArray(surveyRes.data?.data)) {
         rawTableData.value = []
-        return
+        return true
       }
 
       const surveyData = surveyRes.data.data
@@ -268,11 +269,13 @@ export function useSurveySummary({ reportList }) {
       } else {
         unknownUsages.value = []
       }
+      return true
     } catch (error) {
-      if (currentSeq !== requestSeq.value) return
+      if (currentSeq !== requestSeq.value) return true
       console.error('拉取汇总表数据失败:', error)
       resetSummaryMetrics()
-      ElMessage.error('汇总表数据加载失败，请重试')
+      ElMessage.error(getApiErrorMessage(error, '汇总表数据加载失败，请重试'))
+      return false
     }
   }
 

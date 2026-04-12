@@ -455,8 +455,10 @@ const handleRefreshParsedOnly = async () => {
   }
   parsedRefreshLoading.value = true
   try {
-    await fetchSurveyReports(currentProjectInfo.id)
-    ElMessage.success('已刷新已解析实测报告数据')
+    const ok = await fetchSurveyReports(currentProjectInfo.id)
+    if (ok) {
+      ElMessage.success('已刷新已解析实测报告数据')
+    }
   } catch (error) {
     console.error('刷新已解析列表失败:', error)
     ElMessage.error('刷新失败，请稍后重试')

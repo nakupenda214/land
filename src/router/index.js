@@ -1,10 +1,16 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { isLoggedIn } from '@/utils/auth-token'
 
 const routes = [
   {
     path: '/login',
     name: 'Login',
     component: () => import('../views/Login.vue')
+  },
+  {
+    path: '/register',
+    name: 'Register',
+    component: () => import('../views/Register.vue')
   },
   {
     path: '/',
@@ -61,10 +67,11 @@ const router = createRouter({
   routes
 })
 
-// 路由守卫：检查登录态
+const PUBLIC_ROUTE_NAMES = ['Login', 'Register']
+
+// 路由守卫：以 Sa-Token 是否存在于 sessionStorage 为准（登录、注册页除外）
 router.beforeEach((to, from, next) => {
-  const isAuthenticated = sessionStorage.getItem('isAuthenticated')
-  if (to.name !== 'Login' && !isAuthenticated) {
+  if (!PUBLIC_ROUTE_NAMES.includes(to.name) && !isLoggedIn()) {
     next({ name: 'Login' })
     return
   }

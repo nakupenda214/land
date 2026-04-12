@@ -76,15 +76,22 @@
 
 <script setup>
 import { useRoute, useRouter } from 'vue-router'
+import axios from 'axios'
 import { DataAnalysis, ArrowDown, Odometer, UserFilled, MapLocation, Bell } from '@element-plus/icons-vue'
 import GlobalAgentAssistant from '@/components/layout/GlobalAgentAssistant.vue'
 import FloatingTaskPoolStatus from '@/components/layout/FloatingTaskPoolStatus.vue'
+import { clearAuth } from '@/utils/auth-token'
 
 const route = useRoute()
 const router = useRouter()
 
-const handleLogout = () => {
-  sessionStorage.removeItem('isAuthenticated')
+const handleLogout = async () => {
+  try {
+    await axios.post('/api/auth/logout')
+  } catch {
+    /* 忽略网络错误，仍清理本地态 */
+  }
+  clearAuth()
   router.push('/login')
 }
 </script>

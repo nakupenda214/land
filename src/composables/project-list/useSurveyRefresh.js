@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { refreshSurveyReportsByProject } from '@/services/project.service'
+import { getApiErrorMessage } from '@/utils/apiErrorMessage'
 
 export function useSurveyRefresh({ currentProjectInfo, fetchSurveyReports }) {
   const REFRESH_CD_SECONDS = 15
@@ -120,12 +121,14 @@ export function useSurveyRefresh({ currentProjectInfo, fetchSurveyReports }) {
       ElMessage.info('正在刷新项目实测报告数据，请稍候...')
 
       await refreshSurveyReportsByProject(currentProjectInfo.id)
-      await fetchSurveyReports(currentProjectInfo.id)
+      if (!(await fetchSurveyReports(currentProjectInfo.id))) {
+        return
+      }
 
       ElMessage.success('项目实测报告数据刷新完成，已重新加载汇总表')
     } catch (error) {
       console.error('刷新实测报告数据失败：', error)
-      ElMessage.error('刷新失败，请检查网络或稍后重试')
+      ElMessage.error(getApiErrorMessage(error, '刷新失败，请检查网络或稍后重试'))
     } finally {
       refreshBtnLoading.value = false
     }

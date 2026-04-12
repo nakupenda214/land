@@ -52,7 +52,8 @@ export function useProjectSelector({ fetchProjectData, fetchSurveyReports }) {
 
     try {
       const { contractCount = 0, reportCount = 0 } = (await fetchProjectData(projectId)) || {}
-      await fetchSurveyReports(projectId)
+      const surveyOk = await fetchSurveyReports(projectId)
+      if (!surveyOk) return
       ElMessage.success(`数据加载完成：合同 ${contractCount} 份，实测报告 ${reportCount} 份`)
     } catch (error) {
       console.error('数据加载异常:', error)

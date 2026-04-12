@@ -46,7 +46,10 @@
       </el-form>
       
       <div class="tips">
-        <span>测试账号: admin / 123456</span>
+        <span>可使用已注册或管理员创建的账号登录</span>
+      </div>
+      <div class="footer-links">
+        <router-link to="/register">没有账号？立即注册</router-link>
       </div>
     </el-card>
   </div>
@@ -56,7 +59,8 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-// 引入图标组件
+import axios from 'axios'
+import { setToken } from '@/utils/auth-token'
 import { User, Lock } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -76,27 +80,42 @@ const rules = {
   ]
 }
 
-const handleLogin = () => {
+const handleLogin = async () => {
   if (!loginFormRef.value) return
-  
-  loginFormRef.value.validate((valid) => {
-    if (valid) {
-      isLoading.value = true
-      setTimeout(() => {
-        isLoading.value = false
-        if (loginForm.username === 'admin' && loginForm.password === '123456') {
-          ElMessage.success('登录成功')
-          
-          // 【修改点】改为 sessionStorage
-          sessionStorage.setItem('isAuthenticated', 'true') 
-          
-          router.push('/') 
-        } else {
-          ElMessage.error('账号或密码错误 (admin/123456)')
-        }
-      }, 1000)
+  try {
+    await loginFormRef.value.validate()
+  } catch {
+    return
+  }
+  isLoading.value = true
+  try {
+    const { data } = await axios.post('/api/auth/login', {
+      username: loginForm.username.trim(),
+      password: loginForm.password
+    })
+    if (Number(data.code) !== 200) {
+      ElMessage.error(data.msg || '登录失败')
+      return
     }
-  })
+    const token = data.data?.token
+    if (!token) {
+      ElMessage.error('服务端未返回 token')
+      return
+    }
+    setToken(token)
+    sessionStorage.setItem('isAuthenticated', 'true')
+    const user = data.data?.user
+    if (user?.id != null) {
+      sessionStorage.setItem('userId', String(user.id))
+    }
+    ElMessage.success('登录成功')
+    router.push('/')
+  } catch (e) {
+    const msg = e.response?.data?.msg || e.message || '登录失败'
+    ElMessage.error(msg)
+  } finally {
+    isLoading.value = false
+  }
 }
 </script>
 
@@ -114,4 +133,7 @@ const handleLogin = () => {
 .logo-text { font-size: 20px; font-weight: bold; color: #303133; }
 .login-btn { width: 100%; font-weight: bold; }
 .tips { text-align: center; font-size: 12px; color: #909399; margin-top: 10px; }
+.footer-links { text-align: center; margin-top: 14px; font-size: 14px; }
+.footer-links a { color: #409eff; text-decoration: none; }
+.footer-links a:hover { text-decoration: underline; }
 </style>

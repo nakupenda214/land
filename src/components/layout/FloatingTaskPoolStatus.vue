@@ -52,18 +52,102 @@
           </div>
 
           <div class="metric-grid">
-            <div class="metric-item metric-item--editable">
-              <span class="metric-label">核心线程</span>
-              <span class="metric-value">{{ coreThreads }}</span>
-              <el-input-number v-model="poolForm.corePoolSize" :min="1" :step="1" controls-position="right" size="small" style="width: 100%" />
-              <el-button size="small" text type="primary" class="metric-inline-btn" @click="fetchStatus">重置</el-button>
+            <div class="pool-tuner" role="group" aria-label="线程池并发容量调整">
+              <div class="pool-tuner__top">
+                <div class="pool-tuner__title-block">
+                  <span class="pool-tuner__title">并发容量</span>
+                  <span class="pool-tuner__hint">生效值来自服务器；下方为待提交草稿</span>
+                </div>
+                <div
+                  class="pool-tuner__state"
+                  :class="poolDirty ? 'is-dirty' : 'is-clean'"
+                >
+                  {{ poolDirty ? '未应用' : '已同步' }}
+                </div>
+              </div>
+
+              <div class="pool-tuner__fields">
+                <div class="pool-tuner__field">
+                  <div class="pool-tuner__field-head">
+                    <span class="pool-tuner__name">核心线程</span>
+                    <span class="pool-tuner__live">
+                      生效
+                      <strong class="pool-tuner__live-num">{{ coreThreads || '—' }}</strong>
+                    </span>
+                  </div>
+                  <div class="pool-tuner__control">
+                    <span class="pool-tuner__draft-label">调整为</span>
+                    <el-input-number
+                      v-model="poolForm.corePoolSize"
+                      class="pool-tuner__stepper"
+                      :min="1"
+                      :max="Math.max(1, Number(poolForm.maximumPoolSize) || 1)"
+                      :step="1"
+                      controls-position="right"
+                      size="small"
+                    />
+                  </div>
+                </div>
+
+                <div class="pool-tuner__divider" aria-hidden="true" />
+
+                <div class="pool-tuner__field">
+                  <div class="pool-tuner__field-head">
+                    <span class="pool-tuner__name">最大线程</span>
+                    <span class="pool-tuner__live">
+                      生效
+                      <strong class="pool-tuner__live-num">{{ maxThreads || '—' }}</strong>
+                    </span>
+                  </div>
+                  <div class="pool-tuner__control">
+                    <span class="pool-tuner__draft-label">调整为</span>
+                    <el-input-number
+                      v-model="poolForm.maximumPoolSize"
+                      class="pool-tuner__stepper"
+                      :min="Math.max(1, Number(poolForm.corePoolSize) || 1)"
+                      :step="1"
+                      controls-position="right"
+                      size="small"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div class="pool-tuner__meter" aria-hidden="true">
+                <div class="pool-tuner__meter-track">
+                  <div
+                    class="pool-tuner__meter-core"
+                    :style="{ width: `${poolCoreSharePercent}%` }"
+                  />
+                </div>
+                <div class="pool-tuner__meter-cap">
+                  <span>核心相对上限</span>
+                  <span class="pool-tuner__meter-val">{{ poolCoreSharePercent }}%</span>
+                </div>
+              </div>
+
+              <div class="pool-tuner__actions">
+                <el-button
+                  size="small"
+                  class="pool-tuner__btn pool-tuner__btn--ghost"
+                  :disabled="!poolDirty"
+                  @click="resetPoolDraftToLive"
+                >
+                  恢复为生效值
+                </el-button>
+                <el-button
+                  size="small"
+                  type="primary"
+                  class="pool-tuner__btn pool-tuner__btn--apply"
+                  :loading="updatingPoolSize"
+                  :disabled="!poolDirty"
+                  @click="submitPoolSizeUpdate"
+                >
+                  应用配置
+                </el-button>
+              </div>
             </div>
-            <div class="metric-item metric-item--editable">
-              <span class="metric-label">最大线程</span>
-              <span class="metric-value">{{ maxThreads }}</span>
-              <el-input-number v-model="poolForm.maximumPoolSize" :min="1" :step="1" controls-position="right" size="small" style="width: 100%" />
-              <el-button size="small" type="primary" :loading="updatingPoolSize" class="metric-inline-btn" @click="submitPoolSizeUpdate">应用</el-button>
-            </div>
+
             <div class="metric-item">
               <span class="metric-label">线程池大小</span>
               <span class="metric-value">{{ poolSize }}</span>
@@ -84,109 +168,151 @@
         </section>
 
         <div class="running-card">
-          <div class="card-head">
-            <div class="card-title">运行中 / 排队任务</div>
-            <div class="card-sub">
-              <span class="card-sub-seg card-sub-seg--run">运行中 <b>{{ listRunningCount }}</b></span>
-              <span class="card-sub-dot">·</span>
-              <span class="card-sub-seg card-sub-seg--queue">排队 <b>{{ listQueuedCount }}</b></span>
+          <header class="running-card__head">
+            <div class="running-card__head-text">
+              <h2 class="running-card__title">运行中 / 排队任务</h2>
+              <p class="running-card__subtitle">解析流水线与队列占用一览</p>
             </div>
-          </div>
-          <el-empty v-if="!runningTasks.length" description="当前暂无任务" :image-size="70" />
+            <div class="running-card__stats" role="presentation">
+              <div class="running-card__stat running-card__stat--run">
+                <span class="running-card__stat-label">运行中</span>
+                <span class="running-card__stat-value">{{ listRunningCount }}</span>
+              </div>
+              <div class="running-card__stat running-card__stat--queue">
+                <span class="running-card__stat-label">排队</span>
+                <span class="running-card__stat-value">{{ listQueuedCount }}</span>
+              </div>
+            </div>
+          </header>
+          <el-empty
+            v-if="!runningTasks.length"
+            class="running-card__empty"
+            description="当前暂无任务"
+            :image-size="72"
+          />
           <div v-else class="running-list">
             <div
-              v-for="task in sortedRunningTasks"
+              v-for="(task, taskIndex) in sortedRunningTasks"
               :key="task.taskId"
               class="running-item"
               :class="`is-${String(task.status || 'unknown').toLowerCase()}`"
+              :style="{ '--task-i': taskIndex }"
             >
-              <div class="task-head">
-                <div class="task-name">{{ task.taskName || '-' }}</div>
-                <el-tag size="small" :type="task.status === 'RUNNING' ? 'success' : 'warning'" effect="light">
-                  {{ task.status || '-' }}
-                </el-tag>
-              </div>
-
-              <div v-if="task.taskType === 'FILE_PARSE'" class="task-stage-current">
-                <div class="stage-line">
-                  <span class="stage-title">阶段：</span>
-                  <span class="stage-name">{{ task.currentStageName || task.currentStageCode || '等待开始' }}</span>
-                  <span class="stage-percent">{{ Number(task.progress || 0) }}%</span>
+              <div class="running-item__sheen" aria-hidden="true" />
+              <div class="running-item__body">
+                <div class="task-head">
+                  <div class="task-head__main">
+                    <span v-if="task.taskType === 'FILE_PARSE'" class="task-kind">文件解析</span>
+                    <div class="task-name" :title="task.taskName || ''">{{ task.taskName || '-' }}</div>
+                  </div>
+                  <span class="task-status-pill" :class="taskStatusPillClass(task.status)">
+                    {{ task.status || '-' }}
+                  </span>
                 </div>
-                <el-progress
-                  :percentage="Number(task.progress || 0)"
-                  :stroke-width="6"
-                  :show-text="false"
-                  class="task-stage-progress"
-                />
-              </div>
 
-              <div v-if="task.taskType === 'FILE_PARSE' && Array.isArray(task.stageTraces) && task.stageTraces.length" class="stage-trace-list">
-                <span
-                  v-for="trace in task.stageTraces"
-                  :key="`${task.taskId}-${trace.stageCode}`"
-                  class="stage-trace-chip"
-                  :class="`is-${String(trace.status || 'PENDING').toLowerCase()}`"
+                <div v-if="task.taskType === 'FILE_PARSE'" class="task-stage-current">
+                  <div class="stage-panel-head">
+                    <span class="stage-panel-label">当前阶段</span>
+                    <span class="stage-percent">{{ Number(task.progress || 0) }}%</span>
+                  </div>
+                  <div class="stage-line">
+                    <span class="stage-name">{{ task.currentStageName || task.currentStageCode || '等待开始' }}</span>
+                  </div>
+                  <el-progress
+                    :percentage="Number(task.progress || 0)"
+                    :stroke-width="7"
+                    :show-text="false"
+                    class="task-stage-progress"
+                    striped
+                    striped-flow
+                  />
+                </div>
+
+                <div
+                  v-if="task.taskType === 'FILE_PARSE' && Array.isArray(task.stageTraces) && task.stageTraces.length"
+                  class="stage-trace-list"
                 >
-                  {{ trace.stageName || trace.stageCode }} · {{ formatStageTraceDuration(trace) }}
-                </span>
-              </div>
-              <el-tooltip
-                v-if="task.taskType === 'FILE_PARSE' && task.errorMessage"
-                effect="dark"
-                placement="top-start"
-                :content="task.errorMessage"
-                :show-after="150"
-              >
-                <div class="task-error">{{ shortError(task.errorMessage) }}</div>
-              </el-tooltip>
-
-              <div class="task-sub">
-                <div class="sub-chip">
-                  <span class="sub-k">项目</span>
-                  <span class="sub-v">{{ task.projectId ?? '-' }}</span>
-                </div>
-                <div v-if="task.fileName || task.fileId != null" class="sub-chip sub-chip--file">
-                  <span class="sub-k">文件</span>
-                  <span class="sub-v">{{ task.fileName || task.fileId }}</span>
-                </div>
-              </div>
-
-              <div class="task-foot">
-                <div class="task-foot-left">
-                  <el-tag size="small" effect="plain">{{ task.priority || '-' }}</el-tag>
-                </div>
-                <div class="task-foot-actions">
-                  <el-button size="small" text type="primary" class="detail-btn" @click="openTaskDetail(task)">
-                    详情
-                  </el-button>
-                  <el-button
-                    v-if="task.cancellable"
-                    size="small"
-                    text
-                    type="danger"
-                    class="cancel-btn"
-                    @click.stop="handleCancelTask(task)"
+                  <span
+                    v-for="trace in task.stageTraces"
+                    :key="`${task.taskId}-${trace.stageCode}`"
+                    class="stage-trace-chip"
+                    :class="`is-${String(trace.status || 'PENDING').toLowerCase()}`"
                   >
-                    取消
-                  </el-button>
+                    {{ trace.stageName || trace.stageCode }} · {{ formatStageTraceDuration(trace) }}
+                  </span>
                 </div>
-              </div>
+                <el-tooltip
+                  v-if="task.taskType === 'FILE_PARSE' && task.errorMessage"
+                  effect="dark"
+                  placement="top-start"
+                  :content="task.errorMessage"
+                  :show-after="150"
+                >
+                  <div class="task-error">{{ shortError(task.errorMessage) }}</div>
+                </el-tooltip>
 
-              <div class="task-runtime">
-                <span class="runtime-chip">等待 {{ formatDuration(task.waitingDurationMs) }}</span>
-                <span class="runtime-chip">运行 {{ formatDuration(task.runningDurationMs) }}</span>
-                <span class="runtime-chip">CPU {{ formatDuration(task.threadCpuTimeMs) }}</span>
+                <div class="task-sub">
+                  <div class="sub-chip">
+                    <span class="sub-k">项目</span>
+                    <span class="sub-v">{{ task.projectId ?? '-' }}</span>
+                  </div>
+                  <div v-if="task.fileName || task.fileId != null" class="sub-chip sub-chip--file">
+                    <span class="sub-k">文件</span>
+                    <span class="sub-v">{{ task.fileName || task.fileId }}</span>
+                  </div>
+                </div>
+
+                <div class="task-foot">
+                  <div class="task-foot-left">
+                    <span class="priority-pill">{{ task.priority || '-' }}</span>
+                  </div>
+                  <div class="task-foot-actions">
+                    <el-button size="small" text type="primary" class="detail-btn" @click="openTaskDetail(task)">
+                      详情
+                    </el-button>
+                    <el-button
+                      v-if="task.cancellable"
+                      size="small"
+                      text
+                      type="danger"
+                      class="cancel-btn"
+                      @click.stop="handleCancelTask(task)"
+                    >
+                      取消
+                    </el-button>
+                  </div>
+                </div>
+
+                <div class="task-runtime" aria-label="任务耗时">
+                  <span class="runtime-chip">
+                    <span class="runtime-chip__k">等待</span>
+                    <span class="runtime-chip__v">{{ formatDuration(task.waitingDurationMs) }}</span>
+                  </span>
+                  <span class="runtime-chip">
+                    <span class="runtime-chip__k">运行</span>
+                    <span class="runtime-chip__v">{{ formatDuration(task.runningDurationMs) }}</span>
+                  </span>
+                  <span class="runtime-chip">
+                    <span class="runtime-chip__k">CPU</span>
+                    <span class="runtime-chip__v">{{ formatDuration(task.threadCpuTimeMs) }}</span>
+                  </span>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         <div class="system-card">
-          <div class="card-head">
-            <div class="card-title">系统运行状态</div>
-            <div class="card-sub">每 5s 自动刷新</div>
-          </div>
+          <header class="system-card__head">
+            <div class="system-card__head-text">
+              <h2 class="system-card__title">系统运行状态</h2>
+              <p class="system-card__subtitle">每 5s 自动刷新 · 与任务池同源采样</p>
+            </div>
+            <div class="system-card__live" aria-hidden="true">
+              <span class="system-card__live-dot" />
+              <span class="system-card__live-txt">实时</span>
+            </div>
+          </header>
 
           <div class="system-row">
             <div class="system-label">系统CPU</div>
@@ -401,6 +527,27 @@ const healthTag = computed(() => {
   return { label: '空闲', type: 'success' }
 })
 
+/** 草稿是否与服务器当前生效值不一致 */
+const poolDirty = computed(() => {
+  const c = Number(poolForm.value.corePoolSize)
+  const m = Number(poolForm.value.maximumPoolSize)
+  return c !== coreThreads.value || m !== maxThreads.value
+})
+
+/** 草稿：核心占最大线程比例，用于可视化条 */
+const poolCoreSharePercent = computed(() => {
+  const m = Math.max(1, Number(poolForm.value.maximumPoolSize) || 1)
+  const c = Math.max(0, Number(poolForm.value.corePoolSize) || 0)
+  return Math.min(100, Math.round((c / m) * 1000) / 10)
+})
+
+const resetPoolDraftToLive = () => {
+  const currentCore = Number(statusData.value?.threadPoolStatus?.corePoolSize || 1)
+  const currentMax = Number(statusData.value?.threadPoolStatus?.maximumPoolSize || 1)
+  poolForm.value.corePoolSize = currentCore > 0 ? currentCore : 1
+  poolForm.value.maximumPoolSize = currentMax > 0 ? currentMax : 1
+}
+
 const lastUpdateText = computed(() => {
   if (!lastUpdateAt.value) return '未刷新'
   const d = new Date(lastUpdateAt.value)
@@ -428,6 +575,16 @@ function loadColor(percent) {
   if (p >= 60) return '#c28a36'
   if (p >= 40) return '#2563eb'
   return '#1f4e79'
+}
+
+/** 任务卡片右上角状态胶囊样式 */
+const taskStatusPillClass = (status) => {
+  const s = String(status || '').toUpperCase()
+  if (s === 'RUNNING') return 'is-run'
+  if (s === 'QUEUED' || s === 'PENDING') return 'is-wait'
+  if (s === 'FAILED' || s === 'ERROR') return 'is-bad'
+  if (s === 'SUCCESS') return 'is-done'
+  return 'is-na'
 }
 
 const fetchStatus = async () => {
@@ -677,6 +834,8 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;1,9..40,400&family=Syne:wght@600;700&family=JetBrains+Mono:wght@500;600&display=swap');
+
 .task-body {
   display: flex;
   flex-direction: column;
@@ -842,6 +1001,303 @@ onBeforeUnmount(() => {
   gap: 10px;
 }
 
+.pool-tuner {
+  grid-column: 1 / -1;
+  --pool-slate: #0f172a;
+  --pool-ink: #1e293b;
+  --pool-muted: #64748b;
+  --pool-line: rgba(51, 65, 85, 0.35);
+  --pool-surface: linear-gradient(165deg, rgba(255, 255, 255, 0.97) 0%, rgba(241, 245, 249, 0.92) 48%, rgba(226, 232, 240, 0.88) 100%);
+  --pool-amber: #d97706;
+  --pool-amber-soft: rgba(217, 119, 6, 0.14);
+  --pool-teal: #0d9488;
+  font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  border-radius: 16px;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--pool-line);
+  background: var(--pool-surface);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.6) inset,
+    0 14px 36px -22px rgba(15, 23, 42, 0.45);
+  position: relative;
+  overflow: hidden;
+}
+
+.pool-tuner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+
+.pool-tuner__top {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.pool-tuner__title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pool-tuner__title {
+  font-family: 'Syne', 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pool-slate);
+}
+
+.pool-tuner__hint {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--pool-muted);
+  max-width: 42ch;
+}
+
+.pool-tuner__state {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--pool-line);
+  background: rgba(255, 255, 255, 0.65);
+  color: var(--pool-muted);
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.pool-tuner__state.is-clean {
+  border-color: rgba(13, 148, 136, 0.35);
+  background: rgba(240, 253, 250, 0.85);
+  color: #0f766e;
+}
+
+.pool-tuner__state.is-dirty {
+  border-color: rgba(217, 119, 6, 0.45);
+  background: var(--pool-amber-soft);
+  color: #92400e;
+}
+
+.pool-tuner__fields {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 12px 14px;
+  align-items: stretch;
+}
+
+@media (max-width: 560px) {
+  .pool-tuner__fields {
+    grid-template-columns: 1fr;
+  }
+
+  .pool-tuner__divider {
+    display: none;
+  }
+}
+
+.pool-tuner__field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.pool-tuner__field:hover {
+  border-color: rgba(14, 116, 144, 0.35);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 10px 24px -18px rgba(15, 23, 42, 0.25);
+}
+
+.pool-tuner__field-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pool-tuner__name {
+  font-family: 'Syne', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--pool-ink);
+}
+
+.pool-tuner__live {
+  font-size: 11px;
+  color: var(--pool-muted);
+  white-space: nowrap;
+}
+
+.pool-tuner__live-num {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--pool-slate);
+  margin-left: 4px;
+}
+
+.pool-tuner__control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pool-tuner__draft-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pool-muted);
+  flex-shrink: 0;
+}
+
+.pool-tuner__stepper {
+  flex: 1;
+  min-width: 0;
+}
+
+:deep(.pool-tuner__stepper.el-input-number) {
+  width: 100%;
+}
+
+:deep(.pool-tuner__stepper .el-input__wrapper) {
+  border-radius: 10px;
+  padding-left: 10px;
+  padding-right: 6px;
+  background: rgba(248, 250, 252, 0.95);
+  box-shadow: 0 0 0 1px rgba(51, 65, 85, 0.2) inset;
+  transition: box-shadow 0.2s ease;
+}
+
+:deep(.pool-tuner__stepper .el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px rgba(13, 148, 136, 0.45) inset;
+}
+
+:deep(.pool-tuner__stepper .el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.35) inset;
+}
+
+:deep(.pool-tuner__stepper .el-input__inner) {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--pool-slate);
+  text-align: center;
+}
+
+.pool-tuner__divider {
+  width: 1px;
+  margin: 8px 0;
+  background: linear-gradient(180deg, transparent, rgba(100, 116, 139, 0.35), transparent);
+  align-self: stretch;
+  justify-self: center;
+}
+
+.pool-tuner__meter {
+  position: relative;
+  z-index: 1;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(100, 116, 139, 0.35);
+}
+
+.pool-tuner__meter-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06) inset;
+}
+
+.pool-tuner__meter-core {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--pool-teal), #14b8a6);
+  box-shadow: 0 0 12px rgba(13, 148, 136, 0.35);
+  transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pool-tuner__meter-cap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--pool-muted);
+}
+
+.pool-tuner__meter-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--pool-teal);
+}
+
+.pool-tuner__actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.pool-tuner__btn {
+  border-radius: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.pool-tuner__btn--ghost {
+  border: 1px solid rgba(51, 65, 85, 0.25);
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--pool-ink);
+}
+
+.pool-tuner__btn--ghost:hover:not(:disabled) {
+  border-color: rgba(13, 148, 136, 0.4);
+  color: #0f766e;
+  background: rgba(240, 253, 250, 0.9);
+}
+
+.pool-tuner__btn--apply {
+  min-width: 104px;
+  background: linear-gradient(135deg, #0f766e 0%, #0d9488 55%, #14b8a6 100%);
+  border: none;
+  box-shadow: 0 8px 20px -8px rgba(13, 148, 136, 0.65);
+}
+
+.pool-tuner__btn--apply:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+
 .metric-item {
   border: 1px solid rgba(148, 163, 184, 0.35);
   border-radius: 12px;
@@ -850,14 +1306,6 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-
-.metric-item--editable {
-  gap: 6px;
-}
-
-.metric-inline-btn {
-  align-self: flex-end;
 }
 
 .metric-item--queue {
@@ -902,173 +1350,411 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 
+@keyframes running-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes task-row-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.92);
+  }
+}
+
 .running-card {
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  border-radius: 14px;
-  padding: 10px;
-  background: rgba(255, 255, 255, 0.92);
+  --rc-slate: #0f172a;
+  --rc-muted: #64748b;
+  --rc-line: rgba(51, 65, 85, 0.32);
+  --rc-teal: #0d9488;
+  --rc-teal-glow: rgba(13, 148, 136, 0.22);
+  font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  position: relative;
+  border: 1px solid var(--rc-line);
+  border-radius: 16px;
+  padding: 14px 14px 12px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.94) 42%, rgba(241, 245, 249, 0.92) 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.65) inset,
+    0 16px 40px -24px rgba(15, 23, 42, 0.4);
   display: flex;
   flex-direction: column;
   min-height: 360px;
   max-height: min(58vh, 520px);
+  overflow: hidden;
+  animation: running-card-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
-.card-head {
+.running-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  pointer-events: none;
+  mix-blend-mode: multiply;
+  border-radius: inherit;
+}
+
+.running-card__head {
+  position: relative;
+  z-index: 1;
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed rgba(100, 116, 139, 0.38);
 }
 
-.card-title {
-  font-size: 13px;
-  font-weight: 800;
-  color: #0f172a;
+.running-card__title {
+  margin: 0;
+  font-family: 'Syne', 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--rc-slate);
 }
 
-.card-sub {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
-  font-size: 12px;
-  color: #64748b;
+.running-card__subtitle {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--rc-muted);
+  max-width: 36ch;
 }
 
-.card-sub-seg b {
-  color: #0f172a;
-  font-weight: 800;
+.running-card__stats {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
-.card-sub-seg--run b {
-  color: #166534;
+.running-card__stat {
+  min-width: 72px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--rc-line);
+  background: rgba(255, 255, 255, 0.82);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
-.card-sub-seg--queue b {
+.running-card__stat:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 10px 22px -16px rgba(15, 23, 42, 0.2);
+}
+
+.running-card__stat--run {
+  border-color: rgba(13, 148, 136, 0.35);
+  background: linear-gradient(160deg, rgba(240, 253, 250, 0.95) 0%, rgba(255, 255, 255, 0.9) 100%);
+}
+
+.running-card__stat--queue {
+  border-color: rgba(217, 119, 6, 0.32);
+  background: linear-gradient(160deg, rgba(255, 251, 235, 0.95) 0%, rgba(255, 255, 255, 0.9) 100%);
+}
+
+.running-card__stat-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rc-muted);
+}
+
+.running-card__stat-value {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--rc-slate);
+}
+
+.running-card__stat--run .running-card__stat-value {
+  color: #0f766e;
+}
+
+.running-card__stat--queue .running-card__stat-value {
   color: #b45309;
 }
 
-.card-sub-dot {
-  opacity: 0.45;
+:deep(.running-card__empty.el-empty) {
+  position: relative;
+  z-index: 1;
+  padding: 28px 12px;
+  flex: 1;
+  justify-content: center;
+}
+
+:deep(.running-card__empty .el-empty__description p) {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: var(--rc-muted);
 }
 
 .running-list {
+  position: relative;
+  z-index: 1;
   max-height: none;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   align-items: stretch;
-  padding-right: 4px;
+  padding: 2px 6px 4px 2px;
   flex: 1 1 auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(13, 148, 136, 0.35) transparent;
+}
+
+.running-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.running-list::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--rc-teal), #14b8a6);
+  border-radius: 999px;
 }
 
 .running-item {
+  --stripe: #94a3b8;
   position: relative;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: stretch;
   gap: 0;
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.32);
   border-radius: 14px;
-  padding: 10px 10px 10px 14px;
-  background: linear-gradient(180deg, #ffffff 0%, rgba(248, 250, 252, 0.9) 100%);
-  box-shadow: 0 10px 24px -18px rgba(15, 23, 42, 0.28);
-  overflow-x: hidden;
-  overflow-y: visible;
+  padding: 0;
+  background: linear-gradient(118deg, rgba(255, 255, 255, 0.97) 0%, rgba(248, 250, 252, 0.94) 48%, rgba(255, 255, 255, 0.92) 100%);
+  box-shadow: 0 12px 28px -20px rgba(15, 23, 42, 0.35);
+  overflow: hidden;
   min-width: 0;
-  min-height: 112px;
+  min-height: 104px;
   width: 100%;
-  height: auto;
   box-sizing: border-box;
   flex: 0 0 auto;
+  animation: task-row-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: calc(0.04s * var(--task-i, 0));
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.2s ease;
 }
 
 .running-item::before {
   content: '';
+  flex: 0 0 5px;
+  align-self: stretch;
+  background: linear-gradient(180deg, var(--stripe) 0%, color-mix(in srgb, var(--stripe) 65%, #0f172a) 100%);
+  box-shadow: 2px 0 12px var(--rc-teal-glow);
+}
+
+.running-item.is-running {
+  --stripe: #0d9488;
+}
+
+.running-item.is-queued,
+.running-item.is-pending {
+  --stripe: #d97706;
+}
+
+.running-item.is-error,
+.running-item.is-failed {
+  --stripe: #b42318;
+}
+
+.running-item.is-cancelled,
+.running-item.is-canceled {
+  --stripe: #64748b;
+}
+
+.running-item__sheen {
   position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  background: #94a3b8;
-}
-
-.running-item.is-running::before {
-  background: #16a34a;
-}
-
-.running-item.is-queued::before,
-.running-item.is-pending::before {
-  background: #f59e0b;
-}
-
-.running-item.is-error::before,
-.running-item.is-failed::before {
-  background: #b42318;
-}
-
-.running-item.is-cancelled::before,
-.running-item.is-canceled::before {
-  background: #64748b;
+  inset: 0;
+  left: 5px;
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.5) 48%, transparent 56%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease;
 }
 
 .running-item:hover {
-  border-color: rgba(59, 130, 246, 0.35);
-  box-shadow: 0 14px 32px -18px rgba(15, 23, 42, 0.32);
+  border-color: rgba(13, 148, 136, 0.38);
+  box-shadow:
+    0 16px 36px -22px rgba(15, 23, 42, 0.42),
+    0 0 0 1px rgba(13, 148, 136, 0.12);
+  transform: translateY(-1px);
+}
+
+.running-item:hover .running-item__sheen {
+  opacity: 1;
+}
+
+.running-item__body {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 12px 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
 .task-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
+}
+
+.task-head__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.task-kind {
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--rc-teal);
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(13, 148, 136, 0.1);
+  border: 1px solid rgba(13, 148, 136, 0.22);
 }
 
 .task-name {
-  font-size: 13px;
-  font-weight: 800;
-  color: #0f172a;
+  font-family: 'Syne', 'DM Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--rc-slate);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.3;
+}
+
+.task-status-pill {
+  flex-shrink: 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--rc-line);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--rc-muted);
+}
+
+.task-status-pill.is-run {
+  border-color: rgba(13, 148, 136, 0.4);
+  background: linear-gradient(135deg, rgba(240, 253, 250, 0.95) 0%, rgba(255, 255, 255, 0.92) 100%);
+  color: #0f766e;
+  box-shadow: 0 0 14px var(--rc-teal-glow);
+}
+
+.task-status-pill.is-wait {
+  border-color: rgba(217, 119, 6, 0.38);
+  background: rgba(255, 251, 235, 0.92);
+  color: #92400e;
+}
+
+.task-status-pill.is-bad {
+  border-color: rgba(180, 35, 24, 0.35);
+  background: rgba(255, 242, 242, 0.95);
+  color: #991b1b;
+}
+
+.task-status-pill.is-done {
+  border-color: rgba(22, 163, 74, 0.35);
+  background: rgba(236, 253, 245, 0.9);
+  color: #166534;
 }
 
 .task-sub {
-  margin-top: 7px;
+  margin-top: 10px;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
 .task-stage-current {
-  margin-top: 8px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(13, 148, 136, 0.2);
+  background: linear-gradient(165deg, rgba(240, 253, 250, 0.55) 0%, rgba(255, 255, 255, 0.75) 100%);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
+}
+
+.stage-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.stage-panel-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--rc-muted);
 }
 
 .stage-line {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: baseline;
   min-width: 0;
 }
 
-.stage-title {
-  font-size: 12px;
-  color: #64748b;
-}
-
 .stage-name {
-  font-size: 12px;
-  color: #1e293b;
+  font-size: 13px;
+  color: var(--rc-slate);
   font-weight: 700;
   min-width: 0;
   overflow: hidden;
@@ -1081,39 +1767,51 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
+:deep(.task-stage-progress .el-progress-bar__outer) {
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.07);
+  overflow: hidden;
+}
+
+:deep(.task-stage-progress .el-progress-bar__inner) {
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0f766e 0%, var(--rc-teal) 45%, #5eead4 100%) !important;
+}
+
 .stage-percent {
-  font-size: 12px;
-  color: #475569;
-  font-weight: 700;
-  justify-self: end;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--rc-teal);
 }
 
 .stage-trace-list {
-  margin-top: 6px;
+  margin-top: 8px;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
 .stage-trace-chip {
-  padding: 2px 8px;
+  padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  background: rgba(248, 250, 252, 0.95);
   font-size: 11px;
+  font-weight: 600;
   color: #475569;
 }
 
 .stage-trace-chip.is-success {
   border-color: rgba(22, 163, 74, 0.28);
-  background: rgba(236, 253, 245, 0.85);
+  background: rgba(236, 253, 245, 0.88);
   color: #166534;
 }
 
 .stage-trace-chip.is-running {
-  border-color: rgba(37, 99, 235, 0.28);
-  background: rgba(239, 246, 255, 0.9);
-  color: #1d4ed8;
+  border-color: rgba(13, 148, 136, 0.35);
+  background: rgba(240, 253, 250, 0.95);
+  color: #0f766e;
 }
 
 .stage-trace-chip.is-failed {
@@ -1130,13 +1828,14 @@ onBeforeUnmount(() => {
 
 .sub-chip {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  padding: 6px 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.26);
-  background: rgba(241, 245, 249, 0.7);
+  padding: 8px 11px;
+  border-radius: 11px;
+  border: 1px solid rgba(51, 65, 85, 0.12);
+  background: rgba(255, 255, 255, 0.88);
   min-width: 0;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
 }
 
 .sub-chip--file {
@@ -1146,9 +1845,11 @@ onBeforeUnmount(() => {
 
 .sub-k {
   flex: 0 0 auto;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
-  color: #64748b;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--rc-muted);
 }
 
 .sub-v {
@@ -1156,9 +1857,10 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
-  font-weight: 700;
-  color: #0f172a;
+  font-weight: 500;
+  color: var(--rc-slate);
 }
 
 .sub-chip--file .sub-v {
@@ -1168,17 +1870,33 @@ onBeforeUnmount(() => {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
-  line-height: 1.35;
-  max-height: 2.75em;
+  line-height: 1.4;
+  max-height: 2.9em;
+}
+
+.priority-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid rgba(51, 65, 85, 0.15);
+  background: rgba(248, 250, 252, 0.95);
+  color: #475569;
 }
 
 .task-foot {
-  margin-top: 10px;
+  margin-top: 12px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(100, 116, 139, 0.28);
 }
 
 .task-foot-left {
@@ -1186,13 +1904,13 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  flex: 1 1 160px;
+  flex: 1 1 140px;
 }
 
 .task-foot-actions {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
@@ -1214,8 +1932,8 @@ onBeforeUnmount(() => {
 }
 
 .task-id-pill--link:hover {
-  border-color: rgba(37, 99, 235, 0.4);
-  color: #1d4ed8;
+  border-color: rgba(13, 148, 136, 0.45);
+  color: #0f766e;
 }
 
 .task-runtime {
@@ -1223,35 +1941,43 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  font-size: 12px;
-  color: #334155;
 }
 
 .task-error {
   margin-top: 8px;
-  padding: 6px 8px;
-  border-radius: 8px;
-  border: 1px solid rgba(180, 35, 24, 0.24);
-  background: rgba(255, 242, 242, 0.9);
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(180, 35, 24, 0.28);
+  background: rgba(255, 242, 242, 0.92);
   color: #991b1b;
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
 .runtime-chip {
-  padding: 4px 8px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 11px;
   border-radius: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(241, 245, 249, 0.86) 100%);
-  color: #334155;
-  font-weight: 700;
-  line-height: 1.25;
-  box-shadow: 0 4px 10px -8px rgba(15, 23, 42, 0.25);
+  border: 1px solid rgba(51, 65, 85, 0.12);
+  background: rgba(15, 23, 42, 0.04);
+  line-height: 1.2;
 }
 
-:deep(.running-item .el-tag) {
-  border-radius: 999px;
-  font-weight: 800;
+.runtime-chip__k {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--rc-muted);
+}
+
+.runtime-chip__v {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--rc-slate);
 }
 
 .cancel-btn,
@@ -1264,15 +1990,15 @@ onBeforeUnmount(() => {
 }
 
 :deep(.detail-btn.el-button.is-text) {
-  color: #1d4ed8;
-  border: 1px solid rgba(59, 130, 246, 0.28);
-  background: rgba(239, 246, 255, 0.92);
+  color: #0f766e;
+  border: 1px solid rgba(13, 148, 136, 0.3);
+  background: rgba(240, 253, 250, 0.92);
 }
 
 :deep(.detail-btn.el-button.is-text:hover) {
-  color: #1e40af;
-  border-color: rgba(37, 99, 235, 0.42);
-  background: rgba(219, 234, 254, 0.95);
+  color: #115e59;
+  border-color: rgba(13, 148, 136, 0.48);
+  background: rgba(204, 251, 241, 0.95);
 }
 
 :deep(.cancel-btn.el-button.is-text) {
@@ -1286,43 +2012,150 @@ onBeforeUnmount(() => {
   border-color: rgba(180, 35, 24, 0.38);
   background: rgba(254, 226, 226, 0.95);
 }
+
 .system-card {
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  border-radius: 14px;
-  padding: 10px;
-  background: rgba(255, 255, 255, 0.92);
+  --sys-slate: #0f172a;
+  --sys-muted: #64748b;
+  --sys-line: rgba(51, 65, 85, 0.28);
+  font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  position: relative;
+  border: 1px solid var(--sys-line);
+  border-radius: 16px;
+  padding: 14px 14px 10px;
+  background: linear-gradient(155deg, rgba(15, 23, 42, 0.97) 0%, rgba(30, 41, 59, 0.96) 42%, rgba(15, 23, 42, 0.98) 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+    0 18px 42px -24px rgba(0, 0, 0, 0.55);
+  color: #e2e8f0;
+  overflow: hidden;
+  animation: running-card-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.08s backwards;
+}
+
+.system-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.12;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.15) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.12) 1px, transparent 1px);
+  background-size: 20px 20px;
+  pointer-events: none;
+}
+
+.system-card__head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.system-card__title {
+  margin: 0;
+  font-family: 'Syne', 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #f8fafc;
+}
+
+.system-card__subtitle {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #94a3b8;
+}
+
+.system-card__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(45, 212, 191, 0.35);
+  background: rgba(13, 148, 136, 0.15);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #5eead4;
+}
+
+.system-card__live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #2dd4bf;
+  box-shadow: 0 0 10px rgba(45, 212, 191, 0.75);
+  animation: live-pulse 1.6s ease-in-out infinite;
 }
 
 .system-row {
+  position: relative;
+  z-index: 1;
   display: grid;
-  grid-template-columns: 82px 1fr auto;
+  grid-template-columns: 88px 1fr minmax(72px, auto);
   align-items: center;
-  gap: 10px;
-  padding: 5px 0;
-  border-top: 1px dashed rgba(148, 163, 184, 0.35);
+  gap: 12px;
+  padding: 9px 4px;
+  border-top: 1px solid rgba(71, 85, 105, 0.45);
+  transition: background 0.2s ease;
+}
+
+.system-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
 }
 
 .system-row:first-of-type {
   border-top: none;
-  padding-top: 2px;
 }
 
 .system-label {
-  font-size: 12px;
-  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
 }
 
 .system-bar {
   min-width: 0;
 }
 
+:deep(.system-card .el-progress-bar__outer) {
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+
+:deep(.system-card .el-progress-bar__inner) {
+  border-radius: 999px;
+}
+
 .system-bar--text {
+  font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
-  color: #334155;
+  font-weight: 500;
+  color: #cbd5e1;
+  line-height: 1.35;
+  word-break: break-word;
 }
 
 .system-val {
+  font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
-  color: #334155;
+  font-weight: 600;
+  color: #f1f5f9;
+  text-align: right;
+  white-space: nowrap;
 }
 </style>

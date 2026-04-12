@@ -1,4 +1,5 @@
 ﻿import axios from 'axios'
+import { withSaTokenHeaders } from '@/utils/auth-token'
 
 /** landcheck lc-agent：节点英文名 → 界面展示 */
 export const AGENT_NODE_LABELS = {
@@ -83,10 +84,10 @@ export const chatAgentStream = async ({
 
   const response = await fetch('/api/agent/chat/stream', {
     method: 'POST',
-    headers: {
+    headers: withSaTokenHeaders({
       'Content-Type': 'application/json',
       Accept: 'text/event-stream'
-    },
+    }),
     body: JSON.stringify({
       query: body.query,
       ...(body.threadId ? { threadId: body.threadId } : {})
