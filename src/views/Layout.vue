@@ -55,6 +55,7 @@
             </span>
             <template #dropdown>
               <el-dropdown-menu>
+                <el-dropdown-item @click="goAgentManagement">Agent 管理中心</el-dropdown-item>
                 <el-dropdown-item @click="handleLogout">退出系统</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -93,6 +94,10 @@ const handleLogout = async () => {
   }
   clearAuth()
   router.push('/login')
+}
+
+const goAgentManagement = () => {
+  router.push('/agent-management')
 }
 </script>
 

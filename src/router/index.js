@@ -53,6 +53,12 @@ const routes = [
         name: 'NotificationManagement',
         component: () => import('../views/NotificationManagement.vue'),
         meta: { title: '通知订阅管理' }
+      },
+      {
+        path: 'agent-management',
+        name: 'AgentManagement',
+        component: () => import('../views/AgentManagement.vue'),
+        meta: { title: 'Agent 管理中心' }
       }
     ]
   },
