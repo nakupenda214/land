@@ -26,10 +26,6 @@
               <el-input v-model.trim="form.projectName" placeholder="请输入项目名称（如：XX住宅小区项目）" clearable />
             </el-form-item>
 
-            <el-form-item label="项目编号" prop="projectCode">
-              <el-input v-model.trim="form.projectCode" placeholder="请输入项目编号（如：PRJ2025001）" clearable />
-            </el-form-item>
-
             <el-form-item label="项目时间" prop="projectTime">
               <el-date-picker
                 v-model="form.projectTime"
@@ -42,15 +38,6 @@
               />
             </el-form-item>
 
-            <el-form-item label="规划用途" prop="plannedUse">
-              <el-select v-model="form.plannedUse" placeholder="请选择规划用途" clearable>
-                <el-option label="住宅" value="住宅" />
-                <el-option label="商业" value="商业" />
-                <el-option label="办公" value="办公" />
-                <el-option label="商住混合" value="商住混合" />
-                <el-option label="其他" value="其他" />
-              </el-select>
-            </el-form-item>
           </div>
         </div>
 
@@ -66,17 +53,6 @@
         <div class="form-block">
           <div class="block-title">补充信息</div>
           <div class="form-grid">
-            <el-form-item label="占地面积（㎡）" prop="landArea">
-              <el-input-number
-                v-model="form.landArea"
-                placeholder="请输入占地面积"
-                :precision="2"
-                :min="0"
-                style="width: 100%;"
-                controls-position="right"
-              />
-            </el-form-item>
-
             <el-form-item label="备注" prop="remark" class="remark-item">
               <el-input
                 v-model.trim="form.remark"

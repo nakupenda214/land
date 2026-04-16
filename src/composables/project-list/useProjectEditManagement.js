@@ -18,10 +18,7 @@ export function useProjectEditManagement({
   const projectUpdateForm = reactive({
     id: '',
     projectName: '',
-    projectCode: '',
     location: '',
-    landArea: null,
-    plannedUse: '',
     projectTime: '',
     remark: ''
   })
@@ -43,10 +40,7 @@ export function useProjectEditManagement({
       if (res?.data?.code === 200 && projectOriginal) {
         projectUpdateForm.id = projectOriginal.id
         projectUpdateForm.projectName = projectOriginal.projectName || ''
-        projectUpdateForm.projectCode = projectOriginal.projectCode || ''
         projectUpdateForm.location = projectOriginal.location || ''
-        projectUpdateForm.landArea = projectOriginal.landArea || null
-        projectUpdateForm.plannedUse = projectOriginal.plannedUse || ''
         projectUpdateForm.projectTime = projectOriginal.projectTime || ''
         projectUpdateForm.remark = projectOriginal.remark || ''
       }
@@ -89,10 +83,7 @@ export function useProjectEditManagement({
       const requestData = {
         id: projectUpdateForm.id,
         projectName: projectUpdateForm.projectName,
-        projectCode: projectUpdateForm.projectCode,
         location: projectUpdateForm.location,
-        landArea: projectUpdateForm.landArea,
-        plannedUse: projectUpdateForm.plannedUse,
         projectTime: projectUpdateForm.projectTime,
         remark: projectUpdateForm.remark
       }
@@ -117,10 +108,7 @@ export function useProjectEditManagement({
 
     projectEditRef.value.clearValidate()
     Object.assign(projectUpdateForm, {
-      projectCode: '',
       location: '',
-      landArea: null,
-      plannedUse: '',
       projectTime: '',
       remark: ''
     })

@@ -60,10 +60,6 @@
               <span class="v">{{ form.contractNumber || '-' }}</span>
             </div>
             <div class="meta-item">
-              <span class="k">合同类型</span>
-              <span class="v">{{ form.contractType || '-' }}</span>
-            </div>
-            <div class="meta-item">
               <span class="k">出让方</span>
               <span class="v">{{ form.transferor || '-' }}</span>
             </div>
@@ -75,9 +71,6 @@
           <el-form :ref="setFormRef" :model="form" :rules="rules" label-position="top" class="contract-form contract-form-scroll">
             <el-form-item label="合同编号" prop="contractNumber">
               <el-input v-model="form.contractNumber" placeholder="请输入合同编号" />
-            </el-form-item>
-            <el-form-item label="合同类型" prop="contractType">
-              <el-input v-model="form.contractType" placeholder="请输入合同类型" />
             </el-form-item>
             <el-form-item label="出让方" prop="transferor">
               <el-input v-model="form.transferor" placeholder="请输入出让方" />

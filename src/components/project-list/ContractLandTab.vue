@@ -88,14 +88,6 @@
             />
             <el-table-column
               :resizable="false"
-              prop="contractType"
-              label="合同类型"
-              width="108"
-              align="center"
-              header-align="center"
-            />
-            <el-table-column
-              :resizable="false"
               prop="transferor"
               label="出让方"
               min-width="140"

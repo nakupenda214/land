@@ -9,9 +9,6 @@
       <el-form-item label="合同编号" prop="contractNumber">
         <el-input v-model="form.contractNumber" placeholder="请输入合同编号" style="width: 100%;" />
       </el-form-item>
-      <el-form-item label="合同类型" prop="contractType">
-        <el-input v-model="form.contractType" placeholder="请输入合同类型" style="width: 100%;" />
-      </el-form-item>
       <el-form-item label="出让方" prop="transferor">
         <el-input v-model="form.transferor" placeholder="请输入出让方（土地管理部门）" style="width: 100%;" />
       </el-form-item>

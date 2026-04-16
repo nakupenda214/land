@@ -1,10 +1,7 @@
 const PRINT_FIELDS = [
   { label: '项目名称', key: 'projectName' },
-  { label: '项目编号', key: 'projectCode' },
   { label: '项目位置', key: 'location' },
-  { label: '规划用途', key: 'plannedUse' },
   { label: '项目时间', key: 'projectTime' },
-  { label: '土地面积', key: 'landArea' },
   { label: '实测报告数', key: 'surveyReportFileCount' },
   { label: '合同文件数', key: 'contractFileCount' },
   { label: '合同约定建筑面积', key: 'contractAgreedTotalBuildingArea' },

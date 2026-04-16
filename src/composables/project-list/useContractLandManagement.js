@@ -26,7 +26,6 @@ export function useContractLandManagement({ filterProject, currentProjectInfo })
     id: '',
     fileRecordId: '',
     contractNumber: '',
-    contractType: '',
     transferor: '',
     transferee: '',
     remark: ''
@@ -198,7 +197,6 @@ export function useContractLandManagement({ filterProject, currentProjectInfo })
           createTime: contract.createTime || '',
           updateTime: contract.updateTime || '',
           contractNumber: contract.contractNumber || '',
-          contractType: contract.contractType || '',
           transferor: contract.transferor || '',
           transferee: contract.transferee || '',
           totalArea: contract.totalArea || null,
@@ -256,7 +254,6 @@ export function useContractLandManagement({ filterProject, currentProjectInfo })
       id: '',
       fileRecordId: '',
       contractNumber: '',
-      contractType: '',
       transferor: '',
       transferee: '',
       remark: ''
@@ -278,7 +275,6 @@ export function useContractLandManagement({ filterProject, currentProjectInfo })
       id: row.id,
       fileRecordId: row.fileRecordId || '',
       contractNumber: row.contractNumber || '',
-      contractType: row.contractType || '',
       transferor: row.transferor || '',
       transferee: row.transferee || '',
       remark: row.remark || ''
@@ -307,7 +303,6 @@ export function useContractLandManagement({ filterProject, currentProjectInfo })
       const requestData = {
         id: Number(contractForm.id),
         contractNumber: contractForm.contractNumber,
-        contractType: contractForm.contractType,
         transferor: contractForm.transferor,
         transferee: contractForm.transferee,
         remark: contractForm.remark

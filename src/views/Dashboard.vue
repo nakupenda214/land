@@ -25,15 +25,6 @@
             <template #prefix><el-icon><OfficeBuilding /></el-icon></template>
           </el-input>
           <el-input
-            v-model.trim="queryForm.projectCode"
-            class="filter-item"
-            placeholder="项目编号"
-            clearable
-            @keyup.enter="handleSearch"
-          >
-            <template #prefix><el-icon><Tickets /></el-icon></template>
-          </el-input>
-          <el-input
             v-model.trim="queryForm.location"
             class="filter-item"
             placeholder="项目位置"
@@ -41,15 +32,6 @@
             @keyup.enter="handleSearch"
           >
             <template #prefix><el-icon><Location /></el-icon></template>
-          </el-input>
-          <el-input
-            v-model.trim="queryForm.plannedUse"
-            class="filter-item"
-            placeholder="规划用途"
-            clearable
-            @keyup.enter="handleSearch"
-          >
-            <template #prefix><el-icon><CollectionTag /></el-icon></template>
           </el-input>
           <el-date-picker
             v-model="queryForm.projectTimeRange"
@@ -95,9 +77,7 @@
       >
         <el-table-column type="selection" width="48" align="center" />
         <el-table-column prop="projectName" label="项目名称" min-width="220" show-overflow-tooltip />
-        <el-table-column prop="projectCode" label="项目编号" min-width="150" show-overflow-tooltip />
         <el-table-column prop="location" label="项目位置" min-width="180" show-overflow-tooltip />
-        <el-table-column prop="plannedUse" label="规划用途" min-width="130" show-overflow-tooltip />
         <el-table-column prop="projectTime" label="项目时间" min-width="120" align="center" />
         <el-table-column prop="surveyReportFileCount" label="实测报告数" width="120" align="center" />
         <el-table-column prop="contractFileCount" label="合同文件数" width="120" align="center" />
@@ -141,7 +121,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { CollectionTag, DataAnalysis, Location, OfficeBuilding, Tickets } from '@element-plus/icons-vue'
+import { DataAnalysis, Location, OfficeBuilding } from '@element-plus/icons-vue'
 import { deleteProjectById, queryProjectDetails } from '@/services/project.service'
 import { useDashboardPrint } from '@/composables/dashboard/useDashboardPrint'
 import { usePrint } from '@/hooks/usePrint.ts'
@@ -153,9 +133,7 @@ const queryForm = reactive({
   pageNum: 1,
   pageSize: 20,
   projectName: '',
-  projectCode: '',
   location: '',
-  plannedUse: '',
   projectTimeRange: []
 })
 
@@ -184,9 +162,7 @@ const buildPayload = () => {
     sortField: 'updateTime',
     sortDirection: 'desc',
     projectName: queryForm.projectName || undefined,
-    projectCode: queryForm.projectCode || undefined,
     location: queryForm.location || undefined,
-    plannedUse: queryForm.plannedUse || undefined,
     projectTimeStart: start ? formatMonth(start) : undefined,
     projectTimeEnd: end ? formatMonth(end) : undefined
   }
@@ -214,9 +190,7 @@ const handleSearch = async () => {
 
 const handleReset = async () => {
   queryForm.projectName = ''
-  queryForm.projectCode = ''
   queryForm.location = ''
-  queryForm.plannedUse = ''
   queryForm.projectTimeRange = []
   queryForm.pageNum = 1
   queryForm.pageSize = 20
@@ -397,11 +371,11 @@ onMounted(() => {
   color: #607286;
 }
 
-.filter-row {
-  flex: 1 1 720px;
+  .filter-row {
+  flex: 1 1 640px;
   min-width: 0;
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr 1.4fr;
+  grid-template-columns: 1fr 1fr 1.4fr;
   gap: 14px;
   align-items: center;
 }
