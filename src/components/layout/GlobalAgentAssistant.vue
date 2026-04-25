@@ -1,7 +1,7 @@
 ﻿<template>
   <div class="global-agent">
     <button
-      v-if="!visible"
+      v-if="showAgentFab && !visible"
       class="agent-fab"
       type="button"
       title="智能助手"
@@ -194,70 +194,14 @@
 
 <script setup>
 import { computed, nextTick, ref } from 'vue'
-import { marked } from 'marked'
 import { ArrowRight, ChatDotRound, Close, User } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import AgentAssistantGlyph from '@/components/layout/AgentAssistantGlyph.vue'
 import { chatAgentStream, formatAgentNodeLine } from '@/services/agent.service'
-
-marked.setOptions({ breaks: true, gfm: true })
-
-/**
- * 模型常把「### 标题」与正文写在同一行，marked 会把整行当成一个 <h3>，列表/段落全部丢失。
- * 对首行做轻量拆分：常见短标题词后若紧接正文，则插入换行。
- */
-const RUNIN_TITLE_MARKERS = [
-  '查询结果摘要',
-  '结果摘要',
-  '查询结果说明',
-  '查询结果',
-  '答复说明',
-  '结果说明',
-  '详细说明',
-  '主要结论',
-  '结论',
-  '风险提示',
-  '数据说明',
-  '图表说明',
-  '概述'
-].sort((a, b) => b.length - a.length)
-
-/** 正文常以「本次/具体/如下/共/1.」等开头；允许标点后直接接正文 */
-const RUNIN_BODY_START = /^[\u4e00-\u9fff0-9（(一1这那以从经根据共具如下、，：。.；\d]/
-
-function fixRunInAtxHeadingLine(line) {
-  // 必须兼容「###查询结果摘要」无空格，否则正则不匹配、整行会被 marked 当成一个标题
-  const hm = line.match(/^(#{1,6})(\s*)(.*)$/)
-  if (!hm) return null
-  const hashes = hm[1]
-  const rest = hm[3] ?? ''
-  if (rest.length < 18) return null
-  for (const title of RUNIN_TITLE_MARKERS) {
-    if (!rest.startsWith(title)) continue
-    const tail = rest.slice(title.length)
-    const trimmed = tail.trimStart()
-    if (trimmed.length >= 4 && RUNIN_BODY_START.test(trimmed)) {
-      return `${hashes} ${title}\n\n${trimmed}`
-    }
-  }
-  return null
-}
-
-function fixRunInAtxHeadingMarkdown(markdown) {
-  const s = String(markdown ?? '')
-  const lines = s.split(/\r?\n/)
-  for (let i = 0; i < lines.length; i++) {
-    if (!lines[i].trim()) continue
-    const fixed = fixRunInAtxHeadingLine(lines[i].trim())
-    if (fixed) {
-      lines[i] = fixed
-      break
-    }
-  }
-  return lines.join('\n')
-}
+import { renderAgentMarkdownHtml } from '@/utils/agent-markdown.js'
 
 const visible = ref(false)
+const showAgentFab = false
 const drawerWidth = computed(() => (typeof window !== 'undefined' && window.innerWidth < 720 ? '100%' : 'min(640px, 92vw)'))
 const inputText = ref('')
 const messages = ref([])
@@ -333,9 +277,7 @@ const summarizeArgs = (value) => {
 function renderAssistantHtml(raw) {
   const s = raw == null ? '' : String(raw)
   if (!s.trim()) return '<p class="agent-md-empty">暂无内容</p>'
-  const normalized = fixRunInAtxHeadingMarkdown(s)
-  const html = marked.parse(normalized)
-  return String(html).replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+  return renderAgentMarkdownHtml(s)
 }
 
 const stopStreaming = () => {

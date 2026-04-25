@@ -61,6 +61,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import { setToken } from '@/utils/auth-token'
+import { fetchUnreadStationNotificationsAfterLogin } from '@/services/station-notification.service'
 import { User, Lock } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -107,6 +108,11 @@ const handleLogin = async () => {
     const user = data.data?.user
     if (user?.id != null) {
       sessionStorage.setItem('userId', String(user.id))
+    }
+    try {
+      await fetchUnreadStationNotificationsAfterLogin()
+    } catch {
+      /* 未读预热失败不影响登录 */
     }
     ElMessage.success('登录成功')
     router.push('/')

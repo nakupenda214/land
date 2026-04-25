@@ -4,13 +4,14 @@ import { withSaTokenHeaders } from '@/utils/auth-token'
 /** landcheck lc-agent：节点英文名 → 界面展示 */
 export const AGENT_NODE_LABELS = {
   IntentClassifyNode: '意图识别',
+  KnowledgeQaAnswerNode: '知识库生成',
   SchemaRetrieveNode: 'Schema 检索',
   MqlGenerateNode: '生成查询（MQL）',
   MqlValidateNode: '安全校验',
   MongoExecuteNode: '执行数据查询',
+  MQLExecuteNode: '执行数据查询',
   ChartGenerateNode: '生成图表',
   AnswerWrapNode: '组织回答',
-  FallbackReActNode: '智能修正',
   snapshot: '状态检查点'
 }
 
@@ -55,6 +56,7 @@ function isLandAgentEvent(obj) {
  * @param {(evt: object) => void} [options.onThink] — THINK
  * @param {(evt: object) => void} [options.onNode] — NODE（节点阶段）
  * @param {(evt: object) => void} [options.onError] — ERROR
+ * @param {(meta: { threadId?: string, traceId?: string }) => void} [options.onTraceMeta] — 响应头就绪（首包前即可拿到 thread/trace）
  * @param {(info: { threadId?: string, ok?: boolean }) => void} [options.onComplete] — NODE complete
  * @param 其余 onLlm/onFinal/onEvent 等兼容旧调用方
  */
@@ -66,6 +68,7 @@ export const chatAgentStream = async ({
   onThink,
   onNode,
   onComplete,
+  onTraceMeta,
   onFinal,
   onToolCall,
   onToolResult,
@@ -101,10 +104,23 @@ export const chatAgentStream = async ({
   }
 
   const threadIdFromHeader = response.headers.get('X-Thread-Id')
+  const traceIdFromHeader = response.headers.get('X-Agent-Trace-Id')
+  onTraceMeta?.({
+    threadId: threadIdFromHeader || undefined,
+    traceId: traceIdFromHeader || undefined
+  })
 
   const reader = response.body.getReader()
   const decoder = new TextDecoder('utf-8')
   let buffer = ''
+
+  const releaseReader = async () => {
+    try {
+      await reader.cancel(signal?.aborted ? 'client abort' : 'done')
+    } catch {
+      /* ignore */
+    }
+  }
 
   const dispatchLand = (data) => {
     onEvent?.(data)
@@ -201,20 +217,29 @@ export const chatAgentStream = async ({
     }
   }
 
-  while (true) {
-    const { value, done } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    const events = buffer.split(/\r?\n\r?\n/)
-    buffer = events.pop() || ''
-    events.forEach(consumeEvent)
+  try {
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const events = buffer.split(/\r?\n\r?\n/)
+      buffer = events.pop() || ''
+      events.forEach(consumeEvent)
+    }
+
+    if (buffer.trim()) {
+      consumeEvent(buffer.trim())
+    }
+  } finally {
+    if (signal?.aborted) {
+      await releaseReader()
+    }
   }
 
-  if (buffer.trim()) {
-    consumeEvent(buffer.trim())
+  return {
+    threadId: threadIdFromHeader || body.threadId || null,
+    traceId: traceIdFromHeader || null
   }
-
-  return { threadId: threadIdFromHeader || body.threadId || null }
 }
 
 /**

@@ -2,9 +2,7 @@
   <section class="panel business-panel">
     <header class="panel-header">
       <div class="heading">
-        <p class="panel-kicker">Business Knowledge</p>
-        <h3>BusinessKnowledge 管理</h3>
-        <p>可视化对齐：列表、创建、更新、召回、重试向量化、刷新向量库</p>
+        <h3>业务知识管理</h3>
       </div>
       <div class="actions">
         <el-input v-model="keyword" placeholder="按术语检索" clearable class="search" @keyup.enter="loadData" />
@@ -35,17 +33,24 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="召回" width="90">
+      <el-table-column label="召回" width="124" align="center">
         <template #default="{ row }">
-          <el-tag effect="light" :type="row.isRecall ? 'success' : 'info'">{{ row.isRecall ? '开启' : '关闭' }}</el-tag>
+          <el-switch
+            class="recall-switch"
+            :model-value="!!row.isRecall"
+            size="large"
+            inline-prompt
+            active-text="开"
+            inactive-text="关"
+            :loading="recallTogglingId === row.id"
+            :disabled="!!recallTogglingId"
+            @update:model-value="(on) => onRecallChange(row, on)"
+          />
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="290" fixed="right">
+      <el-table-column label="操作" width="240" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openEditDialog(row)">编辑</el-button>
-          <el-button link @click="toggleRecall(row)">
-            {{ row.isRecall ? '关闭召回' : '开启召回' }}
-          </el-button>
           <el-button link @click="retryEmbedding(row)">重试向量化</el-button>
           <el-button link type="danger" @click="removeItem(row)">删除</el-button>
         </template>
@@ -58,7 +63,13 @@
           <el-input v-model.trim="form.businessTerm" maxlength="80" />
         </el-form-item>
         <el-form-item label="术语说明">
-          <el-input v-model.trim="form.description" type="textarea" :rows="4" maxlength="400" />
+          <el-input
+            v-model.trim="form.description"
+            type="textarea"
+            :rows="4"
+            maxlength="2000"
+            show-word-limit
+          />
         </el-form-item>
         <el-form-item label="同义词">
           <el-input v-model.trim="form.synonyms" placeholder="多个词可用逗号分隔" />
@@ -94,6 +105,7 @@ const emit = defineEmits(['updated'])
 const loading = ref(false)
 const refreshing = ref(false)
 const submitting = ref(false)
+const recallTogglingId = ref('')
 const dialogVisible = ref(false)
 const editingId = ref('')
 const keyword = ref('')
@@ -167,13 +179,17 @@ async function submitForm() {
   }
 }
 
-async function toggleRecall(row) {
+async function onRecallChange(row, on) {
+  if (recallTogglingId.value) return
+  recallTogglingId.value = row.id
   try {
-    await recallBusinessKnowledge(row.id, !row.isRecall)
+    await recallBusinessKnowledge(row.id, on)
     ElMessage.success('召回状态已更新')
     await loadData()
   } catch (error) {
     ElMessage.error(error.message || '更新召回状态失败')
+  } finally {
+    recallTogglingId.value = ''
   }
 }
 
@@ -239,23 +255,10 @@ defineExpose({ loadData, getCount: () => rows.value.length })
   display: flex;
   flex-direction: column;
 }
-.panel-kicker {
-  margin: 0;
-  font-size: 11px;
-  letter-spacing: 1.4px;
-  text-transform: uppercase;
-  color: #5f7eb0;
-  font-weight: 700;
-}
 h3 {
   margin: 0;
   font-size: 20px;
   color: #16365f;
-}
-p {
-  margin: 4px 0 0;
-  color: #6d7e98;
-  font-size: 13px;
 }
 .actions {
   display: flex;
@@ -296,6 +299,22 @@ p {
   border-radius: 999px;
   background: #eef4ff;
   color: #395f91;
+}
+
+/* 召回开关：略大的 large 尺寸；开=绿、关=白底灰字 */
+.business-panel :deep(.recall-switch.el-switch) {
+  --el-switch-on-color: #22c55e;
+  --el-switch-off-color: #ffffff;
+  --el-switch-border-color: #d4d4d8;
+}
+.business-panel :deep(.recall-switch.el-switch:not(.is-checked) .el-switch__inner-wrapper) {
+  color: #64748b;
+}
+.business-panel :deep(.recall-switch.el-switch.is-checked .el-switch__inner-wrapper) {
+  color: #ffffff;
+}
+.business-panel :deep(.recall-switch.el-switch:not(.is-checked) .el-switch__action) {
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08);
 }
 </style>
 

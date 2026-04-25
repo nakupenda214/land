@@ -327,18 +327,6 @@
             <div class="system-val">{{ systemCpuText }}</div>
           </div>
           <div class="system-row">
-            <div class="system-label">进程CPU</div>
-            <div class="system-bar">
-              <el-progress
-                :percentage="processCpuPercent"
-                :color="loadColor(processCpuPercent)"
-                :stroke-width="8"
-                :show-text="false"
-              />
-            </div>
-            <div class="system-val">{{ processCpuText }}</div>
-          </div>
-          <div class="system-row">
             <div class="system-label">JVM堆内存</div>
             <div class="system-bar">
               <el-progress
@@ -354,11 +342,6 @@
             <div class="system-label">线程数</div>
             <div class="system-bar system-bar--text">{{ systemStatus.thread?.liveThreadCount ?? '-' }}</div>
             <div class="system-val" />
-          </div>
-          <div class="system-row">
-            <div class="system-label">连接池</div>
-            <div class="system-bar system-bar--text">{{ poolDisplayText }}</div>
-            <div class="system-val">{{ poolDisplayHint }}</div>
           </div>
           <div class="system-row">
             <div class="system-label">GPU</div>
@@ -417,17 +400,17 @@ const statusData = ref({
 })
 const systemStatus = ref({
   system: {},
-  process: {},
   memory: {},
   thread: {},
   dataSource: {},
-  mongoPool: {},
   gpu: {}
 })
 let timer = null
 let detailPollTimer = null
 const refreshIntervalMs = 5000
 const detailPollIntervalMs = 2000
+const pageVisible = ref(typeof document === 'undefined' ? true : document.visibilityState === 'visible')
+const statusLoaded = ref(false)
 const poolForm = ref({
   corePoolSize: 1,
   maximumPoolSize: 1
@@ -481,31 +464,11 @@ const maxThreads = computed(() => Number(statusData.value?.threadPoolStatus?.max
 const poolSize = computed(() => Number(statusData.value?.threadPoolStatus?.poolSize || 0))
 const completedCount = computed(() => Number(statusData.value?.threadPoolStatus?.completedTaskCount || 0))
 const systemCpu = computed(() => Number(systemStatus.value?.system?.cpuLoadPercent || 0))
-const processCpu = computed(() => Number(systemStatus.value?.process?.cpuLoadPercent || 0))
 const memoryUsed = computed(() => Number(systemStatus.value?.memory?.heapUsedBytes || 0))
 const memoryMax = computed(() => Number(systemStatus.value?.memory?.heapMaxBytes || 0))
 const gpuSupported = computed(() => Boolean(systemStatus.value?.gpu?.supported))
 const gpuUtil = computed(() => systemStatus.value?.gpu?.utilizationPercent)
-const dsActive = computed(() => systemStatus.value?.dataSource?.activeConnections)
-const dsTotal = computed(() => systemStatus.value?.dataSource?.totalConnections)
-const mongoPoolSupported = computed(() => Boolean(systemStatus.value?.mongoPool?.supported))
-const mongoInUse = computed(() => systemStatus.value?.mongoPool?.inUse)
-const mongoCurrentSize = computed(() => systemStatus.value?.mongoPool?.currentSize)
-const mongoWaitQueue = computed(() => systemStatus.value?.mongoPool?.checkoutWaitQueue)
-const mongoMessage = computed(() => systemStatus.value?.mongoPool?.message || 'Mongo连接池监控未接入')
-const poolDisplayText = computed(() => {
-  if (mongoPoolSupported.value) {
-    const inUse = mongoInUse.value ?? '-'
-    const total = mongoCurrentSize.value ?? '-'
-    const wait = mongoWaitQueue.value ?? 0
-    return `Mongo ${inUse} / ${total} (等待 ${wait})`
-  }
-  return `${dsActive ?? '-'} / ${dsTotal ?? '-'}`
-})
-const poolDisplayHint = computed(() => (mongoPoolSupported.value ? '' : mongoMessage.value))
-
 const systemCpuPercent = computed(() => clampPercent(systemCpu.value))
-const processCpuPercent = computed(() => clampPercent(processCpu.value))
 const gpuPercent = computed(() => clampPercent(gpuUtil.value))
 const memoryPercent = computed(() => {
   const max = Number(memoryMax.value || 0)
@@ -515,7 +478,6 @@ const memoryPercent = computed(() => {
 })
 
 const systemCpuText = computed(() => formatPercent(systemCpu.value))
-const processCpuText = computed(() => formatPercent(processCpu.value))
 
 const healthTag = computed(() => {
   if (queueSize.value >= 20 || (maxThreads.value > 0 && activeThreads.value >= maxThreads.value)) {
@@ -602,6 +564,7 @@ const fetchStatus = async () => {
       poolForm.value.corePoolSize = currentCore > 0 ? currentCore : 1
       poolForm.value.maximumPoolSize = currentMax > 0 ? currentMax : 1
       lastUpdateAt.value = Date.now()
+      statusLoaded.value = true
     }
   } catch (error) {
     console.error('获取任务线程池状态失败:', error)
@@ -616,11 +579,9 @@ const fetchSystemStatus = async () => {
     if (Number(res?.data?.code) === 200) {
       systemStatus.value = res?.data?.data || {
         system: {},
-        process: {},
         memory: {},
         thread: {},
         dataSource: {},
-        mongoPool: {},
         gpu: {}
       }
     }
@@ -720,23 +681,73 @@ const stopDetailPollIfTerminal = () => {
   if (!t) return
   const st = String(t.status || '').toUpperCase()
   if (st === 'SUCCESS' || st === 'FAILED' || st === 'CANCELLED') {
-    if (detailPollTimer) {
-      window.clearInterval(detailPollTimer)
-      detailPollTimer = null
+    stopDetailPolling()
+  }
+}
+
+const stopMainPolling = () => {
+  if (timer) {
+    window.clearInterval(timer)
+    timer = null
+  }
+}
+
+const startMainPolling = () => {
+  if (!visible.value || !pageVisible.value || timer) return
+  timer = window.setInterval(refreshAll, refreshIntervalMs)
+}
+
+const stopDetailPolling = () => {
+  if (detailPollTimer) {
+    window.clearInterval(detailPollTimer)
+    detailPollTimer = null
+  }
+}
+
+const startDetailPolling = () => {
+  if (!detailVisible.value || !pageVisible.value || detailPollTimer) return
+  detailPollTimer = window.setInterval(() => {
+    refreshTaskDetail()
+  }, detailPollIntervalMs)
+}
+
+const handleVisibilityChange = () => {
+  pageVisible.value = document.visibilityState === 'visible'
+  if (!pageVisible.value) {
+    stopMainPolling()
+    stopDetailPolling()
+    return
+  }
+  if (visible.value) {
+    refreshAll()
+    startMainPolling()
+    if (detailVisible.value) {
+      refreshTaskDetail()
+      startDetailPolling()
     }
   }
 }
 
 watch(detailVisible, (open) => {
-  if (detailPollTimer) {
-    window.clearInterval(detailPollTimer)
-    detailPollTimer = null
+  stopDetailPolling()
+  if (open && pageVisible.value) {
+    startDetailPolling()
   }
+})
+
+watch(visible, async (open) => {
   if (open) {
-    detailPollTimer = window.setInterval(() => {
-      refreshTaskDetail()
-    }, detailPollIntervalMs)
+    recalcDrawerWidth()
+    if (!statusLoaded.value) {
+      await refreshAll()
+    }
+    if (pageVisible.value) {
+      startMainPolling()
+    }
+    return
   }
+  stopMainPolling()
+  stopDetailPolling()
 })
 
 const submitPoolSizeUpdate = async () => {
@@ -809,27 +820,17 @@ const formatBytes = (bytes) => {
   return `${(v / 1024 / 1024 / 1024).toFixed(2)} GB`
 }
 
-watch(visible, (open) => {
-  if (open) recalcDrawerWidth()
-})
-
-onMounted(async () => {
+onMounted(() => {
   recalcDrawerWidth()
   window.addEventListener('resize', recalcDrawerWidth)
-  await refreshAll()
-  timer = window.setInterval(refreshAll, refreshIntervalMs)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', recalcDrawerWidth)
-  if (timer) {
-    window.clearInterval(timer)
-    timer = null
-  }
-  if (detailPollTimer) {
-    window.clearInterval(detailPollTimer)
-    detailPollTimer = null
-  }
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  stopMainPolling()
+  stopDetailPolling()
 })
 </script>
 
@@ -837,6 +838,18 @@ onBeforeUnmount(() => {
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;1,9..40,400&family=Syne:wght@600;700&family=JetBrains+Mono:wght@500;600&display=swap');
 
 .task-body {
+  --semantic-success-border: rgba(13, 148, 136, 0.35);
+  --semantic-success-bg: rgba(240, 253, 250, 0.92);
+  --semantic-success-text: #0f766e;
+  --semantic-warning-border: rgba(217, 119, 6, 0.32);
+  --semantic-warning-bg: rgba(255, 251, 235, 0.92);
+  --semantic-warning-text: #92400e;
+  --semantic-danger-border: rgba(180, 35, 24, 0.28);
+  --semantic-danger-bg: rgba(255, 242, 242, 0.92);
+  --semantic-danger-text: #991b1b;
+  --semantic-neutral-border: rgba(148, 163, 184, 0.35);
+  --semantic-neutral-bg: rgba(241, 245, 249, 0.9);
+  --semantic-neutral-text: #475569;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -903,10 +916,12 @@ onBeforeUnmount(() => {
 
 .summary-card {
   border: 1px solid rgba(148, 163, 184, 0.35);
-  border-radius: 14px;
-  padding: 11px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(241, 245, 249, 0.95) 100%);
-  box-shadow: 0 10px 26px -16px rgba(15, 23, 42, 0.22);
+  border-radius: 16px;
+  padding: 14px 14px 12px;
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 42%, rgba(241, 245, 249, 0.97) 100%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.9) inset,
+    0 12px 30px -22px rgba(15, 23, 42, 0.28);
 }
 
 .summary-top {
@@ -939,21 +954,21 @@ onBeforeUnmount(() => {
 }
 
 .status-pill.is-success {
-  border-color: rgba(22, 163, 74, 0.28);
-  background: rgba(236, 253, 245, 0.85);
-  color: #065f46;
+  border-color: var(--semantic-success-border);
+  background: var(--semantic-success-bg);
+  color: var(--semantic-success-text);
 }
 
 .status-pill.is-warning {
-  border-color: rgba(194, 138, 54, 0.28);
-  background: rgba(255, 251, 235, 0.9);
-  color: #7c2d12;
+  border-color: var(--semantic-warning-border);
+  background: var(--semantic-warning-bg);
+  color: var(--semantic-warning-text);
 }
 
 .status-pill.is-danger {
-  border-color: rgba(180, 35, 24, 0.24);
-  background: rgba(255, 242, 242, 0.9);
-  color: #7f1d1d;
+  border-color: var(--semantic-danger-border);
+  background: var(--semantic-danger-bg);
+  color: var(--semantic-danger-text);
 }
 
 .status-icon {
@@ -1299,13 +1314,14 @@ onBeforeUnmount(() => {
 }
 
 .metric-item {
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.32);
   border-radius: 12px;
   padding: 9px 10px;
-  background: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.9);
   display: flex;
   flex-direction: column;
   gap: 4px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.85) inset;
 }
 
 .metric-item--queue {
@@ -1387,7 +1403,7 @@ onBeforeUnmount(() => {
 .running-card {
   --rc-slate: #0f172a;
   --rc-muted: #64748b;
-  --rc-line: rgba(51, 65, 85, 0.32);
+  --rc-line: rgba(148, 163, 184, 0.35);
   --rc-teal: #0d9488;
   --rc-teal-glow: rgba(13, 148, 136, 0.22);
   font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
@@ -1396,10 +1412,10 @@ onBeforeUnmount(() => {
   border-radius: 16px;
   padding: 14px 14px 12px;
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.94) 42%, rgba(241, 245, 249, 0.92) 100%);
+    linear-gradient(155deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 42%, rgba(241, 245, 249, 0.97) 100%);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.65) inset,
-    0 16px 40px -24px rgba(15, 23, 42, 0.4);
+    0 0 0 1px rgba(255, 255, 255, 0.9) inset,
+    0 12px 30px -22px rgba(15, 23, 42, 0.28);
   display: flex;
   flex-direction: column;
   min-height: 360px;
@@ -1412,7 +1428,7 @@ onBeforeUnmount(() => {
   content: '';
   position: absolute;
   inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.015'/%3E%3C/svg%3E");
   pointer-events: none;
   mix-blend-mode: multiply;
   border-radius: inherit;
@@ -1427,7 +1443,7 @@ onBeforeUnmount(() => {
   gap: 12px;
   margin-bottom: 12px;
   padding-bottom: 12px;
-  border-bottom: 1px dashed rgba(100, 116, 139, 0.38);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.32);
 }
 
 .running-card__title {
@@ -1459,7 +1475,7 @@ onBeforeUnmount(() => {
   padding: 8px 12px;
   border-radius: 12px;
   border: 1px solid var(--rc-line);
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.92);
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -1479,13 +1495,13 @@ onBeforeUnmount(() => {
 }
 
 .running-card__stat--run {
-  border-color: rgba(13, 148, 136, 0.35);
-  background: linear-gradient(160deg, rgba(240, 253, 250, 0.95) 0%, rgba(255, 255, 255, 0.9) 100%);
+  border-color: var(--semantic-success-border);
+  background: linear-gradient(160deg, var(--semantic-success-bg) 0%, rgba(255, 255, 255, 0.9) 100%);
 }
 
 .running-card__stat--queue {
-  border-color: rgba(217, 119, 6, 0.32);
-  background: linear-gradient(160deg, rgba(255, 251, 235, 0.95) 0%, rgba(255, 255, 255, 0.9) 100%);
+  border-color: var(--semantic-warning-border);
+  background: linear-gradient(160deg, var(--semantic-warning-bg) 0%, rgba(255, 255, 255, 0.9) 100%);
 }
 
 .running-card__stat-label {
@@ -1505,11 +1521,11 @@ onBeforeUnmount(() => {
 }
 
 .running-card__stat--run .running-card__stat-value {
-  color: #0f766e;
+  color: var(--semantic-success-text);
 }
 
 .running-card__stat--queue .running-card__stat-value {
-  color: #b45309;
+  color: var(--semantic-warning-text);
 }
 
 :deep(.running-card__empty.el-empty) {
@@ -1559,11 +1575,11 @@ onBeforeUnmount(() => {
   flex-direction: row;
   align-items: stretch;
   gap: 0;
-  border: 1px solid rgba(148, 163, 184, 0.32);
+  border: 1px solid rgba(148, 163, 184, 0.3);
   border-radius: 14px;
   padding: 0;
   background: linear-gradient(118deg, rgba(255, 255, 255, 0.97) 0%, rgba(248, 250, 252, 0.94) 48%, rgba(255, 255, 255, 0.92) 100%);
-  box-shadow: 0 12px 28px -20px rgba(15, 23, 42, 0.35);
+  box-shadow: 0 10px 24px -20px rgba(15, 23, 42, 0.24);
   overflow: hidden;
   min-width: 0;
   min-height: 104px;
@@ -1616,10 +1632,10 @@ onBeforeUnmount(() => {
 }
 
 .running-item:hover {
-  border-color: rgba(13, 148, 136, 0.38);
+  border-color: rgba(13, 148, 136, 0.32);
   box-shadow:
-    0 16px 36px -22px rgba(15, 23, 42, 0.42),
-    0 0 0 1px rgba(13, 148, 136, 0.12);
+    0 14px 30px -22px rgba(15, 23, 42, 0.28),
+    0 0 0 1px rgba(13, 148, 136, 0.1);
   transform: translateY(-1px);
 }
 
@@ -1690,28 +1706,28 @@ onBeforeUnmount(() => {
 }
 
 .task-status-pill.is-run {
-  border-color: rgba(13, 148, 136, 0.4);
-  background: linear-gradient(135deg, rgba(240, 253, 250, 0.95) 0%, rgba(255, 255, 255, 0.92) 100%);
-  color: #0f766e;
+  border-color: var(--semantic-success-border);
+  background: linear-gradient(135deg, var(--semantic-success-bg) 0%, rgba(255, 255, 255, 0.92) 100%);
+  color: var(--semantic-success-text);
   box-shadow: 0 0 14px var(--rc-teal-glow);
 }
 
 .task-status-pill.is-wait {
-  border-color: rgba(217, 119, 6, 0.38);
-  background: rgba(255, 251, 235, 0.92);
-  color: #92400e;
+  border-color: var(--semantic-warning-border);
+  background: var(--semantic-warning-bg);
+  color: var(--semantic-warning-text);
 }
 
 .task-status-pill.is-bad {
-  border-color: rgba(180, 35, 24, 0.35);
-  background: rgba(255, 242, 242, 0.95);
-  color: #991b1b;
+  border-color: var(--semantic-danger-border);
+  background: var(--semantic-danger-bg);
+  color: var(--semantic-danger-text);
 }
 
 .task-status-pill.is-done {
-  border-color: rgba(22, 163, 74, 0.35);
-  background: rgba(236, 253, 245, 0.9);
-  color: #166534;
+  border-color: var(--semantic-success-border);
+  background: var(--semantic-success-bg);
+  color: var(--semantic-success-text);
 }
 
 .task-sub {
@@ -1803,27 +1819,27 @@ onBeforeUnmount(() => {
 }
 
 .stage-trace-chip.is-success {
-  border-color: rgba(22, 163, 74, 0.28);
-  background: rgba(236, 253, 245, 0.88);
-  color: #166534;
+  border-color: var(--semantic-success-border);
+  background: var(--semantic-success-bg);
+  color: var(--semantic-success-text);
 }
 
 .stage-trace-chip.is-running {
-  border-color: rgba(13, 148, 136, 0.35);
-  background: rgba(240, 253, 250, 0.95);
-  color: #0f766e;
+  border-color: var(--semantic-success-border);
+  background: var(--semantic-success-bg);
+  color: var(--semantic-success-text);
 }
 
 .stage-trace-chip.is-failed {
-  border-color: rgba(180, 35, 24, 0.24);
-  background: rgba(255, 242, 242, 0.9);
-  color: #991b1b;
+  border-color: var(--semantic-danger-border);
+  background: var(--semantic-danger-bg);
+  color: var(--semantic-danger-text);
 }
 
 .stage-trace-chip.is-skipped {
-  border-color: rgba(148, 163, 184, 0.35);
-  background: rgba(241, 245, 249, 0.9);
-  color: #475569;
+  border-color: var(--semantic-neutral-border);
+  background: var(--semantic-neutral-bg);
+  color: var(--semantic-neutral-text);
 }
 
 .sub-chip {
@@ -1947,9 +1963,9 @@ onBeforeUnmount(() => {
   margin-top: 8px;
   padding: 8px 10px;
   border-radius: 10px;
-  border: 1px solid rgba(180, 35, 24, 0.28);
-  background: rgba(255, 242, 242, 0.92);
-  color: #991b1b;
+  border: 1px solid var(--semantic-danger-border);
+  background: var(--semantic-danger-bg);
+  color: var(--semantic-danger-text);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -1990,21 +2006,21 @@ onBeforeUnmount(() => {
 }
 
 :deep(.detail-btn.el-button.is-text) {
-  color: #0f766e;
-  border: 1px solid rgba(13, 148, 136, 0.3);
-  background: rgba(240, 253, 250, 0.92);
+  color: var(--semantic-success-text);
+  border: 1px solid var(--semantic-success-border);
+  background: var(--semantic-success-bg);
 }
 
 :deep(.detail-btn.el-button.is-text:hover) {
-  color: #115e59;
+  color: var(--semantic-success-text);
   border-color: rgba(13, 148, 136, 0.48);
   background: rgba(204, 251, 241, 0.95);
 }
 
 :deep(.cancel-btn.el-button.is-text) {
-  color: #b42318;
-  border: 1px solid rgba(180, 35, 24, 0.24);
-  background: rgba(255, 242, 242, 0.92);
+  color: var(--semantic-danger-text);
+  border: 1px solid var(--semantic-danger-border);
+  background: var(--semantic-danger-bg);
 }
 
 :deep(.cancel-btn.el-button.is-text:hover) {
@@ -2016,17 +2032,17 @@ onBeforeUnmount(() => {
 .system-card {
   --sys-slate: #0f172a;
   --sys-muted: #64748b;
-  --sys-line: rgba(51, 65, 85, 0.28);
+  --sys-line: rgba(148, 163, 184, 0.35);
   font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
   position: relative;
   border: 1px solid var(--sys-line);
   border-radius: 16px;
   padding: 14px 14px 10px;
-  background: linear-gradient(155deg, rgba(15, 23, 42, 0.97) 0%, rgba(30, 41, 59, 0.96) 42%, rgba(15, 23, 42, 0.98) 100%);
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 42%, rgba(241, 245, 249, 0.97) 100%);
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.06) inset,
-    0 18px 42px -24px rgba(0, 0, 0, 0.55);
-  color: #e2e8f0;
+    0 0 0 1px rgba(255, 255, 255, 0.9) inset,
+    0 12px 30px -22px rgba(15, 23, 42, 0.28);
+  color: #1e293b;
   overflow: hidden;
   animation: running-card-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) 0.08s backwards;
 }
@@ -2035,10 +2051,10 @@ onBeforeUnmount(() => {
   content: '';
   position: absolute;
   inset: 0;
-  opacity: 0.12;
+  opacity: 0.06;
   background-image:
-    linear-gradient(rgba(148, 163, 184, 0.15) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.12) 1px, transparent 1px);
+    linear-gradient(rgba(148, 163, 184, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.1) 1px, transparent 1px);
   background-size: 20px 20px;
   pointer-events: none;
 }
@@ -2052,7 +2068,7 @@ onBeforeUnmount(() => {
   gap: 12px;
   margin-bottom: 8px;
   padding-bottom: 10px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.32);
 }
 
 .system-card__title {
@@ -2062,14 +2078,14 @@ onBeforeUnmount(() => {
   font-size: 14px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #f8fafc;
+  color: #0f172a;
 }
 
 .system-card__subtitle {
   margin: 4px 0 0;
   font-size: 11px;
   line-height: 1.4;
-  color: #94a3b8;
+  color: #64748b;
 }
 
 .system-card__live {
@@ -2079,22 +2095,22 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
   padding: 5px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(45, 212, 191, 0.35);
-  background: rgba(13, 148, 136, 0.15);
+  border: 1px solid rgba(20, 184, 166, 0.3);
+  background: rgba(240, 253, 250, 0.9);
   font-family: 'JetBrains Mono', monospace;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #5eead4;
+  color: #0f766e;
 }
 
 .system-card__live-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #2dd4bf;
-  box-shadow: 0 0 10px rgba(45, 212, 191, 0.75);
+  background: #14b8a6;
+  box-shadow: 0 0 8px rgba(20, 184, 166, 0.45);
   animation: live-pulse 1.6s ease-in-out infinite;
 }
 
@@ -2106,12 +2122,12 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 12px;
   padding: 9px 4px;
-  border-top: 1px solid rgba(71, 85, 105, 0.45);
+  border-top: 1px solid rgba(148, 163, 184, 0.36);
   transition: background 0.2s ease;
 }
 
 .system-row:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(37, 99, 235, 0.04);
   border-radius: 10px;
 }
 
@@ -2124,7 +2140,7 @@ onBeforeUnmount(() => {
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #94a3b8;
+  color: #64748b;
 }
 
 .system-bar {
@@ -2133,8 +2149,8 @@ onBeforeUnmount(() => {
 
 :deep(.system-card .el-progress-bar__outer) {
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.35);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  background: rgba(148, 163, 184, 0.22);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
 }
 
 :deep(.system-card .el-progress-bar__inner) {
@@ -2145,7 +2161,7 @@ onBeforeUnmount(() => {
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
   font-weight: 500;
-  color: #cbd5e1;
+  color: #334155;
   line-height: 1.35;
   word-break: break-word;
 }
@@ -2154,7 +2170,7 @@ onBeforeUnmount(() => {
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
   font-weight: 600;
-  color: #f1f5f9;
+  color: #0f172a;
   text-align: right;
   white-space: nowrap;
 }

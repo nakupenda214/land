@@ -3,7 +3,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { downloadGridFsFile, getFilesByProject, queryFiles } from '@/services/file.service'
 
-export function useContractLandManagement({ filterProject, currentProjectInfo }) {
+export function useContractLandManagement({ filterProject, currentProjectInfo, onContractLandChanged }) {
   const contractLandList = ref([])
   const selectedContract = reactive({ id: '', contractNumber: '', fileRecordId: '' })
   const currentLandParcelList = ref([])
@@ -89,6 +89,15 @@ export function useContractLandManagement({ filterProject, currentProjectInfo })
     const residentialArea = Number((totalArea - commercialArea).toFixed(2))
     landParcelForm.commercialArea = commercialArea
     landParcelForm.residentialArea = residentialArea
+  }
+
+  const notifyContractLandChanged = async () => {
+    if (typeof onContractLandChanged !== 'function') return
+    try {
+      await onContractLandChanged()
+    } catch (error) {
+      console.error('合同地块变更后刷新汇总失败:', error)
+    }
   }
 
   const normalizePlannedUse = (value) => {
@@ -315,6 +324,7 @@ export function useContractLandManagement({ filterProject, currentProjectInfo })
         contractWorkspaceVisible.value = false
         clearWorkspacePdfUrl()
         await fetchContractListByProjectId(currentProjectInfo.id)
+        await notifyContractLandChanged()
       } else {
         ElMessage.error('保存失败：' + (res.data.msg || '系统异常'))
       }
@@ -442,6 +452,7 @@ export function useContractLandManagement({ filterProject, currentProjectInfo })
         } else {
           currentLandParcelList.value = []
         }
+        await notifyContractLandChanged()
       } else {
         ElMessage.error('操作失败：' + (res.data.msg || '系统异常'))
       }
@@ -472,6 +483,7 @@ export function useContractLandManagement({ filterProject, currentProjectInfo })
         await fetchContractListByProjectId(currentProjectInfo.id)
         Object.assign(selectedContract, { id: '', contractNumber: '', fileRecordId: '' })
         currentLandParcelList.value = []
+        await notifyContractLandChanged()
       } else {
         ElMessage.error('删除失败：' + (res.data.msg || '系统异常'))
       }
@@ -513,6 +525,7 @@ export function useContractLandManagement({ filterProject, currentProjectInfo })
         } else {
           currentLandParcelList.value = []
         }
+        await notifyContractLandChanged()
       } else {
         ElMessage.error('删除失败：' + (res.data.msg || '系统异常'))
       }

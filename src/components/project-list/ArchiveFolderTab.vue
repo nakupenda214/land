@@ -2221,7 +2221,7 @@ onBeforeUnmount(() => {
 }
 
 .archive-tree {
-  --el-tree-node-hover-bg-color: #f2f6fc;
+  --el-tree-node-hover-bg-color: transparent;
   --el-tree-text-color: #303133;
   font-size: 14px;
 }

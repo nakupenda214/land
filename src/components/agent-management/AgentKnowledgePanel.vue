@@ -2,9 +2,7 @@
   <section class="panel agent-panel">
     <header class="panel-header">
       <div class="heading">
-        <p class="panel-kicker">Agent Knowledge</p>
-        <h3>AgentKnowledge 管理</h3>
-        <p>可视化对齐：分页检索、创建、编辑、删除、召回、重试向量化</p>
+        <h3>智能体知识管理</h3>
       </div>
       <div class="actions">
         <el-input v-model="query.title" placeholder="按标题检索" clearable class="search" @keyup.enter="loadData" />
@@ -13,6 +11,7 @@
           <el-option label="QA" value="QA" />
           <el-option label="FAQ" value="FAQ" />
         </el-select>
+        <el-button :loading="loading" @click="loadData">刷新列表</el-button>
         <el-button type="primary" @click="openCreateDialog">新增知识</el-button>
       </div>
     </header>
@@ -68,7 +67,13 @@
       />
     </div>
 
-    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑智能体知识' : '新增智能体知识'" width="720px">
+    <el-dialog
+      v-model="dialogVisible"
+      :title="editingId ? '编辑智能体知识' : '新增智能体知识'"
+      width="720px"
+      append-to-body
+      lock-scroll
+    >
       <el-form label-position="top">
         <el-form-item label="标题">
           <el-input v-model.trim="form.title" maxlength="100" />
@@ -321,23 +326,10 @@ defineExpose({ loadData, getCount: () => total.value })
   display: flex;
   flex-direction: column;
 }
-.panel-kicker {
-  margin: 0;
-  font-size: 11px;
-  letter-spacing: 1.4px;
-  text-transform: uppercase;
-  color: #6f65c8;
-  font-weight: 700;
-}
 h3 {
   margin: 0;
   font-size: 20px;
   color: #2f2c66;
-}
-p {
-  margin: 4px 0 0;
-  color: #78749f;
-  font-size: 13px;
 }
 .actions {
   display: flex;

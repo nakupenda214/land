@@ -66,18 +66,18 @@
             <el-icon><Download /></el-icon>
             导出
           </el-button>
+          <el-button
+            class="hero-btn hero-btn--primary"
+            type="primary"
+            size="small"
+            :icon="Refresh"
+            :loading="parsedRefreshLoading"
+            :disabled="!currentProjectInfo.id"
+            @click="$emit('refresh-parsed')"
+          >
+            刷新文件列表
+          </el-button>
         </div>
-        <el-button
-          class="hero-btn hero-btn--primary"
-          type="primary"
-          size="small"
-          :icon="Refresh"
-          :loading="parsedRefreshLoading"
-          :disabled="!currentProjectInfo.id"
-          @click="$emit('refresh-parsed')"
-        >
-          刷新文件列表
-        </el-button>
       </div>
     </header>
 
@@ -543,22 +543,22 @@ const tableRowClassName = ({ row }) => (normalizeVerifiedFlag(row?.isVerified) =
   z-index: 1;
   flex: 0 0 auto;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   justify-content: center;
-  gap: 6px;
-  min-width: 148px;
+  min-width: 0;
 }
 
 .summary-hero__actions-row {
   display: flex;
   flex-direction: row;
-  align-items: stretch;
+  align-items: center;
   gap: 6px;
-  width: 100%;
+  width: auto;
+  flex-wrap: nowrap;
 }
 
 .summary-hero__actions-row .hero-btn {
-  flex: 1 1 0;
+  flex: 0 0 auto;
   min-width: 0;
 }
 
@@ -566,10 +566,6 @@ const tableRowClassName = ({ row }) => (normalizeVerifiedFlag(row?.isVerified) =
   justify-content: center;
   border-radius: 9px;
   font-weight: 600;
-}
-
-.summary-hero__actions > .hero-btn--primary {
-  width: 100%;
 }
 
 .hero-btn--ghost {
@@ -726,13 +722,7 @@ const tableRowClassName = ({ row }) => (normalizeVerifiedFlag(row?.isVerified) =
   }
 
   .summary-hero__actions {
-    width: 100%;
-    min-width: 0;
-    flex-direction: column;
-  }
-
-  .summary-hero__actions-row {
-    width: 100%;
+    flex-direction: row;
   }
 }
 

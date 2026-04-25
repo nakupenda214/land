@@ -107,9 +107,6 @@ const props = defineProps({
 
 const emit = defineEmits(['refresh'])
 
-const nowTs = ref(Date.now())
-let ticker = null
-const runningBaseMap = new Map()
 const showOverlayLoading = computed(() => props.loading && !props.detail)
 
 const syncPillVisible = ref(false)
@@ -122,46 +119,6 @@ const isJobRunning = (status) => String(status || '').toUpperCase() === 'RUNNING
 const isSuccess = (status) => String(status || '').toUpperCase() === 'SUCCESS'
 const isFailed = (status) => String(status || '').toUpperCase() === 'FAILED'
 const isSkipped = (status) => String(status || '').toUpperCase() === 'SKIPPED'
-
-const stepKey = (step) => `p:${String(step?.stageCode || step?.stageName || '')}`
-const traceKey = (trace) => `t:${String(trace?.stageCode || trace?.stageName || '')}`
-
-const syncRunningBaselines = (detail) => {
-  const nextKeys = new Set()
-
-  for (const step of detail?.pipelineSteps || []) {
-    if (!isRunningStatus(step?.status)) continue
-    const key = stepKey(step)
-    nextKeys.add(key)
-    if (runningBaseMap.has(key)) continue
-    runningBaseMap.set(key, { baseMs: Math.max(0, Number(step?.durationMs) || 0), at: Date.now() })
-  }
-
-  for (const trace of detail?.stageTraces || []) {
-    if (!isRunningStatus(trace?.status)) continue
-    const key = traceKey(trace)
-    nextKeys.add(key)
-    if (runningBaseMap.has(key)) continue
-    runningBaseMap.set(key, { baseMs: Math.max(0, Number(trace?.durationMs) || 0), at: Date.now() })
-  }
-
-  for (const key of Array.from(runningBaseMap.keys())) {
-    if (!nextKeys.has(key)) runningBaseMap.delete(key)
-  }
-}
-
-const startTicker = () => {
-  if (ticker) return
-  ticker = setInterval(() => {
-    nowTs.value = Date.now()
-  }, 250)
-}
-
-const stopTicker = () => {
-  if (!ticker) return
-  clearInterval(ticker)
-  ticker = null
-}
 
 const hasLiveMotion = computed(() => {
   const detail = props.detail
@@ -185,16 +142,6 @@ const retryMetaText = computed(() => {
   }
   return `重试 ${attempt}/${max}`
 })
-
-watch(
-  () => props.detail,
-  (val) => {
-    syncRunningBaselines(val)
-    if (hasLiveMotion.value) startTicker()
-    else stopTicker()
-  },
-  { immediate: true, deep: true }
-)
 
 watch(
   () => props.loading,
@@ -234,23 +181,14 @@ watch(
 onBeforeUnmount(() => {
   if (syncShowTimer) clearTimeout(syncShowTimer)
   if (syncHideTimer) clearTimeout(syncHideTimer)
-  stopTicker()
 })
 
 const pipelineDurationMs = (step) => {
-  const raw = Math.max(0, Number(step?.durationMs) || 0)
-  if (!isRunningStatus(step?.status) || !isJobRunning(props.detail?.status)) return raw
-  const base = runningBaseMap.get(stepKey(step))
-  if (!base) return raw
-  return Math.max(0, base.baseMs + (nowTs.value - base.at))
+  return Math.max(0, Number(step?.durationMs) || 0)
 }
 
 const traceDurationMs = (trace) => {
-  const raw = Math.max(0, Number(trace?.durationMs) || 0)
-  if (!isRunningStatus(trace?.status) || !isJobRunning(props.detail?.status)) return raw
-  const base = runningBaseMap.get(traceKey(trace))
-  if (!base) return raw
-  return Math.max(0, base.baseMs + (nowTs.value - base.at))
+  return Math.max(0, Number(trace?.durationMs) || 0)
 }
 
 const formatDuration = (ms) => {

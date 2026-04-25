@@ -9,9 +9,7 @@
         <div class="brand-copy">
           <div class="brand-title-row">
             <span class="brand-title">项目工作区</span>
-            <span v-if="projectCount > 0" class="count-pill">{{ projectCount }} 个项目</span>
           </div>
-          <p class="brand-desc">搜索或选择项目，加载该项目的档案、合同与实测汇总数据</p>
           <div class="current-project" :class="{ empty: !selectedProjectName }">
             <el-icon class="hint-icon"><InfoFilled /></el-icon>
             <span v-if="selectedProjectName">当前查看：{{ selectedProjectName }}</span>
@@ -41,6 +39,8 @@
                 popper-class="project-filter-select-dropdown"
                 @select="handleSelectProject"
                 @clear="handleClearProject"
+                @focus="handleRequestOptions"
+                @click="handleRequestOptions"
               >
                 <template #default="{ item }">
                   <div class="opt-cell">
@@ -103,9 +103,8 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['update:modelValue', 'search', 'create-project'])
+const emit = defineEmits(['update:modelValue', 'search', 'create-project', 'request-options'])
 
-const projectCount = computed(() => props.projectOptions?.length ?? 0)
 const projectSearchText = ref('')
 const suppressInputEmit = ref(false)
 
@@ -188,6 +187,10 @@ function handleSelectProject(item) {
 function handleClearProject() {
   projectSearchText.value = ''
   emit('update:modelValue', '')
+}
+
+function handleRequestOptions() {
+  emit('request-options')
 }
 
 watch(
@@ -298,28 +301,11 @@ function formatShortTime(val) {
   color: var(--biz-text, #1f2d3d);
 }
 
-.count-pill {
-  font-size: 12px;
-  font-weight: 600;
-  padding: 2px 10px;
-  border-radius: 999px;
-  color: #1e40af;
-  background: rgba(59, 130, 246, 0.12);
-  border: 1px solid rgba(59, 130, 246, 0.22);
-}
-
-.brand-desc {
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--biz-subtext, #5f6b7a);
-}
-
 .current-project {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 6px;
   padding: 8px 10px;
   border-radius: 12px;
   font-size: 12.5px;

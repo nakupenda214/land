@@ -6,6 +6,7 @@
       :project-options="projectOptions"
       :current-project-id="currentProjectInfo.id"
       @search="handleGlobalSearch"
+      @request-options="ensureProjectOptionsLoaded"
       @create-project="showCreateProjectDialog = true"
     />
 
@@ -29,10 +30,10 @@
           />
         </el-tab-pane>
 
-        <el-tab-pane name="summary">
+        <el-tab-pane name="summary" lazy>
           <template #label><span class="custom-tab-label"><el-icon><DataAnalysis /></el-icon> 房产实测汇总表</span></template>
           
-          <div class="tab-content">
+          <div v-if="activeTab === 'summary'" class="tab-content">
             <!-- 未知用途规则配置卡片 -->
             <UnknownUsagePolicyCard
               :unknown-usages="unknownUsages"
@@ -63,13 +64,14 @@
           </div>
         </el-tab-pane>
 
-        <el-tab-pane name="contractLandEdit" class="no-print">
+        <el-tab-pane name="contractLandEdit" class="no-print" lazy>
           <template #label>
             <span class="custom-tab-label">
               <el-icon><Location /></el-icon> 合同及地块信息
             </span>
           </template>
           <ContractLandTab
+            v-if="activeTab === 'contractLandEdit'"
             :contract-land-list="contractLandList"
             :selected-contract="selectedContract"
             :current-land-parcel-list="currentLandParcelList"
@@ -85,7 +87,7 @@
           />
         </el-tab-pane>
 
-        <el-tab-pane name="planningReview" class="no-print">
+        <el-tab-pane name="planningReview" class="no-print" lazy>
           <template #label>
             <span class="custom-tab-label">
               <el-icon><DocumentChecked /></el-icon> 规划复核表
@@ -97,7 +99,7 @@
           />
         </el-tab-pane>
 
-        <el-tab-pane name="projectPartySummary" class="no-print">
+        <el-tab-pane name="projectPartySummary" class="no-print" lazy>
           <template #label>
             <span class="custom-tab-label">
               <el-icon><DocumentCopy /></el-icon> 项目方汇总表
@@ -109,7 +111,7 @@
           />
         </el-tab-pane>
 
-        <el-tab-pane name="operationAudit" class="no-print">
+        <el-tab-pane name="operationAudit" class="no-print" lazy>
           <template #label>
             <span class="custom-tab-label">
               <el-icon><List /></el-icon> 审计日志
@@ -122,13 +124,14 @@
         </el-tab-pane>
 
         <!-- 项目信息更新放在最后 -->
-        <el-tab-pane name="projectEdit" class="no-print">
+        <el-tab-pane name="projectEdit" class="no-print" lazy>
           <template #label>
             <span class="custom-tab-label">
               <el-icon><EditPen /></el-icon> 项目信息更新
             </span>
           </template>
           <ProjectEditForm
+            v-if="activeTab === 'projectEdit'"
             :form="projectUpdateForm"
             :rules="projectEditRules"
             :loading="projectEditLoading"
@@ -295,6 +298,10 @@ const archiveTabRef = ref(null)
 // 组件卸载时清理事件，避免内存泄漏
 onUnmounted(() => {
   clearRefreshTimer();
+  if (delayedProjectOptionsTimer) {
+    clearTimeout(delayedProjectOptionsTimer)
+    delayedProjectOptionsTimer = null
+  }
 })
 
 // 页面状态
@@ -351,6 +358,39 @@ const {
   fetchProjects: fetchProjectList,
   fetchProjectDetail
 } = useProjectSelector({ fetchProjectData, fetchSurveyReports })
+
+const projectOptionsLoaded = ref(false)
+const projectOptionsLoading = ref(false)
+let projectOptionsLoadingPromise = null
+let delayedProjectOptionsTimer = null
+
+const ensureProjectOptionsLoaded = async () => {
+  if (projectOptionsLoaded.value) return true
+  if (projectOptionsLoadingPromise) return projectOptionsLoadingPromise
+  projectOptionsLoading.value = true
+  projectOptionsLoadingPromise = fetchProjectList()
+    .then(() => {
+      projectOptionsLoaded.value = true
+      return true
+    })
+    .finally(() => {
+      projectOptionsLoading.value = false
+      projectOptionsLoadingPromise = null
+    })
+  return projectOptionsLoadingPromise
+}
+
+const applyCurrentProjectMeta = (projectId) => {
+  const pid = String(projectId || '')
+  if (!pid) return false
+  const projectItem = projectOptions.value.find((p) => String(p.id) === pid)
+  if (!projectItem) return false
+  currentProjectInfo.id = pid
+  currentProjectInfo.name = projectItem.name
+  currentProjectInfo.code = projectItem.code || `XM-${pid.padStart(3, '0')}`
+  currentProjectInfo.status = '已归档'
+  return true
+}
 
 const handlePendingAuditConsumed = () => {
   pendingAuditFileId.value = ''
@@ -509,7 +549,11 @@ const {
   handleSelectPreviewFile
 } = useContractLandManagement({
   filterProject,
-  currentProjectInfo
+  currentProjectInfo,
+  onContractLandChanged: async () => {
+    if (!currentProjectInfo.id) return
+    await fetchSurveyReports(currentProjectInfo.id)
+  }
 })
 
 const contractRefreshLoading = ref(false)
@@ -550,9 +594,17 @@ const handleGlobalSearch = async () => {
     ElMessage.warning('请先选择项目')
     return
   }
-
-  await fetchProjectDetail(projectId)
-  await fetchContractListByProjectId(projectId)
+  await ensureProjectOptionsLoaded()
+  const found = applyCurrentProjectMeta(projectId)
+  if (!found) {
+    ElMessage.warning('当前项目不存在或列表尚未同步，请稍后重试')
+    return
+  }
+  if (activeTab.value === 'contractLandEdit') {
+    await fetchContractListByProjectId(projectId)
+  } else if (activeTab.value === 'summary') {
+    await fetchSurveyReports(projectId)
+  }
   restoreRefreshCdStatus(projectId)
 }
 
@@ -662,18 +714,11 @@ watch(activeTab, async (tab, prevTab) => {
 
   if (tab === 'contractLandEdit') {
     await fetchContractListByProjectId(currentProjectInfo.id)
-    return
-  }
-
-  if (tab === 'summary' && prevTab !== 'summary') {
-    await fetchSurveyReports(currentProjectInfo.id)
   }
 })
 
 // 页面初始化：恢复项目选择并加载数据
 onMounted(async () => {
-  // A. 先拉取项目列表（填充下拉框）
-  await fetchProjectList()
   if (initialReturnTab.value && ['summary', 'contractLandEdit', 'projectEdit', 'archives', 'planningReview', 'projectPartySummary', 'operationAudit'].includes(initialReturnTab.value)) {
     activeTab.value = initialReturnTab.value
     initialReturnTab.value = ''
@@ -684,29 +729,32 @@ onMounted(async () => {
   }
 
   // B. 决定选中哪个项目
-  const queryProjectId = route.query.projectId;
-  const savedProjectId = localStorage.getItem('projectFilterStatus');
-  let targetProjectId = '';
+  delayedProjectOptionsTimer = window.setTimeout(async () => {
+    delayedProjectOptionsTimer = null
+    await ensureProjectOptionsLoaded()
+    const queryProjectId = route.query.projectId
+    const savedProjectId = localStorage.getItem('projectFilterStatus')
+    let targetProjectId = ''
 
-  if (queryProjectId) {
-    targetProjectId = String(queryProjectId);
-    filterProject.value = targetProjectId;
-    handleGlobalSearch(); // 立即查询
-  } else if (savedProjectId) {
-    const exists = projectOptions.value.some(p => p.id === savedProjectId);
-    if (exists) {
-      targetProjectId = savedProjectId;
-      filterProject.value = targetProjectId;
-      handleGlobalSearch(); // 立即查询
-    } else {
-      localStorage.removeItem('projectFilterStatus');
+    if (queryProjectId) {
+      targetProjectId = String(queryProjectId)
+      filterProject.value = targetProjectId
+      await handleGlobalSearch()
+    } else if (savedProjectId) {
+      const exists = projectOptions.value.some((p) => String(p.id) === String(savedProjectId))
+      if (exists) {
+        targetProjectId = String(savedProjectId)
+        filterProject.value = targetProjectId
+        await handleGlobalSearch()
+      } else {
+        localStorage.removeItem('projectFilterStatus')
+      }
     }
-  }
 
-  // C. 恢复当前项目的冷却状态（从本地缓存读取）
-  if (targetProjectId) {
-    restoreRefreshCdStatus(targetProjectId);
-  }
+    if (targetProjectId) {
+      restoreRefreshCdStatus(targetProjectId)
+    }
+  }, 260)
 })
 
 
