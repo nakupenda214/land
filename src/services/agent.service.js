@@ -51,7 +51,8 @@ function isLandAgentEvent(obj) {
  * @param {object} options
  * @param {{ query: string, threadId?: string }} options.payload
  * @param {AbortSignal} [options.signal]
- * @param {(chunk: string) => void} [options.onStreamChunk] — streamChannel=main 的 chunk（主答复）
+ * @param {(chunk: string, meta: { node?: string }) => void} [options.onStreamChunk] — streamChannel=main 的 chunk（主答复）
+ * @param {(chunk: string, meta: { node?: string }) => void} [options.onStreamReasoning] — streamChannel=reasoning 的 chunk（思考流）
  * @param {(chunk: string, meta: { node?: string }) => void} [options.onStreamTrace] — streamChannel=trace 的 chunk
  * @param {(evt: object) => void} [options.onThink] — THINK
  * @param {(evt: object) => void} [options.onNode] — NODE（节点阶段）
@@ -64,6 +65,7 @@ export const chatAgentStream = async ({
   payload,
   signal,
   onStreamChunk,
+  onStreamReasoning,
   onStreamTrace,
   onThink,
   onNode,
@@ -148,12 +150,16 @@ export const chatAgentStream = async ({
         if (status === 'stream' && pl?.chunk != null) {
           const chunk = String(pl.chunk)
           const ch = pl.streamChannel
+          const isReasoning = ch === 'reasoning'
           const isMain =
             ch === 'main' ||
             (ch == null && data.node === 'AnswerWrapNode')
           const isTrace = ch === 'trace' || (ch == null && data.node && data.node !== 'AnswerWrapNode')
-          if (isMain) {
-            onStreamChunk?.(chunk)
+          if (isReasoning) {
+            onStreamReasoning?.(chunk, { node: data.node })
+            onLlm?.({ text: chunk, payload: { phase: 'stream', streamChannel: 'reasoning', node: data.node } })
+          } else if (isMain) {
+            onStreamChunk?.(chunk, { node: data.node })
             onLlm?.({ text: chunk, payload: { phase: 'stream', streamChannel: 'main' } })
           } else if (isTrace) {
             onStreamTrace?.(chunk, { node: data.node })

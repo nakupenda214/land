@@ -328,6 +328,14 @@ const handleSend = async () => {
           scrollToBottom()
         }
       },
+      onStreamReasoning: (chunk, meta) => {
+        const text = String(chunk || '').trim()
+        if (!text) return
+        appendDedup(assistantMsg, meta?.node ? `[${meta.node}] ${text}` : text, {
+          level: 'info',
+          typeLabel: '思考'
+        })
+      },
       onThink: (evt) => {
         const msg = evt?.payload?.message
         if (msg) appendDedup(assistantMsg, msg, { level: 'info', typeLabel: '分析' })

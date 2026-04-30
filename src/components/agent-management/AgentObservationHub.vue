@@ -13,7 +13,30 @@
             <el-button type="primary" plain :loading="snapLoading" @click="loadSnapshot">刷新快照</el-button>
           </div>
         </div>
-        <div class="kqa-grid">
+        <div class="kqa-grid kqa-grid--core">
+          <div class="stat-card">
+            <div class="stat-label">请求总成功率（主口径）</div>
+            <div class="stat-value">{{ percentText(snap?.chainSummary?.successRate) }}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">端到端时延（data_query avg / p95）</div>
+            <div class="stat-value">{{ routeLatencySecText('data_query') }}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">LLM 调用成功率</div>
+            <div class="stat-value">{{ percentText(llmOverall.successRate) }}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">最终答复正确率（人工）</div>
+            <div class="stat-value">{{ finalAnswerCorrectnessText }}</div>
+          </div>
+        </div>
+        <div class="metric-toggle-row">
+          <el-button size="small" text type="primary" @click="showAdvancedChainMetrics = !showAdvancedChainMetrics">
+            {{ showAdvancedChainMetrics ? '收起高级指标' : '展开高级指标' }}
+          </el-button>
+        </div>
+        <div v-if="showAdvancedChainMetrics" class="kqa-grid kqa-grid--detail">
           <div class="stat-card">
             <div class="stat-label">时间窗内 trace 数</div>
             <div class="stat-value">{{ snap?.traceRoot?.totalStarted ?? '—' }}</div>
@@ -29,12 +52,10 @@
             <div class="stat-value">{{ traceFinishRate }}</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">请求总成功率</div>
-            <div class="stat-value">{{ percentText(snap?.chainSummary?.successRate) }}</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">最终答复正确率（人工）</div>
-            <div class="stat-value">{{ percentText(snap?.chainSummary?.finalAnswerCorrectRate) }}</div>
+            <div class="stat-label">人工评审（correct / partial / wrong）</div>
+            <div class="stat-value">
+              {{ snap?.chainSummary?.finalAnswerCorrectCount ?? 0 }} / {{ snap?.chainSummary?.finalAnswerPartialCount ?? 0 }} / {{ snap?.chainSummary?.finalAnswerWrongCount ?? 0 }}
+            </div>
           </div>
           <div class="stat-card">
             <div class="stat-label">答复正确率（data_query）</div>
@@ -43,12 +64,6 @@
           <div class="stat-card">
             <div class="stat-label">答复正确率（knowledge_qa）</div>
             <div class="stat-value">{{ percentText(snap?.chainSummary?.finalAnswerByRoute?.knowledge_qa?.correctRate) }}</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">人工评审（correct / partial / wrong）</div>
-            <div class="stat-value">
-              {{ snap?.chainSummary?.finalAnswerCorrectCount ?? 0 }} / {{ snap?.chainSummary?.finalAnswerPartialCount ?? 0 }} / {{ snap?.chainSummary?.finalAnswerWrongCount ?? 0 }}
-            </div>
           </div>
           <div class="stat-card">
             <div class="stat-label">语义一致性一次性通过率</div>
@@ -69,10 +84,6 @@
           <div class="stat-card">
             <div class="stat-label">Mongo 执行有效率（按 trace）</div>
             <div class="stat-value">{{ percentText(snap?.chainSummary?.mongoExecTraceSuccessRate) }}</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">data_query 端到端 avg / p95</div>
-            <div class="stat-value">{{ routeLatencySecText('data_query') }}</div>
           </div>
           <div class="stat-card">
             <div class="stat-label">knowledge_qa 端到端 avg / p95</div>
@@ -251,29 +262,23 @@
           </el-table-column>
         </el-table>
 
-        <el-table
-          v-loading="llmLoading"
-          :data="llmTrend"
-          stripe
-          empty-text="暂无 LLM 趋势"
-          class="snap-table"
-          table-layout="auto"
-          :max-height="300"
-        >
-          <el-table-column prop="bucketStart" label="时间" min-width="220">
-            <template #default="{ row }">{{ formatTs(row.bucketStart) }}</template>
-          </el-table-column>
-          <el-table-column prop="calls" label="调用" min-width="180" align="right" />
-          <el-table-column prop="totalTokens" label="总 Tokens" min-width="200" align="right" />
-          <el-table-column label="成功率" min-width="180" align="right">
-            <template #default="{ row }">{{ percentText(row.successRate) }}</template>
-          </el-table-column>
-        </el-table>
-
         <el-table v-loading="llmLoading" :data="llmByNodeRows" stripe empty-text="暂无节点 Token 消耗" class="snap-table">
           <el-table-column prop="node" label="节点" min-width="180" />
           <el-table-column prop="calls" label="调用数" width="100" align="right" />
           <el-table-column prop="totalTokens" label="总 Tokens" width="130" align="right" />
+          <el-table-column label="Token 占比" min-width="220">
+            <template #default="{ row }">
+              <div class="share-wrap">
+                <div class="share-bar">
+                  <div class="share-fill" :style="{ width: `${Math.max(0, Math.min(100, Number(row.tokenSharePct || 0)))}%` }"></div>
+                </div>
+                <span class="share-text">{{ Number(row.tokenSharePct || 0).toFixed(1) }}%</span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="平均单次 Token" width="130" align="right">
+            <template #default="{ row }">{{ Math.round(row.avgTokensPerCall) }}</template>
+          </el-table-column>
           <el-table-column prop="promptTokens" label="Prompt Tokens" width="130" align="right" />
           <el-table-column prop="completionTokens" label="Completion Tokens" width="150" align="right" />
         </el-table>
@@ -337,6 +342,7 @@ import { getAgentObservabilitySnapshot, getAgentRagSummary, listAgentBadCases, g
 const snapHours = ref(72)
 const snap = ref(null)
 const snapLoading = ref(false)
+const showAdvancedChainMetrics = ref(false)
 const ragTrend = ref({ overall: {}, series: [] })
 const ragTrendLoading = ref(false)
 const ragTrendPage = ref(1)
@@ -437,16 +443,23 @@ const ragTrendDisplayOverall = computed(() => {
   }
 })
 const llmOverall = computed(() => llmSummary.value?.overall || {})
-const llmTrend = computed(() => (Array.isArray(llmSummary.value?.trend) ? llmSummary.value.trend : []).slice(-20))
 const llmByNodeRows = computed(() => {
   const rows = Array.isArray(llmSummary.value?.byNode) ? llmSummary.value.byNode : []
-  return rows.map((r) => ({
+  const baseRows = rows.map((r) => ({
     node: r?.key || 'unknown',
     calls: Number(r?.calls || 0),
     totalTokens: Number(r?.totalTokens || 0),
+    avgTokensPerCall: Number(r?.calls || 0) > 0 ? Number(r?.totalTokens || 0) / Number(r?.calls || 0) : 0,
     promptTokens: Number(r?.promptTokens || 0),
     completionTokens: Number(r?.completionTokens || 0)
   }))
+  const totalTok = baseRows.reduce((acc, r) => acc + Number(r.totalTokens || 0), 0)
+  return baseRows
+    .map((r) => ({
+      ...r,
+      tokenSharePct: totalTok > 0 ? (Number(r.totalTokens || 0) / totalTok) * 100 : 0
+    }))
+    .sort((a, b) => b.totalTokens - a.totalTokens)
 })
 const llmByModelRows = computed(() => {
   const rows = Array.isArray(llmSummary.value?.byModel) ? llmSummary.value.byModel : []
@@ -462,14 +475,15 @@ const llmByModelRows = computed(() => {
 const llmWarnings = computed(() => {
   const rows = []
   const successRate = Number(llmOverall.value?.successRate || 0)
-  const p95 = Number(llmOverall.value?.p95DurationMs || 0)
   if (llmOverall.value?.llmCalls > 0 && successRate < 0.9) {
     rows.push(`LLM 成功率偏低：${percentText(successRate)}（阈值 90%）`)
   }
-  if (p95 > 5000) {
-    rows.push(`LLM P95 耗时偏高：${Math.round(p95)}ms（阈值 5000ms）`)
-  }
   return rows
+})
+const finalAnswerCorrectnessText = computed(() => {
+  const annotated = Number(snap.value?.chainSummary?.finalAnswerAnnotatedCount || 0)
+  if (annotated <= 0) return '待标注'
+  return percentText(snap.value?.chainSummary?.finalAnswerCorrectRate)
 })
 
 function traceStatusCount(key) {
@@ -592,7 +606,8 @@ function formatReasonCode(code) {
   if (!raw) return '—'
   const labelMap = {
     mql_generate_exhausted: '生成重试耗尽（mql_generate_exhausted）',
-    graph_stream_failed: '图流执行失败（graph_stream_failed）'
+    graph_stream_failed: '图流执行失败（graph_stream_failed）',
+    graph_stream_timeout: '图流执行超时（graph_stream_timeout）'
   }
   return labelMap[raw] || raw
 }
@@ -699,9 +714,31 @@ onMounted(() => {
   margin-bottom: 12px;
 }
 
+.kqa-grid--core {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.kqa-grid--detail {
+  margin-top: 8px;
+}
+
+.metric-toggle-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: 2px 0 4px;
+}
+
+.compact-note {
+  margin-bottom: 10px;
+}
+
 @media (max-width: 900px) {
   .kqa-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kqa-grid--core {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -785,9 +822,17 @@ onMounted(() => {
   margin-bottom: 10px;
 }
 
+.rag-grid--overall {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 @media (max-width: 900px) {
   .rag-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rag-grid--overall {
+    grid-template-columns: 1fr;
   }
 }
 

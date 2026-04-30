@@ -10,13 +10,21 @@ function safeParseMessage(frameBody) {
   }
 }
 
-export function useProjectStomp({ projectIdRef, activeRef, onFileUpdate, onBatchUploadUpdate, onConnected }) {
+export function useProjectStomp({
+  projectIdRef,
+  activeRef,
+  onFileUpdate,
+  onBatchUploadUpdate,
+  onConnected,
+  disconnectGraceMs = 45000
+}) {
   let client = null
   let subscriptions = []
   let currentProjectId = ''
   let isDisconnecting = false
   let reconnectAttempts = 0
   let reconnectTimer = null
+  let disconnectGraceTimer = null
   const maxReconnectAttempts = 5
   const connectionState = ref('idle')
   const reconnectCount = ref(0)
@@ -25,6 +33,13 @@ export function useProjectStomp({ projectIdRef, activeRef, onFileUpdate, onBatch
     if (reconnectTimer) {
       clearTimeout(reconnectTimer)
       reconnectTimer = null
+    }
+  }
+
+  const clearDisconnectGraceTimer = () => {
+    if (disconnectGraceTimer) {
+      clearTimeout(disconnectGraceTimer)
+      disconnectGraceTimer = null
     }
   }
 
@@ -48,6 +63,7 @@ export function useProjectStomp({ projectIdRef, activeRef, onFileUpdate, onBatch
   const disconnect = async (resetAttempts = true) => {
     isDisconnecting = true
     clearReconnectTimer()
+    clearDisconnectGraceTimer()
     if (resetAttempts) {
       reconnectAttempts = 0
       reconnectCount.value = 0
@@ -70,6 +86,18 @@ export function useProjectStomp({ projectIdRef, activeRef, onFileUpdate, onBatch
       isDisconnecting = false
       connectionState.value = 'disconnected'
     }
+  }
+
+  const scheduleGracefulDisconnect = (resetAttempts = true) => {
+    if (disconnectGraceMs <= 0) {
+      disconnect(resetAttempts)
+      return
+    }
+    if (disconnectGraceTimer) return
+    disconnectGraceTimer = setTimeout(() => {
+      disconnectGraceTimer = null
+      disconnect(resetAttempts)
+    }, disconnectGraceMs)
   }
 
   const subscribeProjectTopics = (projectId) => {
@@ -198,9 +226,10 @@ export function useProjectStomp({ projectIdRef, activeRef, onFileUpdate, onBatch
     ([projectId, active]) => {
       const pid = String(projectId || '')
       if (!active || !pid) {
-        disconnect()
+        scheduleGracefulDisconnect()
         return
       }
+      clearDisconnectGraceTimer()
       reconnectAttempts = 0
       connect(pid, false)
     },
@@ -208,7 +237,7 @@ export function useProjectStomp({ projectIdRef, activeRef, onFileUpdate, onBatch
   )
 
   onBeforeUnmount(() => {
-    disconnect()
+    scheduleGracefulDisconnect()
   })
 
   return {

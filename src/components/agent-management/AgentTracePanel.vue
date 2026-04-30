@@ -205,6 +205,12 @@
                 {{ t }}
               </el-checkbox-button>
             </el-checkbox-group>
+            <span class="filter-label">TRACE_BAG 分区</span>
+            <el-radio-group v-model="traceBagLaneFilter" size="small" class="lane-group">
+              <el-radio-button label="all">全部</el-radio-button>
+              <el-radio-button label="governance">治理</el-radio-button>
+              <el-radio-button label="business">业务</el-radio-button>
+            </el-radio-group>
             <span v-if="typeFilterList.length" class="filter-hint">已选 {{ typeFilterList.length }} 类；清空则显示全部</span>
           </div>
 
@@ -283,6 +289,45 @@
           <div v-if="finalAnswerText" class="final-answer-card">
             <div class="final-answer-cap">模型最终答复</div>
             <div class="final-answer-body agent-md" v-html="finalAnswerHtml" />
+          </div>
+
+          <div v-if="llmStreamRows.length" class="final-answer-card">
+            <div class="final-answer-cap">思考流（Reasoning）</div>
+            <div
+              ref="llmStreamWrapRef"
+              class="llm-stream-wrap"
+              @scroll.passive="onLlmStreamScroll"
+            >
+              <div v-for="row in llmStreamRows" :key="`llm-${row.nodeId}`" class="llm-stream-node">
+                <div class="llm-stream-node-head">
+                  <span class="llm-stream-node-title">{{ row.nodeId }}</span>
+                  <span class="llm-stream-node-meta">{{ row.reasoningChars }} chars / {{ row.answerChars }} chars</span>
+                </div>
+                <div class="llm-stream-grid">
+                  <section class="llm-stream-pane">
+                    <h5>思考过程</h5>
+                    <div
+                      class="llm-stream-body"
+                      @scroll.passive="onLlmPaneScroll(row.nodeId, 'reasoning')"
+                      :ref="(el) => setLlmPaneRef(el, row.nodeId, 'reasoning')"
+                    >{{ row.reasoningText || '（无）' }}</div>
+                  </section>
+                  <section class="llm-stream-pane">
+                    <h5>正常回答</h5>
+                    <div
+                      class="llm-stream-body"
+                      @scroll.passive="onLlmPaneScroll(row.nodeId, 'answer')"
+                      :ref="(el) => setLlmPaneRef(el, row.nodeId, 'answer')"
+                    >{{ row.answerText || '（无）' }}</div>
+                  </section>
+                </div>
+              </div>
+            </div>
+            <div v-if="!llmAutoFollow" class="llm-stream-float">
+              <el-button size="small" type="primary" plain @click="resumeLlmAutoFollow">
+                跟随最新内容
+              </el-button>
+            </div>
           </div>
 
           <div v-if="selectedId" class="anno-card">
@@ -430,7 +475,7 @@ import {
   listAgentTraces,
   upsertTraceAnnotation
 } from '@/services/agent-management.service.js'
-import { renderAgentMarkdownHtml } from '@/utils/agent-markdown.js'
+import { normalizeAgentMarkdownText, renderAgentMarkdownHtml } from '@/utils/agent-markdown.js'
 import { chatAgentStream, formatAgentNodeLine } from '@/services/agent.service'
 import AgentTraceTopology from '@/components/agent-management/AgentTraceTopology.vue'
 import AgentTraceEventCard from '@/components/agent-management/AgentTraceEventCard.vue'
@@ -455,6 +500,8 @@ const selectedId = ref('')
 const detail = ref(null)
 /** 选中的类型；空数组表示不过滤（显示全部） */
 const typeFilterList = ref([])
+/** TRACE_BAG 车道过滤：all/governance/business */
+const traceBagLaneFilter = ref('all')
 /** 拓扑节点点击 → 时间轴仅看相关事件 */
 const topologySelectedId = ref('')
 /** 拓扑边点击 → 时间轴联动到 GRAPH_EDGE 事件 */
@@ -468,6 +515,12 @@ const queryResultVisible = ref(false)
 const queryResultTitle = ref('')
 const queryResultBody = ref('')
 const queryResultLoading = ref(false)
+const displayedFinalAnswerText = ref('')
+let finalAnswerTypingTimer = null
+const llmStreamWrapRef = ref(null)
+const llmAutoFollow = ref(true)
+const llmPaneRefs = ref({})
+const llmPaneAutoFollow = ref({})
 
 const skeleton = ref(null)
 const obsQuery = ref('')
@@ -475,6 +528,8 @@ const obsThreadId = ref(typeof localStorage !== 'undefined' ? localStorage.getIt
 const obsStreaming = ref(false)
 const obsAbortController = ref(null)
 const liveReasoningLines = ref([])
+const liveLlmNodeStreams = ref({})
+const liveLlmNodeSeq = ref(0)
 let pollTimer = null
 
 /** 与 trace 详情同屏的人工标注（写入 agent_trace_annotation） */
@@ -526,6 +581,14 @@ const filteredEvents = computed(() => {
   if (typeFilterList.value.length) {
     const set = new Set(typeFilterList.value)
     list = list.filter((ev) => set.has(ev?.type))
+  }
+  if (traceBagLaneFilter.value !== 'all') {
+    list = list.filter((ev) => {
+      if (ev?.type !== 'TRACE_BAG') return true
+      const facet = String(ev?.payload?.facet || '')
+      const isGovernance = facet === 'node_governance'
+      return traceBagLaneFilter.value === 'governance' ? isGovernance : !isGovernance
+    })
   }
   if (topologySelectedId.value) {
     const nid = topologySelectedId.value
@@ -768,7 +831,83 @@ const finalAnswerText = computed(() => {
   return ''
 })
 
-const finalAnswerHtml = computed(() => renderAgentMarkdownHtml(finalAnswerText.value))
+const finalAnswerHtml = computed(() => renderAgentMarkdownHtml(displayedFinalAnswerText.value))
+
+const LLM_STREAM_REASON_SEP = '\n\n── 同节点后续推理（trace 摘要）──\n\n'
+const LLM_STREAM_ANSWER_SEP = '\n\n── 同节点后续输出（trace）──\n\n'
+
+const llmStreamRows = computed(() => {
+  const merged = {}
+  const live = liveLlmNodeStreams.value || {}
+  const hadLiveReasoning = new Set()
+  const hadLiveAnswer = new Set()
+  for (const [nodeIdRaw, row] of Object.entries(live)) {
+    const nodeId = String(nodeIdRaw || '').trim() || 'unknown'
+    const x = merged[nodeId] || {
+      nodeId,
+      firstSeen: Number(row?.firstSeen ?? Number.MAX_SAFE_INTEGER),
+      reasoningText: String(row?.reasoningText || ''),
+      answerText: String(row?.answerText || '')
+    }
+    x.firstSeen = Math.min(x.firstSeen, Number(row?.firstSeen ?? Number.MAX_SAFE_INTEGER))
+    if (String(x.reasoningText || '').trim()) hadLiveReasoning.add(nodeId)
+    if (String(x.answerText || '').trim()) hadLiveAnswer.add(nodeId)
+    merged[nodeId] = x
+  }
+  let eventIdx = 0
+  for (const ev of events.value) {
+    eventIdx += 1
+    const eventFirstSeen = 1000000 + eventIdx
+    if (ev?.type === 'TRACE_BAG' && String(ev?.payload?.facet || '') === 'llm_reasoning') {
+      const kv = ev?.payload?.kv || {}
+      const nodeId = String(kv.nodeId || ev?.payload?.nodeId || '').trim() || 'unknown'
+      const x = merged[nodeId] || { nodeId, firstSeen: eventFirstSeen, reasoningText: '', answerText: '' }
+      x.firstSeen = Math.min(x.firstSeen, eventFirstSeen)
+      const preview = String(kv.reasoningPreview || '')
+      if (!preview) {
+        merged[nodeId] = x
+        continue
+      }
+      // 本会话已收到该节点 reasoning SSE 时，仍以实时流为准，仅用 trace 补空，避免与 LLM_RESPONSE 双写重复。
+      if (hadLiveReasoning.has(nodeId)) {
+        if (!x.reasoningText) x.reasoningText = preview
+      } else if (!x.reasoningText) {
+        x.reasoningText = preview
+      } else if (!x.reasoningText.includes(preview)) {
+        x.reasoningText += LLM_STREAM_REASON_SEP + preview
+      }
+      merged[nodeId] = x
+      continue
+    }
+    if (ev?.type === 'LLM_RESPONSE') {
+      const nodeId = String(ev?.source || '').trim() || 'unknown'
+      const payload = ev?.payload || {}
+      const text = String(payload.responseFull || payload.responsePreview || '')
+      if (!text) continue
+      const x = merged[nodeId] || { nodeId, firstSeen: eventFirstSeen, reasoningText: '', answerText: '' }
+      x.firstSeen = Math.min(x.firstSeen, eventFirstSeen)
+      if (hadLiveAnswer.has(nodeId)) {
+        if (!x.answerText) x.answerText = text
+      } else if (!x.answerText) {
+        x.answerText = text
+      } else if (!x.answerText.includes(text)) {
+        x.answerText += LLM_STREAM_ANSWER_SEP + text
+      }
+      merged[nodeId] = x
+    }
+  }
+  return Object.values(merged)
+    .map((x) => ({
+      ...x,
+      reasoningChars: x.reasoningText.length,
+      answerChars: x.answerText.length
+    }))
+    .filter((x) => x.reasoningChars > 0 || x.answerChars > 0)
+    .sort((a, b) => {
+      if (a.firstSeen !== b.firstSeen) return a.firstSeen - b.firstSeen
+      return a.nodeId.localeCompare(b.nodeId)
+    })
+})
 
 function formatTime(ms) {
   if (ms == null || ms === '') return '—'
@@ -779,6 +918,37 @@ function formatTime(ms) {
   } catch {
     return String(ms)
   }
+}
+
+function stopFinalAnswerTyping() {
+  if (finalAnswerTypingTimer) {
+    clearInterval(finalAnswerTypingTimer)
+    finalAnswerTypingTimer = null
+  }
+}
+
+function syncFinalAnswerDisplay(nextRaw, animate) {
+  const normalized = normalizeAgentMarkdownText(nextRaw || '')
+  if (!animate) {
+    stopFinalAnswerTyping()
+    displayedFinalAnswerText.value = normalized
+    return
+  }
+  const current = displayedFinalAnswerText.value || ''
+  if (!normalized.startsWith(current)) {
+    displayedFinalAnswerText.value = ''
+  }
+  stopFinalAnswerTyping()
+  finalAnswerTypingTimer = setInterval(() => {
+    const cur = displayedFinalAnswerText.value || ''
+    if (cur.length >= normalized.length) {
+      stopFinalAnswerTyping()
+      return
+    }
+    // 每帧推进 2~4 字，既有“打字感”又不拖沓
+    const step = Math.max(2, Math.min(4, Math.ceil((normalized.length - cur.length) / 60)))
+    displayedFinalAnswerText.value = normalized.slice(0, cur.length + step)
+  }, 24)
 }
 
 function openPromptInspect(ev) {
@@ -1134,6 +1304,9 @@ async function loadDetail(id) {
   detailLoading.value = true
   try {
     detail.value = await getAgentTrace(id)
+    // 从列表/重载进入详情时丢弃观测 SSE 缓冲，避免与 Mongo 事件错位或「只显示一轮」的合并假象
+    liveLlmNodeStreams.value = {}
+    liveLlmNodeSeq.value = 0
     typeFilterList.value = []
     await loadAnnotation(id)
   } catch (e) {
@@ -1236,6 +1409,8 @@ function resetObservationSession() {
     /* ignore */
   }
   ElMessage.success('已切换为新会话，下一次发送将创建新的 thread')
+  liveLlmNodeStreams.value = {}
+  liveLlmNodeSeq.value = 0
 }
 
 function formatNowClock() {
@@ -1263,11 +1438,34 @@ function appendLiveLine(text, { dedup = true } = {}) {
   })
 }
 
+function pushNodeStreamChunk(node, channel, chunk) {
+  const nodeId = String(node || '').trim() || 'unknown'
+  const text = String(chunk || '')
+  if (!text) return
+  const prev = liveLlmNodeStreams.value[nodeId] || {
+    reasoningText: '',
+    answerText: '',
+    firstSeen: ++liveLlmNodeSeq.value
+  }
+  const next = { ...prev }
+  if (channel === 'reasoning') {
+    next.reasoningText += text
+  } else {
+    next.answerText += text
+  }
+  liveLlmNodeStreams.value = {
+    ...liveLlmNodeStreams.value,
+    [nodeId]: next
+  }
+}
+
 async function sendObservation() {
   const q = obsQuery.value.trim()
   if (!q || obsStreaming.value) return
   lastDedup = ''
   liveReasoningLines.value = []
+  liveLlmNodeStreams.value = {}
+  liveLlmNodeSeq.value = 0
   obsStreaming.value = true
   obsAbortController.value = new AbortController()
   try {
@@ -1301,6 +1499,15 @@ async function sendObservation() {
       onNode: (evt) => {
         const line = formatAgentNodeLine(evt)
         if (line) appendLiveLine(line)
+      },
+      onStreamChunk: (chunk, meta) => {
+        pushNodeStreamChunk(meta?.node, 'answer', chunk)
+      },
+      onStreamTrace: (chunk, meta) => {
+        pushNodeStreamChunk(meta?.node, 'answer', chunk)
+      },
+      onStreamReasoning: (chunk, meta) => {
+        pushNodeStreamChunk(meta?.node, 'reasoning', chunk)
       },
       onError: (evt) => {
         const msg = evt?.message || evt?.text || '流式错误'
@@ -1338,6 +1545,15 @@ watch(
   }
 )
 
+watch(
+  () => [finalAnswerText.value, detail.value?.status],
+  ([text, status]) => {
+    const animate = status === 'RUNNING' || obsStreaming.value
+    syncFinalAnswerDisplay(String(text || ''), animate)
+  },
+  { immediate: true }
+)
+
 watch(selectedId, (id) => {
   inspectVisible.value = false
   inspectTitle.value = ''
@@ -1368,7 +1584,111 @@ onMounted(() => {
 onUnmounted(() => {
   stopPolling()
   stopObservation()
+  stopFinalAnswerTyping()
+  liveLlmNodeStreams.value = {}
+  liveLlmNodeSeq.value = 0
 })
+
+function isNearBottom(el, threshold = 28) {
+  if (!el) return true
+  const remain = el.scrollHeight - el.clientHeight - el.scrollTop
+  return remain <= threshold
+}
+
+function scrollLlmStreamToBottom(smooth = false) {
+  const el = llmStreamWrapRef.value
+  if (!el) return
+  el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' })
+}
+
+function onLlmStreamScroll() {
+  const el = llmStreamWrapRef.value
+  if (!el) return
+  llmAutoFollow.value = isNearBottom(el)
+}
+
+function resumeLlmAutoFollow() {
+  llmAutoFollow.value = true
+  Object.keys(llmPaneAutoFollow.value).forEach((k) => {
+    llmPaneAutoFollow.value[k] = true
+  })
+  nextTick(() => {
+    scrollLlmStreamToBottom(true)
+    scrollAllLlmPanesToBottom(true)
+  })
+}
+
+function paneKey(nodeId, kind) {
+  return `${String(nodeId || 'unknown')}::${String(kind || 'answer')}`
+}
+
+function setLlmPaneRef(el, nodeId, kind) {
+  const key = paneKey(nodeId, kind)
+  if (el) {
+    llmPaneRefs.value[key] = el
+    if (!(key in llmPaneAutoFollow.value)) {
+      llmPaneAutoFollow.value[key] = true
+    }
+    return
+  }
+  delete llmPaneRefs.value[key]
+}
+
+function onLlmPaneScroll(nodeId, kind) {
+  const key = paneKey(nodeId, kind)
+  const el = llmPaneRefs.value[key]
+  if (!el) return
+  llmPaneAutoFollow.value[key] = isNearBottom(el)
+}
+
+function scrollLlmPaneToBottom(nodeId, kind, smooth = false) {
+  const key = paneKey(nodeId, kind)
+  const el = llmPaneRefs.value[key]
+  if (!el) return
+  el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' })
+}
+
+function scrollAllLlmPanesToBottom(smooth = false) {
+  for (const key of Object.keys(llmPaneRefs.value)) {
+    if (!llmPaneAutoFollow.value[key]) continue
+    const el = llmPaneRefs.value[key]
+    if (!el) continue
+    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' })
+  }
+}
+
+watch(
+  () => [llmStreamRows.value.length, llmStreamRows.value.map((r) => `${r.nodeId}:${r.reasoningChars}:${r.answerChars}`).join('|')],
+  () => {
+    nextTick(() => {
+      if (llmAutoFollow.value) {
+        scrollLlmStreamToBottom()
+      }
+      for (const row of llmStreamRows.value) {
+        const reasonKey = paneKey(row.nodeId, 'reasoning')
+        const answerKey = paneKey(row.nodeId, 'answer')
+        if (llmPaneAutoFollow.value[reasonKey] !== false) {
+          scrollLlmPaneToBottom(row.nodeId, 'reasoning')
+        }
+        if (llmPaneAutoFollow.value[answerKey] !== false) {
+          scrollLlmPaneToBottom(row.nodeId, 'answer')
+        }
+      }
+    })
+  }
+)
+
+watch(
+  () => selectedId.value,
+  () => {
+    llmAutoFollow.value = true
+    llmPaneAutoFollow.value = {}
+    nextTick(() => {
+      scrollLlmStreamToBottom()
+      scrollAllLlmPanesToBottom()
+    })
+  }
+)
 </script>
 
 <style scoped>
@@ -1938,6 +2258,21 @@ onUnmounted(() => {
   gap: 6px;
 }
 
+.lane-group :deep(.el-radio-button__inner) {
+  font-size: 11px;
+  border-radius: 999px !important;
+  border: 1px solid #d3dff2 !important;
+  background: #ffffff;
+  color: #4f6280;
+  box-shadow: none !important;
+}
+
+.lane-group :deep(.el-radio-button.is-active .el-radio-button__inner) {
+  background: linear-gradient(120deg, #ecfeff 0%, #dff7ff 100%);
+  border-color: #14b8a6 !important;
+  color: #0f766e;
+}
+
 .type-group :deep(.el-checkbox-button__inner) {
   font-family: 'Fragment Mono', ui-monospace, monospace;
   font-size: 11px;
@@ -2311,6 +2646,83 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.65);
 }
 
+.llm-stream-wrap {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 420px;
+  overflow: auto;
+  padding-right: 4px;
+  scroll-behavior: smooth;
+}
+
+.llm-stream-node {
+  border-radius: 12px;
+  border: 1px solid #99f6e4;
+  background: #ffffff;
+  padding: 10px 12px 12px;
+  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.08);
+}
+
+.llm-stream-node-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.llm-stream-node-title {
+  font-family: 'Fragment Mono', ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f766e;
+}
+
+.llm-stream-node-meta {
+  font-size: 11px;
+  color: #64748b;
+  font-family: 'Fragment Mono', ui-monospace, monospace;
+}
+
+.llm-stream-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.llm-stream-pane {
+  border-radius: 8px;
+  border: 1px solid #ccfbf1;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  padding: 8px;
+}
+
+.llm-stream-pane h5 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.llm-stream-body {
+  font-size: 12px;
+  line-height: 1.62;
+  color: #0f172a;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 186px;
+  overflow: auto;
+  font-family: 'Fragment Mono', ui-monospace, monospace;
+  scrollbar-gutter: stable;
+}
+
+.llm-stream-float {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
 .plan-spine {
   display: flex;
   flex-wrap: wrap;
@@ -2379,6 +2791,13 @@ onUnmounted(() => {
 .obs-actions-row {
   display: flex;
   gap: 6px;
+  min-width: 0;
+}
+
+.obs-actions-row .obs-btn {
+  width: auto;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .obs-btn {

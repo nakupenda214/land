@@ -298,10 +298,6 @@ const archiveTabRef = ref(null)
 // 组件卸载时清理事件，避免内存泄漏
 onUnmounted(() => {
   clearRefreshTimer();
-  if (delayedProjectOptionsTimer) {
-    clearTimeout(delayedProjectOptionsTimer)
-    delayedProjectOptionsTimer = null
-  }
 })
 
 // 页面状态
@@ -362,7 +358,6 @@ const {
 const projectOptionsLoaded = ref(false)
 const projectOptionsLoading = ref(false)
 let projectOptionsLoadingPromise = null
-let delayedProjectOptionsTimer = null
 
 const ensureProjectOptionsLoaded = async () => {
   if (projectOptionsLoaded.value) return true
@@ -728,33 +723,30 @@ onMounted(async () => {
     activeTab.value = 'archives'
   }
 
-  // B. 决定选中哪个项目
-  delayedProjectOptionsTimer = window.setTimeout(async () => {
-    delayedProjectOptionsTimer = null
-    await ensureProjectOptionsLoaded()
-    const queryProjectId = route.query.projectId
-    const savedProjectId = localStorage.getItem('projectFilterStatus')
-    let targetProjectId = ''
+  // B. 决定选中哪个项目（去掉人为延迟，首进即加载）
+  await ensureProjectOptionsLoaded()
+  const queryProjectId = route.query.projectId
+  const savedProjectId = localStorage.getItem('projectFilterStatus')
+  let targetProjectId = ''
 
-    if (queryProjectId) {
-      targetProjectId = String(queryProjectId)
+  if (queryProjectId) {
+    targetProjectId = String(queryProjectId)
+    filterProject.value = targetProjectId
+    await handleGlobalSearch()
+  } else if (savedProjectId) {
+    const exists = projectOptions.value.some((p) => String(p.id) === String(savedProjectId))
+    if (exists) {
+      targetProjectId = String(savedProjectId)
       filterProject.value = targetProjectId
       await handleGlobalSearch()
-    } else if (savedProjectId) {
-      const exists = projectOptions.value.some((p) => String(p.id) === String(savedProjectId))
-      if (exists) {
-        targetProjectId = String(savedProjectId)
-        filterProject.value = targetProjectId
-        await handleGlobalSearch()
-      } else {
-        localStorage.removeItem('projectFilterStatus')
-      }
+    } else {
+      localStorage.removeItem('projectFilterStatus')
     }
+  }
 
-    if (targetProjectId) {
-      restoreRefreshCdStatus(targetProjectId)
-    }
-  }, 260)
+  if (targetProjectId) {
+    restoreRefreshCdStatus(targetProjectId)
+  }
 })
 
 

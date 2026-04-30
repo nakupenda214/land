@@ -63,7 +63,6 @@
               :loading="!!routeSaving[row.nodeId]"
               @change="(val) => onRouteBindChange(row, val)"
             >
-              <el-option label="系统默认" value="" />
               <el-option v-for="p in profiles" :key="p.id" :label="p.profileName" :value="p.id" />
             </el-select>
           </template>

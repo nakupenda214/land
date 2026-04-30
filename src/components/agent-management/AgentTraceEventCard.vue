@@ -33,6 +33,11 @@
           查看响应全文
         </el-button>
       </div>
+      <div v-if="ev?.type === 'TRACE_BAG'" class="trace-bag-bar">
+        <span class="tbf">{{ ev?.payload?.facet || 'unknown_facet' }}</span>
+        <span class="tbn">{{ traceBagLaneLabel(ev) }}</span>
+        <span v-if="traceBagErrorCodeLabel(ev)" class="tbn">{{ traceBagErrorCodeLabel(ev) }}</span>
+      </div>
       <div v-if="showMongoResultButton(ev)" class="llm-inline-actions">
         <span class="llm-meta-chip">rowCount {{ ev?.payload?.detail?.rowCount ?? 0 }}</span>
         <el-button size="small" type="primary" plain @click="$emit('openQueryResult', ev)">查看查询结果</el-button>
@@ -79,6 +84,24 @@ function showMongoResultButton(ev) {
   if (String(ev?.payload?.tool || '') !== 'mongo_execute') return false
   const id = ev?.payload?.detail?.queryResultId
   return id != null && String(id).trim().length > 0
+}
+
+function traceBagLaneLabel(ev) {
+  const facet = String(ev?.payload?.facet || '')
+  if (facet === 'node_governance') return '治理分区'
+  if (facet === 'llm_reasoning') return '思考分区'
+  return '业务分区'
+}
+
+function traceBagErrorCodeLabel(ev) {
+  const facet = String(ev?.payload?.facet || '')
+  if (facet !== 'node_governance') return ''
+  const code = String(ev?.payload?.kv?.errorCode || '').trim().toUpperCase()
+  if (!code) return ''
+  if (code.includes('TIMEOUT')) return `超时：${code}`
+  if (code.includes('RETRY')) return `重试：${code}`
+  if (code.includes('ERROR')) return `异常：${code}`
+  return code
 }
 </script>
 
