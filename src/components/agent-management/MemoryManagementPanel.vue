@@ -1,32 +1,13 @@
 <template>
   <section class="memory-page">
-    <aside class="session-pane panel-card">
-      <div class="session-tools">
-        <el-input
-          v-model="keyword"
-          clearable
-          placeholder="检索会话"
-          @keyup.enter="loadSessions"
-        />
-        <el-button :loading="loadingSessions" @click="loadSessions">查询</el-button>
-      </div>
-      <el-scrollbar class="session-list">
-        <div
-          v-for="item in sessions"
-          :key="item.threadId"
-          class="session-item"
-          :class="{ active: selectedThreadId === item.threadId }"
-          @click="selectSession(item)"
-        >
-          <el-tooltip :content="item.title || '未命名会话'" placement="top" :show-after="300">
-            <div class="session-title">{{ item.title || '未命名会话' }}</div>
-          </el-tooltip>
-          <div class="session-meta">用户：{{ item.userId || '—' }}</div>
-          <div class="session-preview">{{ item.memorySummary || '暂无摘要' }}</div>
-        </div>
-        <el-empty v-if="!loadingSessions && !sessions.length" description="暂无会话数据" />
-      </el-scrollbar>
-    </aside>
+    <MemorySessionSidebar
+      v-model:keyword="keyword"
+      :sessions="sessions"
+      :loading-sessions="loadingSessions"
+      :selected-thread-id="selectedThreadId"
+      @query-sessions="loadSessions"
+      @select-session="selectSession"
+    />
 
     <main class="content-pane">
       <section class="panel-card">
@@ -62,7 +43,12 @@
             <el-input-number v-model="cfg.summaryMaxChars" :min="300" :max="5000" :step="100" />
           </el-form-item>
           <el-form-item label="摘要刷新间隔(ms)">
-            <el-input-number v-model="cfg.summaryRefreshIntervalMs" :min="30000" :max="3600000" :step="10000" />
+            <el-input-number
+              v-model="cfg.summaryRefreshIntervalMs"
+              :min="30000"
+              :max="3600000"
+              :step="10000"
+            />
           </el-form-item>
         </el-form>
       </section>
@@ -165,233 +151,43 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import {
-  clearAgentMemorySummary,
-  getAgentMemoryConfig,
-  listAgentMemoryMessages,
-  listAgentMemorySessions,
-  refreshAgentMemorySummary,
-  updateAgentMemoryConfig
-} from '@/services/agent-management.service.js'
+import MemorySessionSidebar from './MemorySessionSidebar.vue'
+import { useMemoryManagementPanel } from '@/composables/agent-management/useMemoryManagementPanel.js'
 
-const cfg = reactive({
-  traceBagEnabled: true,
-  workingCandidateMessages: 40,
-  workingTopMessages: 6,
-  workingRecentMessages: 2,
-  workingMaxChars: 4000,
-  summarySourceMessages: 24,
-  summaryMaxChars: 1200,
-  summaryRefreshIntervalMs: 120000
-})
-
-const loadingCfg = ref(false)
-const savingCfg = ref(false)
-const loadingSessions = ref(false)
-const loadingMessages = ref(false)
-const sessions = ref([])
-const keyword = ref('')
-
-const selectedThreadId = ref('')
-const messageKeyword = ref('')
-const messageRole = ref('')
-const messages = ref([])
-const messageTotal = ref(0)
-const messagePageNum = ref(1)
-const messagePageSize = ref(20)
-const roleCounts = reactive({ user: 0, assistant: 0 })
-const messageViewerVisible = ref(false)
-const viewingMessageContent = ref('')
-
-const selectedSession = computed(() => sessions.value.find((s) => s.threadId === selectedThreadId.value) || null)
-const roleStats = computed(() => {
-  const total = Number(messageTotal.value || 0)
-  const user = Number(roleCounts.user || 0)
-  const assistant = Number(roleCounts.assistant || 0)
-  const pct = (x) => (total > 0 ? `${((x * 100) / total).toFixed(1)}%` : '0.0%')
-  return {
-    user,
-    assistant,
-    userPct: pct(user),
-    assistantPct: pct(assistant)
-  }
-})
-
-async function loadConfig() {
-  loadingCfg.value = true
-  try {
-    const data = (await getAgentMemoryConfig()) || {}
-    Object.assign(cfg, data)
-  } catch (e) {
-    ElMessage.error(e?.message || '加载记忆配置失败')
-  } finally {
-    loadingCfg.value = false
-  }
-}
-
-async function saveConfig() {
-  savingCfg.value = true
-  try {
-    const body = {
-      traceBagEnabled: !!cfg.traceBagEnabled,
-      workingCandidateMessages: Number(cfg.workingCandidateMessages || 40),
-      workingTopMessages: Number(cfg.workingTopMessages || 6),
-      workingRecentMessages: Number(cfg.workingRecentMessages || 2),
-      workingMaxChars: Number(cfg.workingMaxChars || 4000),
-      summarySourceMessages: Number(cfg.summarySourceMessages || 24),
-      summaryMaxChars: Number(cfg.summaryMaxChars || 1200),
-      summaryRefreshIntervalMs: Number(cfg.summaryRefreshIntervalMs || 120000)
-    }
-    const latest = await updateAgentMemoryConfig(body)
-    Object.assign(cfg, latest || {})
-    ElMessage.success('记忆配置已更新')
-  } catch (e) {
-    ElMessage.error(e?.message || '保存记忆配置失败')
-  } finally {
-    savingCfg.value = false
-  }
-}
-
-async function loadSessions() {
-  loadingSessions.value = true
-  try {
-    sessions.value = (await listAgentMemorySessions(200, keyword.value)) || []
-    if (!sessions.value.length) {
-      selectedThreadId.value = ''
-      messages.value = []
-      messageTotal.value = 0
-      return
-    }
-    if (!selectedThreadId.value || !sessions.value.some((it) => it.threadId === selectedThreadId.value)) {
-      selectedThreadId.value = sessions.value[0].threadId
-      messagePageNum.value = 1
-      await loadMessages()
-    }
-  } catch (e) {
-    ElMessage.error(e?.message || '加载会话摘要失败')
-    sessions.value = []
-    selectedThreadId.value = ''
-  } finally {
-    loadingSessions.value = false
-  }
-}
-
-async function selectSession(item) {
-  const tid = item?.threadId
-  if (!tid || tid === selectedThreadId.value) return
-  selectedThreadId.value = tid
-  messagePageNum.value = 1
-  await loadMessages()
-}
-
-async function loadMessages() {
-  if (!selectedThreadId.value) return
-  loadingMessages.value = true
-  try {
-    const res = await listAgentMemoryMessages(
-      selectedThreadId.value,
-      messagePageNum.value,
-      messagePageSize.value,
-      messageKeyword.value,
-      messageRole.value
-    )
-    messages.value = res?.records || []
-    messageTotal.value = Number(res?.total || 0)
-    roleCounts.user = Number(res?.roleCounts?.user || 0)
-    roleCounts.assistant = Number(res?.roleCounts?.assistant || 0)
-  } catch (e) {
-    ElMessage.error(e?.message || '加载会话记忆明细失败')
-    messages.value = []
-    messageTotal.value = 0
-    roleCounts.user = 0
-    roleCounts.assistant = 0
-  } finally {
-    loadingMessages.value = false
-  }
-}
-
-function onMessagePageChange(page) {
-  messagePageNum.value = page
-  loadMessages()
-}
-
-function onMessageSizeChange(size) {
-  messagePageSize.value = size
-  messagePageNum.value = 1
-  loadMessages()
-}
-
-function onFilterChange() {
-  messagePageNum.value = 1
-  loadMessages()
-}
-
-function escapeHtml(text) {
-  return String(text)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
-}
-
-function highlightMessage(text) {
-  const safe = escapeHtml(text)
-  const kw = String(messageKeyword.value || '').trim()
-  if (!kw) return safe
-  const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const reg = new RegExp(`(${escaped})`, 'ig')
-  return safe.replace(reg, '<mark class="kw-highlight">$1</mark>')
-}
-
-/** 单行展示不下或含换行时显示「查看」 */
-function messageNeedsExpand(content) {
-  const s = String(content ?? '')
-  if (!s.trim()) return false
-  if (/[\r\n]/.test(s)) return true
-  return s.length > 72
-}
-
-function openContentViewer(content) {
-  viewingMessageContent.value = String(content || '')
-  messageViewerVisible.value = true
-}
-
-async function refreshSummary(row) {
-  const tid = row?.threadId || selectedThreadId.value
-  if (!tid) return
-  try {
-    await refreshAgentMemorySummary(tid)
-    ElMessage.success('摘要已刷新')
-    await loadSessions()
-  } catch (e) {
-    ElMessage.error(e?.message || '刷新摘要失败')
-  }
-}
-
-async function clearSummary(row) {
-  const tid = row?.threadId || selectedThreadId.value
-  if (!tid) return
-  try {
-    await clearAgentMemorySummary(tid)
-    ElMessage.success('摘要已清空')
-    await loadSessions()
-  } catch (e) {
-    ElMessage.error(e?.message || '清空摘要失败')
-  }
-}
-
-function formatTs(v) {
-  const n = Number(v)
-  if (!Number.isFinite(n) || n <= 0) return '—'
-  return new Date(n).toLocaleString()
-}
-
-onMounted(async () => {
-  await Promise.all([loadConfig(), loadSessions()])
-})
+const {
+  cfg,
+  loadingCfg,
+  savingCfg,
+  loadConfig,
+  saveConfig,
+  loadingSessions,
+  sessions,
+  keyword,
+  loadSessions,
+  selectSession,
+  selectedThreadId,
+  messageKeyword,
+  messageRole,
+  messages,
+  loadingMessages,
+  messageTotal,
+  messagePageNum,
+  messagePageSize,
+  loadMessages,
+  onMessagePageChange,
+  onMessageSizeChange,
+  onFilterChange,
+  roleStats,
+  selectedSession,
+  openContentViewer,
+  messageViewerVisible,
+  viewingMessageContent,
+  highlightMessage,
+  messageNeedsExpand,
+  refreshSummary,
+  clearSummary,
+  formatTs,
+} = useMemoryManagementPanel()
 </script>
 
 <style scoped>
@@ -432,58 +228,6 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-}
-
-.session-tools {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.session-list {
-  height: 560px;
-  padding-right: 4px;
-}
-
-.session-item {
-  border: 1px solid #e6edf8;
-  background: #fff;
-  border-radius: 10px;
-  padding: 10px;
-  margin-bottom: 8px;
-  cursor: pointer;
-}
-
-.session-item.active {
-  border-color: #4f8cff;
-  background: #f3f8ff;
-  box-shadow: inset 0 0 0 1px #b9d3ff;
-}
-
-.session-title {
-  font-weight: 600;
-  color: #294a74;
-  margin-bottom: 4px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.session-meta {
-  font-size: 12px;
-  color: #5f6f89;
-  margin-bottom: 2px;
-}
-
-.session-preview {
-  margin-top: 6px;
-  font-size: 12px;
-  color: #3c4e68;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
 }
 
 .cfg-grid {

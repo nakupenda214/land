@@ -75,13 +75,13 @@ export function normalizeAgentMarkdownText(markdown) {
   s = fixRunInAtxHeadingMarkdown(s)
 
   // 通用标题粘连：# 标题后面直接跟正文（无换行）
-  s = s.replace(/^(#{1,6}\s*[^\n#]{2,48}?)(?=(?:本次|以下|其中|此外|1[\.、]|一、|二、|三、))/m, '$1\n\n')
+  s = s.replace(/^(#{1,6}\s*[^\n#]{2,48}?)(?=(?:本次|以下|其中|此外|1[.、]|一、|二、|三、))/m, '$1\n\n')
 
   // 中文句号后直接进入编号列表
-  s = s.replace(/([。；：!?])\s*(\d+[\.、]\s*)/g, '$1\n\n$2')
+  s = s.replace(/([。；：!?])\s*(\d+[.、]\s*)/g, '$1\n\n$2')
 
   // 行内出现“ 1. ”这种编号时，尽量改为新段落
-  s = s.replace(/([^\n])\s+(\d+[\.、]\s+)/g, '$1\n\n$2')
+  s = s.replace(/([^\n])\s+(\d+[.、]\s+)/g, '$1\n\n$2')
 
   // 行内短横线子项转为换行列表
   s = s.replace(/([。；：])\s*-\s+/g, '$1\n- ')

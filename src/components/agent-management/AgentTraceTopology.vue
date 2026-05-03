@@ -16,8 +16,6 @@
         </el-button-group>
         <el-button size="small" @click="fitToView">适配视图</el-button>
         <el-button size="small" type="primary" plain @click="fitEntireGraph">查看整图</el-button>
-        <el-button size="small" @click="setCurrentAsDefaultLayout">设为默认布局</el-button>
-        <el-button size="small" text @click="clearDefaultLayout">清除默认布局</el-button>
         <el-button v-if="selectedNodeId" size="small" text type="primary" @click="$emit('clear-node')">清除节点筛选</el-button>
       </div>
     </div>
@@ -51,13 +49,19 @@
 </template>
 
 <script setup>
-import { computed, markRaw, ref, watch } from 'vue'
+import { computed, markRaw, onUnmounted, ref, watch } from 'vue'
 import { Minus, Plus } from '@element-plus/icons-vue'
 import { VueFlow } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 
-import { edgeKey } from './agent-trace-topology-layout.js'
+import {
+  computeSkeletonFingerprint,
+  edgeKey,
+  mergeTopologyLayoutPositions,
+  normalizeTopologyPositionMap
+} from './agent-trace-topology-layout.js'
+import { getTopologyLayout, putTopologyLayout } from '@/services/agent-management.service.js'
 import AgentTraceFlowNode from './AgentTraceFlowNode.vue'
 
 const props = defineProps({
@@ -67,14 +71,21 @@ const props = defineProps({
   observedGraphEdges: { type: Array, default: () => [] },
   observedEdgeKeys: { type: Object, default: null },
   selectedNodeId: { type: String, default: '' },
-  nodeMetrics: { type: Object, default: () => ({}) }
+  nodeMetrics: { type: Object, default: () => ({}) },
+  /** 与后端 scope 对齐：agent_main | self_opt */
+  layoutScope: { type: String, default: 'agent_main' }
 })
 
 const emit = defineEmits(['select-node', 'clear-node', 'select-edge'])
 
 const ZOOM_MIN = 0.1
 const ZOOM_MAX = 2.6
-const DEFAULT_LAYOUT_STORAGE_KEY = 'agent_trace_topology_default_layout_v1'
+const REMOTE_LAYOUT_DEBOUNCE_MS = 650
+
+function defaultLayoutStorageKey(scope) {
+  const s = String(scope || 'agent_main').trim() || 'agent_main'
+  return `agent_trace_topology_default_layout_v1_${s}`
+}
 const zoom = ref(1)
 const flowIns = ref(null)
 const positionOverride = ref({})
@@ -247,21 +258,17 @@ const flowNodes = computed(() => {
   })
 })
 
+const remoteSaveTimer = ref(null)
+let remoteLoadTimer = null
+const REMOTE_LAYOUT_LOAD_DEBOUNCE_MS = 220
+
 function normalizePositionMap(input) {
-  const out = {}
-  if (!input || typeof input !== 'object') return out
-  for (const [id, p] of Object.entries(input)) {
-    const x = Number(p?.x)
-    const y = Number(p?.y)
-    if (!id || !Number.isFinite(x) || !Number.isFinite(y)) continue
-    out[id] = { x, y }
-  }
-  return out
+  return normalizeTopologyPositionMap(input)
 }
 
 function loadDefaultLayout() {
   try {
-    const raw = localStorage.getItem(DEFAULT_LAYOUT_STORAGE_KEY)
+    const raw = localStorage.getItem(defaultLayoutStorageKey(props.layoutScope))
     if (!raw) return {}
     return normalizePositionMap(JSON.parse(raw))
   } catch {
@@ -269,13 +276,72 @@ function loadDefaultLayout() {
   }
 }
 
+function scheduleRemoteSave(map) {
+  const scope = String(props.layoutScope || 'agent_main').trim() || 'agent_main'
+  if (remoteSaveTimer.value) {
+    clearTimeout(remoteSaveTimer.value)
+    remoteSaveTimer.value = null
+  }
+  remoteSaveTimer.value = setTimeout(async () => {
+    remoteSaveTimer.value = null
+    const nodes = props.layoutNodes || []
+    const edges = props.skeletonEdges || []
+    if (!nodes.length) return
+    try {
+      const fp = await computeSkeletonFingerprint(nodes, edges)
+      if (!fp) return
+      const positions = normalizePositionMap(map)
+      await putTopologyLayout(scope, {
+        layoutSchemaVersion: 1,
+        skeletonFingerprint: fp,
+        positions
+      })
+    } catch {
+      // 未登录或网络失败：仅本地已保存
+    }
+  }, REMOTE_LAYOUT_DEBOUNCE_MS)
+}
+
 function saveDefaultLayout(map) {
+  const key = defaultLayoutStorageKey(props.layoutScope)
   try {
-    localStorage.setItem(DEFAULT_LAYOUT_STORAGE_KEY, JSON.stringify(normalizePositionMap(map)))
+    localStorage.setItem(key, JSON.stringify(normalizePositionMap(map)))
   } catch {
     // ignore storage failure
   }
+  scheduleRemoteSave(map)
 }
+
+async function loadRemoteLayoutAndMerge() {
+  const nodes = props.layoutNodes || []
+  if (!nodes.length) return
+  const scope = String(props.layoutScope || 'agent_main').trim() || 'agent_main'
+  const nodeIds = nodes.map((n) => String(n?.id || '').trim()).filter(Boolean)
+  const idSet = new Set(nodeIds)
+  const local = loadDefaultLayout()
+  let remotePositions = {}
+  try {
+    const data = await getTopologyLayout(scope)
+    remotePositions = (data && data.positions) || {}
+  } catch {
+    remotePositions = {}
+  }
+  const mergedRemote = mergeTopologyLayoutPositions(remotePositions, idSet)
+  const merged =
+    Object.keys(mergedRemote).length > 0 ? { ...mergedRemote } : { ...normalizePositionMap(local) }
+  positionOverride.value = merged
+}
+
+onUnmounted(() => {
+  if (remoteSaveTimer.value) {
+    clearTimeout(remoteSaveTimer.value)
+    remoteSaveTimer.value = null
+  }
+  if (remoteLoadTimer) {
+    clearTimeout(remoteLoadTimer)
+    remoteLoadTimer = null
+  }
+})
 
 const edgeSeqInfo = computed(() => {
   const m = new Map()
@@ -350,10 +416,10 @@ const flowEdges = computed(() => {
       label,
       labelStyle: hot
         ? { fill: '#065f46', fontWeight: 800, fontSize: 11 }
-        : { fill: '#64748b', fontWeight: 700, fontSize: 10.5 },
+        : { fill: 'rgba(100, 116, 139, 0.38)', fontWeight: 600, fontSize: 10 },
       labelBgStyle: hot
         ? { fill: '#d1fae5', fillOpacity: 0.98, stroke: '#10b981', strokeWidth: 1 }
-        : { fill: '#e2e8f0', fillOpacity: 0.96, stroke: '#94a3b8', strokeWidth: 1 },
+        : { fill: '#f1f5f9', fillOpacity: 0.6, stroke: 'rgba(148, 163, 184, 0.4)', strokeWidth: 0.8 },
       labelBgPadding: [2, 4],
       labelBgBorderRadius: 5,
       style: hot
@@ -363,10 +429,10 @@ const flowEdges = computed(() => {
             filter: 'drop-shadow(0 0 6px rgba(5,150,105,.35))'
           }
         : {
-            stroke: '#8aa2bf',
-            strokeWidth: 2.2,
-            strokeDasharray: '8 5',
-            opacity: 0.95
+            stroke: 'rgba(138, 162, 191, 0.6)',
+            strokeWidth: 1.55,
+            strokeDasharray: '6 6',
+            opacity: 0.44
           }
     }
   })
@@ -432,15 +498,33 @@ function onNodeClick({ node }) {
   emit('select-node', node?.id)
 }
 
-function onNodeDragStop({ node }) {
-  if (!node?.id || !node?.position) return
-  const merged = {
-    ...positionOverride.value,
-    [node.id]: { x: node.position.x, y: node.position.y }
+/**
+ * 从 Vue Flow 实例读取当前所有节点坐标并写入本地 + 防抖同步服务端（无需再点「设为默认布局」）。
+ */
+function snapshotPositionsFromFlow() {
+  const nodes = flowIns.value?.getNodes?.()
+  if (!Array.isArray(nodes) || !nodes.length) {
+    return null
   }
-  positionOverride.value = merged
-  // 你拖到哪里就默认记到哪里，下一次默认布局直接复用。
-  saveDefaultLayout(merged)
+  const m = { ...positionOverride.value }
+  for (const n of nodes) {
+    const x = Number(n?.position?.x)
+    const y = Number(n?.position?.y)
+    if (!n?.id || !Number.isFinite(x) || !Number.isFinite(y)) continue
+    m[n.id] = { x, y }
+  }
+  return Object.keys(m).length ? m : null
+}
+
+function persistLayoutFromFlow() {
+  const snap = snapshotPositionsFromFlow()
+  if (!snap) return
+  positionOverride.value = snap
+  saveDefaultLayout(snap)
+}
+
+function onNodeDragStop() {
+  persistLayoutFromFlow()
 }
 
 function onEdgeClick({ edge }) {
@@ -452,48 +536,16 @@ function onEdgeClick({ edge }) {
   })
 }
 
-function setCurrentAsDefaultLayout() {
-  const nodes = flowIns.value?.getNodes?.()
-  if (!Array.isArray(nodes) || !nodes.length) {
-    saveDefaultLayout(positionOverride.value)
-    return
-  }
-  const m = { ...positionOverride.value }
-  for (const n of nodes) {
-    const x = Number(n?.position?.x)
-    const y = Number(n?.position?.y)
-    if (!n?.id || !Number.isFinite(x) || !Number.isFinite(y)) continue
-    m[n.id] = { x, y }
-  }
-  positionOverride.value = m
-  saveDefaultLayout(m)
-}
-
-function clearDefaultLayout() {
-  positionOverride.value = {}
-  try {
-    localStorage.removeItem(DEFAULT_LAYOUT_STORAGE_KEY)
-  } catch {
-    // ignore storage failure
-  }
-}
-
 watch(
-  () => props.traceId,
+  () => [props.layoutNodes, props.skeletonEdges, props.layoutScope],
   () => {
-    positionOverride.value = loadDefaultLayout()
-  }
-)
-
-watch(
-  () => props.layoutNodes,
-  () => {
-    // 首次或图骨架变化时，尝试加载已保存的默认布局。
-    if (!Object.keys(positionOverride.value).length) {
-      positionOverride.value = loadDefaultLayout()
-    }
+    if (remoteLoadTimer) clearTimeout(remoteLoadTimer)
+    remoteLoadTimer = setTimeout(() => {
+      remoteLoadTimer = null
+      void loadRemoteLayoutAndMerge()
+    }, REMOTE_LAYOUT_LOAD_DEBOUNCE_MS)
   },
-  { immediate: true }
+  { deep: true, immediate: true }
 )
 </script>
 

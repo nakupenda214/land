@@ -10,6 +10,9 @@ export const AGENT_NODE_LABELS = {
   MqlValidateNode: '安全校验',
   MongoExecuteNode: '执行数据查询',
   MQLExecuteNode: '执行数据查询',
+  python_generate: 'Python 脚本生成',
+  python_execute: 'Python 执行',
+  python_analyze: 'Python 结果分析',
   ChartGenerateNode: '生成图表',
   AnswerWrapNode: '组织回答',
   snapshot: '状态检查点'
@@ -26,6 +29,46 @@ export function formatAgentNodeLine(evt) {
   const detail = evt.payload?.detail != null ? String(evt.payload.detail) : ''
   const label = labelForNode(evt.node)
   return detail ? `${label}：${detail}` : `${label}（${evt.status || '进行中'}）`
+}
+
+/**
+ * 从 trace 详情 events 中解析最近一次计划 JSON（人工复核挂起 / planner / STATE_PATCH）。
+ * @param {unknown[]} events
+ * @returns {string}
+ */
+export function extractPlanPreviewFromTraceEvents(events) {
+  if (!Array.isArray(events)) return ''
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i]
+    const pl = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {}
+    if (ev?.type === 'TRACE_BAG') {
+      const facet = String(pl.facet || '')
+      const kv = pl.kv && typeof pl.kv === 'object' ? pl.kv : {}
+      if (facet === 'human_review') {
+        const phase = String(kv.phase || '')
+        if ((phase === 'human_review_pending' || phase === '') && kv.planPreview != null) {
+          const s = String(kv.planPreview).trim()
+          if (s) return s
+        }
+      }
+      if (facet === 'planner_plan') {
+        const raw = kv.preview ?? kv.plan ?? kv.body ?? kv.text
+        if (raw != null) {
+          const s = typeof raw === 'string' ? raw.trim() : JSON.stringify(raw)
+          if (s) return s
+        }
+      }
+    }
+    if (ev?.type === 'STATE_PATCH') {
+      const keys = pl.keys && typeof pl.keys === 'object' ? pl.keys : null
+      if (keys && keys.planner_node_output != null) {
+        const v = keys.planner_node_output
+        const s = typeof v === 'string' ? v.trim() : JSON.stringify(v)
+        if (s) return s
+      }
+    }
+  }
+  return ''
 }
 
 /** 旧版流式协议（kind 字段） */
@@ -49,16 +92,25 @@ function isLandAgentEvent(obj) {
  * 事件体为 JSON：`type`, `node`, `status`, `timestamp`, `payload`。
  *
  * @param {object} options
- * @param {{ query: string, threadId?: string }} options.payload
+ * @param {{
+ *   query?: string,
+ *   threadId?: string,
+ *   humanReview?: boolean,
+ *   nl2sqlOnly?: boolean,
+ *   humanFeedbackContent?: string,
+ *   rejectedPlan?: boolean,
+ *   traceId?: string
+ * }} options.payload
  * @param {AbortSignal} [options.signal]
  * @param {(chunk: string, meta: { node?: string }) => void} [options.onStreamChunk] — streamChannel=main 的 chunk（主答复）
  * @param {(chunk: string, meta: { node?: string }) => void} [options.onStreamReasoning] — streamChannel=reasoning 的 chunk（思考流）
  * @param {(chunk: string, meta: { node?: string }) => void} [options.onStreamTrace] — streamChannel=trace 的 chunk
+ * @param {(evt: { section: 'code'|'stdout'|'analyze', chunk: string, node?: string }) => void} [options.onStreamPython] — Python 分区流（python_code / python_stdout / python_analyze）
  * @param {(evt: object) => void} [options.onThink] — THINK
  * @param {(evt: object) => void} [options.onNode] — NODE（节点阶段）
  * @param {(evt: object) => void} [options.onError] — ERROR
  * @param {(meta: { threadId?: string, traceId?: string }) => void} [options.onTraceMeta] — 响应头就绪（首包前即可拿到 thread/trace）
- * @param {(info: { threadId?: string, ok?: boolean }) => void} [options.onComplete] — NODE complete
+ * @param {(info: { threadId?: string, ok?: boolean, awaitingHumanReview?: boolean, planPreview?: string }) => void} [options.onComplete] — NODE complete
  * @param 其余 onLlm/onFinal/onEvent 等兼容旧调用方
  */
 export const chatAgentStream = async ({
@@ -67,6 +119,7 @@ export const chatAgentStream = async ({
   onStreamChunk,
   onStreamReasoning,
   onStreamTrace,
+  onStreamPython,
   onThink,
   onNode,
   onComplete,
@@ -83,20 +136,35 @@ export const chatAgentStream = async ({
     query: payload?.query ?? payload?.message ?? '',
     threadId: payload?.threadId ?? payload?.sessionId ?? undefined
   }
-  if (!String(body.query).trim()) {
+  const isHitlResume = !!(payload?.humanFeedbackContent && String(payload.humanFeedbackContent).trim())
+  if (!isHitlResume && !String(body.query).trim()) {
     throw new Error('query 不能为空')
+  }
+
+  const jsonBody = {
+    query: body.query,
+    ...(body.threadId ? { threadId: body.threadId } : {}),
+    ...(payload?.humanReview === true ? { humanReview: true } : {}),
+    ...(payload?.nl2sqlOnly === true ? { nl2sqlOnly: true } : {}),
+    ...(isHitlResume
+      ? {
+        humanFeedbackContent: String(payload.humanFeedbackContent).trim(),
+        rejectedPlan: !!payload.rejectedPlan,
+        ...(payload?.traceId ? { traceId: String(payload.traceId).trim() } : {})
+      }
+      : {})
   }
 
   const response = await fetch('/api/agent/chat/stream', {
     method: 'POST',
     headers: withSaTokenHeaders({
       'Content-Type': 'application/json',
-      Accept: 'text/event-stream'
+      // 兼容 4xx 时 Spring 返回 JSON；纯 event-stream 会导致 HttpMediaTypeNotAcceptable
+      Accept: 'text/event-stream, application/json;q=0.9',
+      ...(body.threadId ? { 'X-Thread-Id': String(body.threadId) } : {}),
+      ...(payload?.traceId ? { 'X-Agent-Trace-Id': String(payload.traceId).trim() } : {})
     }),
-    body: JSON.stringify({
-      query: body.query,
-      ...(body.threadId ? { threadId: body.threadId } : {})
-    }),
+    body: JSON.stringify(jsonBody),
     signal,
     credentials: 'include'
   })
@@ -126,7 +194,7 @@ export const chatAgentStream = async ({
 
   const dispatchLand = (data) => {
     onEvent?.(data)
-    const { type, node, status, payload: pl } = data
+    const { type, status, payload: pl } = data
 
     switch (type) {
       case 'THINK': {
@@ -136,11 +204,21 @@ export const chatAgentStream = async ({
       case 'NODE': {
         onNode?.(data)
         if (status === 'complete' && pl && pl.ok === true) {
-          onComplete?.({ threadId: threadIdFromHeader || undefined, ok: true })
+          const pp = pl.planPreview != null && String(pl.planPreview).trim() !== '' ? String(pl.planPreview) : undefined
+          onComplete?.({
+            threadId: threadIdFromHeader || undefined,
+            ok: true,
+            awaitingHumanReview: !!pl.awaitingHumanReview,
+            ...(pp !== undefined ? { planPreview: pp } : {})
+          })
           onFinal?.({
             threadId: threadIdFromHeader,
             text: '',
-            payload: { ok: true }
+            payload: {
+              ok: true,
+              awaitingHumanReview: !!pl.awaitingHumanReview,
+              ...(pp !== undefined ? { planPreview: pp } : {})
+            }
           })
         }
         // 非 complete 的 NODE 仅交给 onNode，避免与 onLlm 重复刷「执行过程」
@@ -154,14 +232,24 @@ export const chatAgentStream = async ({
           const isMain =
             ch === 'main' ||
             (ch == null && data.node === 'AnswerWrapNode')
-          const isTrace = ch === 'trace' || (ch == null && data.node && data.node !== 'AnswerWrapNode')
-          if (isReasoning) {
+          const pythonSection =
+            ch === 'python_code' ? 'code' : ch === 'python_stdout' ? 'stdout' : ch === 'python_analyze' ? 'analyze' : null
+          if (pythonSection) {
+            onStreamPython?.({ section: pythonSection, chunk, node: data.node })
+            onLlm?.({
+              text: chunk,
+              payload: { phase: 'stream', streamChannel: `python_${pythonSection}`, node: data.node }
+            })
+          } else if (isReasoning) {
             onStreamReasoning?.(chunk, { node: data.node })
             onLlm?.({ text: chunk, payload: { phase: 'stream', streamChannel: 'reasoning', node: data.node } })
           } else if (isMain) {
             onStreamChunk?.(chunk, { node: data.node })
             onLlm?.({ text: chunk, payload: { phase: 'stream', streamChannel: 'main' } })
-          } else if (isTrace) {
+          } else if (
+            ch === 'trace' ||
+            (ch == null && data.node && data.node !== 'AnswerWrapNode')
+          ) {
             onStreamTrace?.(chunk, { node: data.node })
             onLlm?.({ text: chunk, payload: { phase: 'stream', streamChannel: 'trace', node: data.node } })
           }

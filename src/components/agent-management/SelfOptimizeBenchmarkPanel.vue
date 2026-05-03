@@ -46,85 +46,17 @@
       <el-table-column prop="expectedCount" label="expectedCount" width="120" />
       <el-table-column prop="userQuery" label="userQuery" min-width="260" show-overflow-tooltip />
       <el-table-column label="更新时间" width="170">
-        <template #default="{ row }">{{ formatTime(row.updateTime) }}</template>
+        <template #default="{ row }">{{ formatBenchmarkUpdateTime(row.updateTime) }}</template>
       </el-table-column>
     </el-table>
   </section>
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { addBenchmarkCase } from '@/services/agent-management.service.js'
+import { useSelfOptimizeBenchmarkPanel } from '@/composables/agent-management/useSelfOptimizeBenchmarkPanel.js'
+import { formatBenchmarkUpdateTime } from '@/utils/selfopt-benchmark-record.js'
 
-const state = ref({ benchmarks: [] })
-const submitLoading = ref(false)
-const form = reactive({
-  userQuery: '',
-  expectedNode: '',
-  expectedResult: '',
-  expectedCount: undefined,
-  caseType: 'regression',
-  priority: 5,
-  mustPass: true,
-  toleranceThreshold: 0
-})
-
-const records = computed(() => state.value.benchmarks || [])
-
-function saveState(next) {
-  state.value = next
-}
-
-function addBenchmarkRecord(stateObj, record) {
-  const list = [{ ...record, updateTime: Date.now() }, ...(stateObj?.benchmarks || [])]
-  return { ...stateObj, benchmarks: list.slice(0, 200) }
-}
-
-function formatTime(ts) {
-  if (!ts) return '—'
-  return new Date(ts).toLocaleString()
-}
-
-function resetForm() {
-  form.userQuery = ''
-  form.expectedNode = ''
-  form.expectedResult = ''
-  form.expectedCount = undefined
-  form.caseType = 'regression'
-  form.priority = 5
-  form.mustPass = true
-  form.toleranceThreshold = 0
-}
-
-async function submitCase() {
-  if (!form.userQuery) {
-    ElMessage.warning('用户问题不能为空')
-    return
-  }
-  submitLoading.value = true
-  try {
-    const payload = {
-      userQuery: form.userQuery,
-      expectedNode: form.expectedNode,
-      expectedResult: form.expectedResult,
-      expectedCount: form.expectedCount != null && form.expectedCount !== '' ? Number(form.expectedCount) : undefined,
-      caseType: form.caseType,
-      priority: form.priority,
-      mustPass: form.mustPass,
-      toleranceThreshold: form.toleranceThreshold
-    }
-    const data = await addBenchmarkCase(payload)
-    const next = addBenchmarkRecord(state.value, data || payload)
-    saveState(next)
-    resetForm()
-    ElMessage.success('基准用例新增成功')
-  } catch (e) {
-    ElMessage.error(e?.message || '新增基准用例失败')
-  } finally {
-    submitLoading.value = false
-  }
-}
+const { form, submitLoading, records, submitCase } = useSelfOptimizeBenchmarkPanel()
 </script>
 
 <style scoped>
@@ -163,4 +95,3 @@ async function submitCase() {
   color: #64748b;
 }
 </style>
-

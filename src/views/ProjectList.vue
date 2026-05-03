@@ -241,7 +241,7 @@
 <script setup>
 import { ref, onMounted, computed, watch , onUnmounted, nextTick} from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { DataAnalysis, DocumentChecked, DocumentCopy, Tickets, FolderOpened, Location, List, EditPen } from '@element-plus/icons-vue'
+import { DataAnalysis, DocumentChecked, DocumentCopy, FolderOpened, Location, List, EditPen } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { createProject } from '@/services/project.service'
 
@@ -704,7 +704,7 @@ watch(
   }
 )
 
-watch(activeTab, async (tab, prevTab) => {
+watch(activeTab, async (tab, _prevTab) => {
   if (!currentProjectInfo.id) return
 
   if (tab === 'contractLandEdit') {

@@ -73,7 +73,7 @@ const createEmptyAreaComparison = () => ({
   }
 })
 
-export function useSurveySummary({ reportList }) {
+export function useSurveySummary({ reportList: _reportList }) {
   const businessResidentialRatio = reactive({ contractRatio: '≥2:8', measuredRatio: '-' })
   const comparisonData = reactive([
     { label: '合同约定建筑面积', contract: '-', measured: '-', diff: '-', isArea: true },

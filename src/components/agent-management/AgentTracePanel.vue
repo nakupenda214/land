@@ -65,6 +65,9 @@
               @keydown.shift.enter.stop
             />
             <div class="obs-actions">
+              <el-checkbox v-model="obsHumanReview" size="small" class="obs-hitl-check" :disabled="obsStreaming">
+                人工复核计划
+              </el-checkbox>
               <el-button plain size="small" class="obs-btn obs-btn-new" @click="resetObservationSession">新会话</el-button>
               <div class="obs-actions-row">
                 <el-button v-if="obsStreaming" type="warning" plain size="small" class="obs-btn" @click="stopObservation">停止</el-button>
@@ -72,6 +75,36 @@
                   {{ obsStreaming ? '执行中…' : '发送' }}
                 </el-button>
               </div>
+            </div>
+            <div v-if="obsAwaitingHumanReview" class="obs-hitl-bar">
+              <p class="obs-hitl-hint">
+                计划已挂起，请填写说明后选择通过或驳回（将发起新的 SSE 续跑）。关闭本区仅影响展示：同一会话 Trace 仍为运行中，可随时续跑。
+              </p>
+              <div v-if="obsHitlPlanPreview.trim()" class="obs-hitl-plan-row">
+                <el-button type="primary" link size="small" @click="obsHitlPlanDialogVisible = true">查看待审计划</el-button>
+              </div>
+              <el-input
+                v-model="obsHitlNote"
+                type="textarea"
+                :autosize="{ minRows: 2, maxRows: 5 }"
+                placeholder="复核说明（必填）"
+                class="obs-hitl-input"
+              />
+              <div class="obs-hitl-actions">
+                <el-button size="small" @click="dismissHumanReviewBar">稍后处理</el-button>
+                <el-button type="success" size="small" :loading="obsHitlSubmitting" :disabled="obsStreaming" @click="submitHumanReviewFeedback(true)">
+                  通过
+                </el-button>
+                <el-button type="danger" size="small" :loading="obsHitlSubmitting" :disabled="obsStreaming" @click="submitHumanReviewFeedback(false)">
+                  驳回
+                </el-button>
+              </div>
+            </div>
+            <div v-else-if="obsHitlBarDismissed && (obsHitlTraceId || obsThreadId)" class="obs-hitl-dismissed-strip">
+              <p class="obs-hitl-hint">
+                已收起复核区。Trace 未结束：请点「继续复核」后填写说明并选择通过或驳回；需使用同一 threadId（见上方会话）发起续跑。
+              </p>
+              <el-button type="primary" plain size="small" @click="resumeHumanReviewBar">继续复核</el-button>
             </div>
           </div>
           <el-collapse v-if="liveReasoningLines.length" class="live-collapse">
@@ -117,6 +150,7 @@
 
           <AgentTraceTopology
             v-if="layoutNodes.length"
+            layout-scope="agent_main"
             :layout-nodes="layoutNodes"
             :skeleton-edges="skeletonEdges"
             :trace-id="selectedId"
@@ -163,9 +197,26 @@
             </div>
           </el-dialog>
 
-          <div v-if="planStepChips.length" class="plan-spine" aria-label="计划沿拓扑推进顺序">
-            <span class="plan-spine-title">计划推进</span>
-            <span v-for="(c, i) in planStepChips" :key="i" class="plan-chip">{{ c }}</span>
+          <div v-if="planSpineTodos.length" class="plan-spine" aria-label="计划沿拓扑推进顺序">
+            <div class="plan-spine-head">
+              <span class="plan-spine-title">计划推进</span>
+              <span v-if="planSpineSource !== 'none'" class="plan-spine-source">{{ planSpineSourceLabel }}</span>
+            </div>
+            <ul class="plan-spine-todos">
+              <li
+                v-for="row in planSpineTodos"
+                :key="row.step"
+                class="plan-spine-todo"
+                :data-status="row.status"
+              >
+                <span class="plan-todo-mark" aria-hidden="true">{{ planTodoIcon(row.status) }}</span>
+                <span class="plan-todo-body">
+                  <span class="plan-todo-step">第 {{ row.step }} 步</span>
+                  <code class="plan-todo-tool">{{ row.toolToUse }}</code>
+                  <span v-if="row.instruction" class="plan-todo-inst">{{ row.instruction }}</span>
+                </span>
+              </li>
+            </ul>
           </div>
 
           <div class="filter-bar">
@@ -206,9 +257,20 @@
                   class="ev-cluster"
                   :data-edge-key="clusterEdgeKey(block)"
                 >
-                  <header class="ev-cluster-head">
+                  <header class="ev-cluster-head" :class="{ 'ev-cluster-head--python': isPythonNodeId(block.nodeId) }">
                     <div class="ev-cluster-head-main">
-                      <h4 class="ev-cluster-title">{{ clusterTitle(block.nodeId) }}</h4>
+                      <h4 class="ev-cluster-title">
+                        <el-tag
+                          v-if="isPythonNodeId(block.nodeId)"
+                          size="small"
+                          type="warning"
+                          effect="plain"
+                          class="python-cluster-tag"
+                        >
+                          Python
+                        </el-tag>
+                        {{ clusterTitle(block.nodeId) }}
+                      </h4>
                       <p class="ev-cluster-id mono-clip">{{ block.nodeId }}</p>
                     </div>
                     <div class="ev-cluster-head-aside">
@@ -258,9 +320,12 @@
             </ol>
           </el-scrollbar>
 
-          <div v-if="finalAnswerText" class="final-answer-card">
+          <div v-if="selectedId" class="final-answer-card">
             <div class="final-answer-cap">模型最终答复</div>
-            <div class="final-answer-body agent-md" v-html="finalAnswerHtml" />
+            <div v-if="finalAnswerText" class="final-answer-body agent-md" v-html="finalAnswerHtml" />
+            <div v-else class="final-answer-body final-answer-placeholder">
+              {{ finalAnswerPlaceholder }}
+            </div>
           </div>
 
           <div v-if="llmStreamRows.length" class="final-answer-card">
@@ -432,6 +497,30 @@
         </template>
       </main>
     </div>
+
+    <el-dialog
+      v-model="obsHitlPlanDialogVisible"
+      title="待审计划"
+      width="min(720px, 92vw)"
+      destroy-on-close
+      append-to-body
+      class="obs-hitl-plan-dialog"
+    >
+      <div class="obs-hitl-plan-dialog-body">
+        <template v-if="obsHitlPlanModel.mode === 'steps'">
+          <p v-if="obsHitlPlanModel.thoughtProcess" class="obs-plan-thought">{{ obsHitlPlanModel.thoughtProcess }}</p>
+          <ol class="obs-plan-steps">
+            <li v-for="st in obsHitlPlanModel.steps" :key="st.step" class="obs-plan-step-row">
+              <span class="obs-plan-step-no">#{{ st.step }}</span>
+              <code class="obs-plan-tool">{{ st.toolToUse }}</code>
+              <span v-if="st.instruction" class="obs-plan-inst">{{ st.instruction }}</span>
+            </li>
+          </ol>
+        </template>
+        <pre v-else-if="obsHitlPlanModel.mode === 'pretty'" class="obs-hitl-plan-pre-dialog">{{ obsHitlPlanModel.pretty }}</pre>
+        <pre v-else class="obs-hitl-plan-pre-dialog">{{ obsHitlPlanModel.pretty || obsHitlPlanPreview }}</pre>
+      </div>
+    </el-dialog>
   </section>
 </template>
 
@@ -448,12 +537,23 @@ import {
   upsertTraceAnnotation
 } from '@/services/agent-management.service.js'
 import { normalizeAgentMarkdownText, renderAgentMarkdownHtml } from '@/utils/agent-markdown.js'
-import { chatAgentStream, formatAgentNodeLine } from '@/services/agent.service'
+import {
+  buildPlanSpineTodos,
+  parsePlanPreviewModel,
+  traceAwaitingHumanReviewFromDetail
+} from '@/utils/agent-plan-preview.js'
+import {
+  AGENT_NODE_LABELS,
+  chatAgentStream,
+  extractPlanPreviewFromTraceEvents,
+  formatAgentNodeLine
+} from '@/services/agent.service'
 import AgentTraceTopology from '@/components/agent-management/AgentTraceTopology.vue'
 import AgentTraceEventCard from '@/components/agent-management/AgentTraceEventCard.vue'
 import { buildTimelineBlocks } from '@/components/agent-management/agent-trace-timeline-groups.js'
 import { dotClassForEventType } from '@/components/agent-management/agent-trace-event-present.js'
 import {
+  agentRuntimeLlmStreamOrderIndex,
   buildNodeMetricsFromEvents,
   edgeKey,
   eventTouchesNode,
@@ -463,6 +563,8 @@ import {
 } from '@/components/agent-management/agent-trace-topology-layout.js'
 
 const OBS_THREAD_KEY = 'agent_trace_obs_thread_id'
+/** 刷新后恢复：待人审 + 是否已点「稍后」收起条 */
+const OBS_HITL_PENDING_KEY = 'agent_trace_obs_hitl_pending'
 const limit = ref(50)
 const listLoading = ref(false)
 const detailLoading = ref(false)
@@ -499,10 +601,30 @@ const obsQuery = ref('')
 const obsThreadId = ref(typeof localStorage !== 'undefined' ? localStorage.getItem(OBS_THREAD_KEY) || '' : '')
 const obsStreaming = ref(false)
 const obsAbortController = ref(null)
+/** 首轮请求是否开启图内人工复核（HITL） */
+const obsHumanReview = ref(false)
+/** 后端 complete 携带 awaitingHumanReview 时展示复核条 */
+const obsAwaitingHumanReview = ref(false)
+const obsHitlNote = ref('')
+const obsHitlTraceId = ref('')
+const obsHitlSubmitting = ref(false)
+/** 挂起时计划 JSON / SSE planPreview */
+const obsHitlPlanPreview = ref('')
+/** 点「稍后处理」仅收起条，不代表会话取消 */
+const obsHitlBarDismissed = ref(false)
+const obsHitlPlanDialogVisible = ref(false)
+/** Python 流合并进 reasoning 时，每 (node,section) 只加一次分段标题 */
+const obsPyReasoningPrefixed = ref(new Set())
 const liveReasoningLines = ref([])
 const liveLlmNodeStreams = ref({})
 const liveLlmNodeSeq = ref(0)
 let pollTimer = null
+
+const obsHitlPlanModel = computed(() => parsePlanPreviewModel(obsHitlPlanPreview.value))
+
+function isPythonNodeId(nodeId) {
+  return /^python_/i.test(String(nodeId || '').trim())
+}
 
 /** 与 trace 详情同屏的人工标注（写入 agent_trace_annotation） */
 const ann = reactive({
@@ -641,7 +763,9 @@ function blockTimelineKey(block, idx) {
 }
 
 function clusterTitle(nodeId) {
-  return nodeLabelById.value.get(nodeId) || nodeId
+  const id = String(nodeId || '').trim()
+  if (!id) return 'unknown'
+  return nodeLabelById.value.get(id) || AGENT_NODE_LABELS[id] || id
 }
 
 function clusterEdgeKey(block) {
@@ -711,23 +835,32 @@ const observedEdgeKeySet = computed(() => {
 const topologyNodeMetrics = computed(() => buildNodeMetricsFromEvents(events.value))
 
 /** 根文档 finalAnswerPreview 或事件中 TRACE_BAG final_answer（仅详情区展示） */
-/** TRACE_BAG plan_step：与拓扑「一节点一框」一致，只表示沿图推进的步骤顺序 */
-const planStepChips = computed(() => {
-  const out = []
-  for (const ev of events.value) {
-    if (ev?.type !== 'TRACE_BAG' || ev?.payload?.facet !== 'plan_step') continue
-    const kv = ev.payload?.kv || {}
-    if (kv.phase === 'plan_done') {
-      out.push(`完成 · 共 ${kv.totalSteps ?? '?'} 步`)
-      continue
-    }
-    const step = kv.currentStep
-    const tot = kv.totalSteps
-    const tool = kv.toolToUse || '?'
-    out.push(`第${step}/${tot}步 → ${tool}`)
+const planSpineBundle = computed(() => buildPlanSpineTodos(events.value))
+const planSpineTodos = computed(() => planSpineBundle.value.todos)
+const planSpineSource = computed(() => planSpineBundle.value.source)
+const planSpineSourceLabel = computed(() => {
+  const m = {
+    outline: '大纲',
+    json: 'Planner',
+    plan_step_only: '步进',
+    none: ''
   }
-  return out
+  return m[planSpineSource.value] || ''
 })
+
+function planTodoIcon(status) {
+  if (status === 'done') return '✓'
+  if (status === 'running') return '⏳'
+  return '○'
+}
+
+/** 与后端 AgentConstants 中「流式产出最终答复」节点 id 对齐，用于 LLM_RESPONSE.responseFull 兜底 */
+const FINAL_ANSWER_LLM_SOURCES = new Set([
+  'answer_wrap',
+  'knowledge_qa_answer',
+  'feasibility_answer',
+  'common_chat'
+])
 
 const finalAnswerText = computed(() => {
   const fp = detail.value?.finalAnswerPreview
@@ -740,7 +873,27 @@ const finalAnswerText = computed(() => {
       if (p != null && String(p).trim()) return String(p).trim()
     }
   }
+  // 根字段与 TRACE_BAG 均未写入时：从 LLM_RESPONSE.responseFull 兜底（与 traceLlmResponse 存库字段一致）
+  for (let i = evs.length - 1; i >= 0; i--) {
+    const ev = evs[i]
+    if (ev?.type !== 'LLM_RESPONSE') continue
+    const src = String(ev?.source || '').trim()
+    if (!FINAL_ANSWER_LLM_SOURCES.has(src)) continue
+    const pl = ev?.payload && typeof ev.payload === 'object' ? ev.payload : {}
+    const full = pl.responseFull
+    if (full != null && String(full).trim()) return String(full).trim()
+  }
   return ''
+})
+
+const finalAnswerPlaceholder = computed(() => {
+  const st = String(detail.value?.status || '').toUpperCase()
+  if (st === 'RUNNING') return '（进行中：尚未写入最终答复摘要）'
+  if (st === 'SUCCESS' && !finalAnswerText.value) {
+    return '（已完成：根文档无 finalAnswerPreview，且事件中无 final_answer 袋与答复类 LLM_RESPONSE；若刚升级前后端请重跑一条 trace）'
+  }
+  if (st === 'FAILED' || st === 'CANCELLED') return '（本 trace 无最终答复）'
+  return '（暂无最终答复摘要）'
 })
 
 const finalAnswerHtml = computed(() => renderAgentMarkdownHtml(displayedFinalAnswerText.value))
@@ -816,7 +969,11 @@ const llmStreamRows = computed(() => {
     }))
     .filter((x) => x.reasoningChars > 0 || x.answerChars > 0)
     .sort((a, b) => {
+      // 以「首次出现顺序」为主：计划驱动时 Python 常在 MQL 之后，勿用静态拓扑序压过运行时序
       if (a.firstSeen !== b.firstSeen) return a.firstSeen - b.firstSeen
+      const oa = agentRuntimeLlmStreamOrderIndex(a.nodeId)
+      const ob = agentRuntimeLlmStreamOrderIndex(b.nodeId)
+      if (oa !== ob) return oa - ob
       return a.nodeId.localeCompare(b.nodeId)
     })
 })
@@ -954,8 +1111,12 @@ async function loadList() {
   try {
     rows.value = (await listAgentTraces(limit.value)) || []
     if (selectedId.value && !rows.value.some((r) => (r._id || r.traceId) === selectedId.value)) {
-      selectedId.value = ''
-      detail.value = null
+      const hitlTr = String(obsHitlTraceId.value || '').trim()
+      const keepForHitlRestore = hitlTr && selectedId.value === hitlTr
+      if (!keepForHitlRestore) {
+        selectedId.value = ''
+        detail.value = null
+      }
     }
   } catch (e) {
     ElMessage.error(e.message || '加载列表失败')
@@ -1005,7 +1166,14 @@ function inferRouteFromTrace(trace, evs) {
     const nid = String(ev?.payload?.nodeId || '').toLowerCase()
     if (!nid) continue
     if (nid.includes('knowledge_qa')) return 'knowledge_qa'
-    if (nid.includes('evidence_recall') || nid.includes('mql') || nid.includes('mongo_execute')) return 'data_query'
+    if (
+      nid.includes('evidence_recall') ||
+      nid.includes('mql') ||
+      nid.includes('mongo_execute') ||
+      nid.includes('python_')
+    ) {
+      return 'data_query'
+    }
   }
   return ''
 }
@@ -1124,14 +1292,19 @@ async function saveAnnotation() {
 
 async function loadDetail(id) {
   if (!id) return
+  const prevDetailId = String(detail.value?._id || detail.value?.traceId || '')
+  const sameTraceReload = prevDetailId && prevDetailId === String(id)
   detailLoading.value = true
   try {
     detail.value = await getAgentTrace(id)
-    // 从列表/重载进入详情时丢弃观测 SSE 缓冲，避免与 Mongo 事件错位或「只显示一轮」的合并假象
-    liveLlmNodeStreams.value = {}
-    liveLlmNodeSeq.value = 0
+    // 仅切换不同 trace 时清空观测 SSE 合并缓冲；同一 trace 重载详情时保留，避免思考流/最终区「整块消失」
+    if (!sameTraceReload) {
+      liveLlmNodeStreams.value = {}
+      liveLlmNodeSeq.value = 0
+    }
     typeFilterList.value = []
     await loadAnnotation(id)
+    syncObsHitlUiFromDetail()
   } catch (e) {
     ElMessage.error(e.message || '加载详情失败')
     detail.value = null
@@ -1221,6 +1394,7 @@ function startPolling() {
     if (!id) return
     try {
       detail.value = await getAgentTrace(id)
+      syncObsHitlPlanFromDetail()
     } catch {
       /* 忽略单次失败 */
     }
@@ -1235,16 +1409,240 @@ function stopObservation() {
   obsStreaming.value = false
 }
 
+function syncObsHitlPlanFromDetail() {
+  if (String(obsHitlPlanPreview.value || '').trim()) return
+  const evs = detail.value?.events
+  if (!Array.isArray(evs) || !evs.length) return
+  const s = extractPlanPreviewFromTraceEvents(evs)
+  if (s) obsHitlPlanPreview.value = s
+}
+
+function persistObsHitlPending() {
+  try {
+    if (!obsAwaitingHumanReview.value && !obsHitlBarDismissed.value) {
+      localStorage.removeItem(OBS_HITL_PENDING_KEY)
+      return
+    }
+    const tid = String(obsThreadId.value || '').trim()
+    const tr = String(obsHitlTraceId.value || '').trim()
+    if (!tid) return
+    localStorage.setItem(
+      OBS_HITL_PENDING_KEY,
+      JSON.stringify({
+        threadId: tid,
+        traceId: tr,
+        dismissed: !!obsHitlBarDismissed.value
+      })
+    )
+  } catch {
+    /* ignore */
+  }
+}
+
+function clearObsHitlPending() {
+  try {
+    localStorage.removeItem(OBS_HITL_PENDING_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+function restoreObsHitlPending() {
+  try {
+    const raw = localStorage.getItem(OBS_HITL_PENDING_KEY)
+    if (!raw) return
+    const o = JSON.parse(raw)
+    const savedThread = String(o.threadId || '').trim()
+    if (!savedThread) return
+    const currentThread = String(obsThreadId.value || '').trim()
+    if (currentThread && savedThread !== currentThread) return
+    obsThreadId.value = savedThread
+    try {
+      localStorage.setItem(OBS_THREAD_KEY, savedThread)
+    } catch {
+      /* ignore */
+    }
+    const tr = String(o.traceId || '').trim()
+    if (tr) obsHitlTraceId.value = tr
+    obsHitlBarDismissed.value = !!o.dismissed
+    obsAwaitingHumanReview.value = !obsHitlBarDismissed.value
+    if (tr && !selectedId.value) selectedId.value = tr
+  } catch {
+    /* ignore */
+  }
+}
+
+/** 详情区与观测会话对齐时，用 Mongo 事件恢复「仍待人审」态（补 localStorage 丢失） */
+function syncObsHitlUiFromDetail() {
+  const d = detail.value
+  if (!d || !traceAwaitingHumanReviewFromDetail(d)) return
+  const rowThread = String(d.threadId || '').trim()
+  const traceId = String(d._id || d.traceId || '').trim()
+  const obsTid = String(obsThreadId.value || '').trim()
+  const obsTrace = String(obsHitlTraceId.value || '').trim()
+  const matchesSession =
+    (obsTrace && traceId && obsTrace === traceId) || (obsTid && rowThread && obsTid === rowThread)
+  if (!matchesSession) return
+  if (rowThread && !obsThreadId.value) {
+    obsThreadId.value = rowThread
+    try {
+      localStorage.setItem(OBS_THREAD_KEY, rowThread)
+    } catch {
+      /* ignore */
+    }
+  }
+  if (traceId) obsHitlTraceId.value = traceId
+  if (obsHitlBarDismissed.value) {
+    obsAwaitingHumanReview.value = false
+  } else {
+    obsAwaitingHumanReview.value = true
+  }
+  persistObsHitlPending()
+  syncObsHitlPlanFromDetail()
+}
+
 function resetObservationSession() {
   obsThreadId.value = ''
+  obsAwaitingHumanReview.value = false
+  obsHitlNote.value = ''
+  obsHitlTraceId.value = ''
+  obsHitlPlanPreview.value = ''
+  obsHitlBarDismissed.value = false
+  clearObsHitlPending()
   try {
     localStorage.removeItem(OBS_THREAD_KEY)
   } catch {
     /* ignore */
   }
   ElMessage.success('已切换为新会话，下一次发送将创建新的 thread')
+  liveReasoningLines.value = []
+  obsPyReasoningPrefixed.value = new Set()
   liveLlmNodeStreams.value = {}
   liveLlmNodeSeq.value = 0
+}
+
+function dismissHumanReviewBar() {
+  obsHitlBarDismissed.value = true
+  obsAwaitingHumanReview.value = false
+  obsHitlNote.value = ''
+  persistObsHitlPending()
+}
+
+function resumeHumanReviewBar() {
+  obsHitlBarDismissed.value = false
+  obsAwaitingHumanReview.value = true
+  persistObsHitlPending()
+}
+
+async function submitHumanReviewFeedback(approved) {
+  const note = obsHitlNote.value.trim()
+  if (!note) {
+    ElMessage.warning('请填写复核说明')
+    return
+  }
+  if (!obsThreadId.value) {
+    ElMessage.error('缺少 threadId，无法续跑')
+    return
+  }
+  if (obsStreaming.value) return
+  lastDedup = ''
+  obsHitlSubmitting.value = true
+  obsStreaming.value = true
+  obsAbortController.value = new AbortController()
+  obsHitlBarDismissed.value = false
+  obsPyReasoningPrefixed.value = new Set()
+  try {
+    await chatAgentStream({
+      payload: {
+        query: ' ',
+        threadId: obsThreadId.value,
+        humanFeedbackContent: note,
+        rejectedPlan: !approved,
+        traceId: obsHitlTraceId.value || undefined
+      },
+      signal: obsAbortController.value.signal,
+      onTraceMeta: ({ threadId, traceId }) => {
+        if (threadId) {
+          obsThreadId.value = threadId
+          try {
+            localStorage.setItem(OBS_THREAD_KEY, threadId)
+          } catch {
+            /* ignore */
+          }
+        }
+        if (traceId) {
+          obsHitlTraceId.value = traceId
+          selectedId.value = traceId
+          topologySelectedId.value = ''
+          getAgentTrace(traceId)
+            .then((d) => {
+              detail.value = d
+            })
+            .catch(() => {})
+          startPolling()
+        }
+      },
+      onThink: (evt) => {
+        const msg = evt?.payload?.message
+        if (msg) appendLiveLine(String(msg))
+      },
+      onNode: (evt) => {
+        const line = formatAgentNodeLine(evt)
+        if (line) appendLiveLine(line)
+      },
+      onStreamChunk: (chunk, meta) => {
+        pushNodeStreamChunk(meta?.node, 'answer', chunk)
+      },
+      onStreamTrace: (chunk, meta) => {
+        pushNodeStreamChunk(meta?.node, 'answer', chunk)
+      },
+      onStreamReasoning: (chunk, meta) => {
+        pushNodeStreamChunk(meta?.node, 'reasoning', chunk)
+      },
+      onStreamPython: ({ section, chunk, node }) => {
+        appendPythonToReasoningStream(node, section, chunk)
+      },
+      onComplete: (info) => {
+        if (info?.awaitingHumanReview) {
+          obsAwaitingHumanReview.value = true
+          obsHitlBarDismissed.value = false
+          const fromSse = info?.planPreview != null ? String(info.planPreview) : ''
+          if (fromSse.trim()) obsHitlPlanPreview.value = fromSse.trim()
+          else syncObsHitlPlanFromDetail()
+          persistObsHitlPending()
+          appendLiveLine('再次挂起，等待人工复核', { dedup: false })
+        } else {
+          obsAwaitingHumanReview.value = false
+          obsHitlNote.value = ''
+          obsHitlPlanPreview.value = ''
+          obsHitlBarDismissed.value = false
+          clearObsHitlPending()
+        }
+      },
+      onError: (evt) => {
+        const msg = evt?.message || evt?.text || '流式错误'
+        appendLiveLine(String(msg), { dedup: false })
+      }
+    })
+  } catch (e) {
+    if (e?.name !== 'AbortError') {
+      ElMessage.error(e?.message || '续跑失败')
+    }
+  } finally {
+    obsAbortController.value = null
+    obsHitlSubmitting.value = false
+    try {
+      if (selectedId.value) {
+        detail.value = await getAgentTrace(selectedId.value)
+        syncObsHitlPlanFromDetail()
+      }
+    } catch {
+      /* ignore */
+    }
+    obsStreaming.value = false
+    stopPolling()
+    await loadList()
+  }
 }
 
 function formatNowClock() {
@@ -1293,18 +1691,43 @@ function pushNodeStreamChunk(node, channel, chunk) {
   }
 }
 
+function pythonObsSectionTitle(section) {
+  if (section === 'code') return '代码'
+  if (section === 'stdout') return '输出'
+  return '解读'
+}
+
+function appendPythonToReasoningStream(node, section, chunk) {
+  if (!section || chunk == null || chunk === '') return
+  const nid = String(node || '').trim() || `python_${section}`
+  const key = `${nid}:${section}`
+  const set = obsPyReasoningPrefixed.value
+  let prefix = ''
+  if (!set.has(key)) {
+    obsPyReasoningPrefixed.value = new Set(set).add(key)
+    prefix = `\n── Python·${pythonObsSectionTitle(section)} ──\n`
+  }
+  pushNodeStreamChunk(nid, 'reasoning', prefix + String(chunk))
+}
+
 async function sendObservation() {
   const q = obsQuery.value.trim()
   if (!q || obsStreaming.value) return
   lastDedup = ''
   liveReasoningLines.value = []
+  obsPyReasoningPrefixed.value = new Set()
   liveLlmNodeStreams.value = {}
   liveLlmNodeSeq.value = 0
   obsStreaming.value = true
   obsAbortController.value = new AbortController()
+  obsHitlBarDismissed.value = false
   try {
     await chatAgentStream({
-      payload: { query: q, threadId: obsThreadId.value || undefined },
+      payload: {
+        query: q,
+        threadId: obsThreadId.value || undefined,
+        ...(obsHumanReview.value ? { humanReview: true } : {})
+      },
       signal: obsAbortController.value.signal,
       onTraceMeta: ({ threadId, traceId }) => {
         if (threadId) {
@@ -1316,6 +1739,7 @@ async function sendObservation() {
           }
         }
         if (traceId) {
+          obsHitlTraceId.value = traceId
           selectedId.value = traceId
           topologySelectedId.value = ''
           getAgentTrace(traceId)
@@ -1343,9 +1767,29 @@ async function sendObservation() {
       onStreamReasoning: (chunk, meta) => {
         pushNodeStreamChunk(meta?.node, 'reasoning', chunk)
       },
+      onStreamPython: ({ section, chunk, node }) => {
+        appendPythonToReasoningStream(node, section, chunk)
+      },
       onError: (evt) => {
         const msg = evt?.message || evt?.text || '流式错误'
         appendLiveLine(String(msg), { dedup: false })
+      },
+      onComplete: (info) => {
+        if (info?.awaitingHumanReview) {
+          obsAwaitingHumanReview.value = true
+          obsHitlBarDismissed.value = false
+          const fromSse = info?.planPreview != null ? String(info.planPreview) : ''
+          if (fromSse.trim()) obsHitlPlanPreview.value = fromSse.trim()
+          else syncObsHitlPlanFromDetail()
+          persistObsHitlPending()
+          appendLiveLine('图已挂起，等待人工复核', { dedup: false })
+        } else {
+          obsAwaitingHumanReview.value = false
+          obsHitlNote.value = ''
+          obsHitlPlanPreview.value = ''
+          obsHitlBarDismissed.value = false
+          clearObsHitlPending()
+        }
       }
     })
   } catch (e) {
@@ -1357,6 +1801,7 @@ async function sendObservation() {
     try {
       if (selectedId.value) {
         detail.value = await getAgentTrace(selectedId.value)
+        syncObsHitlPlanFromDetail()
       }
     } catch {
       /* ignore */
@@ -1410,8 +1855,14 @@ async function loadSkeleton() {
   }
 }
 
-onMounted(() => {
-  loadList()
+onMounted(async () => {
+  restoreObsHitlPending()
+  await loadList()
+  const tr = String(obsHitlTraceId.value || '').trim()
+  if (tr) {
+    selectedId.value = tr
+    await loadDetail(tr)
+  }
   loadSkeleton()
 })
 
@@ -2191,6 +2642,11 @@ watch(
   background: linear-gradient(90deg, rgba(255, 255, 255, 0.55), transparent);
 }
 
+.ev-cluster-head--python {
+  border-bottom-color: rgba(251, 191, 36, 0.55);
+  background: linear-gradient(90deg, rgba(255, 251, 235, 0.9), rgba(255, 255, 255, 0.35));
+}
+
 .ev-cluster-head-main {
   flex: 1;
   min-width: 0;
@@ -2198,12 +2654,20 @@ watch(
 
 .ev-cluster-title {
   margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
   font-family: Georgia, 'Times New Roman', Times, serif;
   font-size: 17px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--ec-ink);
   line-height: 1.2;
+}
+
+.python-cluster-tag {
+  flex-shrink: 0;
 }
 
 .ev-cluster-id {
@@ -2318,6 +2782,13 @@ watch(
   word-break: break-word;
   max-height: 360px;
   overflow: auto;
+}
+
+.final-answer-body.final-answer-placeholder {
+  font-size: 13px;
+  color: #64748b;
+  font-style: italic;
+  max-height: none;
 }
 
 .final-answer-body.agent-md :deep(h1),
@@ -2472,15 +2943,18 @@ watch(
 }
 
 .plan-spine {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
   margin-bottom: 12px;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: 12px;
   border: 1px dashed #94a3b8;
   background: #f8fafc;
+}
+
+.plan-spine-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
 }
 
 .plan-spine-title {
@@ -2491,14 +2965,76 @@ watch(
   color: #64748b;
 }
 
-.plan-chip {
+.plan-spine-source {
   font-size: 11px;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  color: #1e293b;
+  color: #94a3b8;
+}
+
+.plan-spine-todos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.plan-spine-todo {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  font-size: 12px;
+}
+
+.plan-spine-todo[data-status='done'] {
+  opacity: 0.85;
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.plan-spine-todo[data-status='running'] {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.plan-todo-mark {
+  flex: 0 0 auto;
+  width: 1.25em;
+  text-align: center;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.plan-todo-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.plan-todo-step {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.plan-todo-tool {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #f1f5f9;
+}
+
+.plan-todo-inst {
+  flex: 1 1 100%;
+  font-size: 11px;
+  color: #475569;
+  line-height: 1.35;
 }
 
 .obs-run-card {
@@ -2517,8 +3053,120 @@ watch(
 
 .obs-run-body {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: 10px;
+}
+
+.obs-input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.obs-hitl-bar {
+  flex: 1 1 100%;
+  width: 100%;
+  margin-top: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(89, 120, 165, 0.06);
+  border: 1px dashed rgba(89, 120, 165, 0.35);
+  box-sizing: border-box;
+}
+
+.obs-hitl-hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #4a5f78;
+  line-height: 1.45;
+}
+
+.obs-hitl-input {
+  margin-bottom: 8px;
+}
+
+.obs-hitl-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.obs-hitl-plan-row {
+  margin-bottom: 6px;
+}
+
+.obs-hitl-plan-dialog-body {
+  max-height: min(70vh, 720px);
+  overflow: auto;
+}
+
+.obs-plan-thought {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.45;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.obs-plan-steps {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.obs-plan-step-row {
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.obs-plan-step-no {
+  font-weight: 700;
+  margin-right: 6px;
+  color: #64748b;
+}
+
+.obs-plan-tool {
+  font-size: 12px;
+  margin-right: 6px;
+}
+
+.obs-plan-inst {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.obs-hitl-plan-pre-dialog {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, monospace;
+}
+
+.obs-hitl-dismissed-strip {
+  flex: 1 1 100%;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(234, 179, 8, 0.08);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  box-sizing: border-box;
+}
+
+.obs-hitl-check {
+  width: 100%;
+  align-self: flex-start;
+  line-height: 1.25;
+}
+
+.obs-hitl-check :deep(.el-checkbox__label) {
+  font-size: 11px;
+  white-space: normal;
 }
 
 .obs-input :deep(.el-textarea__inner) {
@@ -2636,6 +3284,7 @@ watch(
   flex: 1;
   word-break: break-word;
 }
+
 </style>
 
 <style>

@@ -141,6 +141,7 @@ function setRecentProjectIds(nextIds) {
   try {
     localStorage.setItem(RECENT_KEY, JSON.stringify(nextIds.slice(0, 12)))
   } catch {
+    /* ignore persist failures */
   }
 }
 

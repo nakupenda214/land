@@ -809,7 +809,7 @@ const batchUpdateLoading = ref(false)
 
 const {
   currentViewType,
-  preprocessGridfsId,
+  preprocessGridfsId: _preprocessGridfsId,
   isPreprocessAvailable,
   recognitionMdContent,
   recognitionMdLoading,

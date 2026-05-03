@@ -64,6 +64,47 @@
         <span class="llm-meta-chip">rowCount {{ ev?.payload?.detail?.rowCount ?? 0 }}</span>
         <el-button size="small" type="primary" plain @click="$emit('openQueryResult', ev)">查看查询结果</el-button>
       </div>
+      <div v-if="showPythonExecuteSummary(ev)" class="python-tool-call">
+        <div class="llm-inline-actions">
+          <span class="llm-meta-chip" :data-py-ok="pythonExecuteOk(ev) ? '1' : '0'">
+            {{ pythonExecuteOk(ev) ? '执行成功' : '执行失败' }}
+          </span>
+          <span v-if="pythonExecuteExit(ev) != null && pythonExecuteExit(ev) !== ''" class="llm-meta-chip">
+            exit {{ pythonExecuteExit(ev) }}
+          </span>
+          <span class="llm-meta-chip">stdin {{ Number(pythonExecuteDetail(ev)?.stdinChars ?? 0) }} chars</span>
+        </div>
+        <el-collapse v-if="pythonHasIoPanels(ev)" v-model="pythonIoOpen" class="python-io-collapse">
+          <el-collapse-item
+            v-if="pythonExecuteCode(ev)"
+            title="代码摘要（审计）"
+            name="py-code"
+          >
+            <pre class="python-io-pre">{{ pythonExecuteCode(ev) }}</pre>
+          </el-collapse-item>
+          <el-collapse-item
+            v-if="pythonExecuteStdout(ev)"
+            title="stdout 摘要"
+            name="py-out"
+          >
+            <pre class="python-io-pre">{{ pythonExecuteStdout(ev) }}</pre>
+          </el-collapse-item>
+          <el-collapse-item
+            v-if="pythonExecuteStderr(ev)"
+            title="stderr 摘要"
+            name="py-err"
+          >
+            <pre class="python-io-pre">{{ pythonExecuteStderr(ev) }}</pre>
+          </el-collapse-item>
+          <el-collapse-item
+            v-if="pythonExecuteException(ev)"
+            title="异常信息"
+            name="py-ex"
+          >
+            <pre class="python-io-pre">{{ pythonExecuteException(ev) }}</pre>
+          </el-collapse-item>
+        </el-collapse>
+      </div>
       <pre
         class="ev-json"
         :class="{ 'ev-json--tight': ev?.type === 'LLM_REQUEST' || ev?.type === 'LLM_RESPONSE' }"
@@ -74,6 +115,7 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import {
   dotClassForEventType,
   edgeHintLines,
@@ -91,6 +133,56 @@ defineProps({
 })
 
 const emit = defineEmits(['openPrompt', 'openResponse', 'openQueryResult', 'openTrace'])
+
+/** 同一卡片内折叠面板展开项（与 mongo_execute 行内操作区风格对齐） */
+const pythonIoOpen = ref(['py-out', 'py-err'])
+
+function pythonExecuteDetail(ev) {
+  if (ev?.type !== 'TOOL_CALL') return null
+  const d = ev?.payload?.detail
+  if (!d || typeof d !== 'object') return null
+  return d
+}
+
+function showPythonExecuteSummary(ev) {
+  return ev?.type === 'TOOL_CALL' && String(ev?.payload?.tool || '') === 'python_execute'
+}
+
+function pythonHasIoPanels(ev) {
+  return !!(
+    pythonExecuteCode(ev) ||
+    pythonExecuteStdout(ev) ||
+    pythonExecuteStderr(ev) ||
+    pythonExecuteException(ev)
+  )
+}
+
+function pythonExecuteOk(ev) {
+  const d = pythonExecuteDetail(ev)
+  return d?.ok === true || d?.ok === 'true'
+}
+
+function pythonExecuteExit(ev) {
+  const d = pythonExecuteDetail(ev)
+  if (d == null || d.exitCode === undefined || d.exitCode === null) return ''
+  return d.exitCode
+}
+
+function pythonExecuteCode(ev) {
+  return String(pythonExecuteDetail(ev)?.codePreview || '').trim()
+}
+
+function pythonExecuteStdout(ev) {
+  return String(pythonExecuteDetail(ev)?.stdoutPreview || '').trim()
+}
+
+function pythonExecuteStderr(ev) {
+  return String(pythonExecuteDetail(ev)?.stderrPreview || '').trim()
+}
+
+function pythonExecuteException(ev) {
+  return String(pythonExecuteDetail(ev)?.exceptionMsg || '').trim()
+}
 
 function hasLlmResponseBody(ev) {
   const p = ev?.payload
@@ -422,5 +514,43 @@ function emitOpenChildTrace(id) {
   font-size: 10px;
   color: #64748b;
   max-width: min(420px, 55vw);
+}
+
+.python-tool-call {
+  margin: 0 0 10px;
+}
+
+.python-io-collapse {
+  margin-top: 6px;
+  border: none;
+}
+
+.python-io-collapse :deep(.el-collapse-item__header) {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  background: transparent;
+}
+
+.python-io-pre {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+  font-size: 10.5px;
+  line-height: 1.42;
+  color: #1e293b;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.llm-meta-chip[data-py-ok='0'] {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
 }
 </style>

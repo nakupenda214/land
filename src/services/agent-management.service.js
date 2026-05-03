@@ -255,6 +255,19 @@ export function getAgentGraphSkeleton() {
     .then((res) => unwrapAgentApi(res, '加载图骨架失败'))
 }
 
+/** 拓扑默认布局偏好（须登录 PUT；未登录 GET 为空） */
+export function getTopologyLayout(scope = 'agent_main') {
+  return axios
+    .get(`${API_PREFIX}/agent-traces/meta/topology-layout`, { params: { scope } })
+    .then((res) => unwrapAgentApi(res, '加载拓扑布局失败'))
+}
+
+export function putTopologyLayout(scope, body) {
+  return axios
+    .put(`${API_PREFIX}/agent-traces/meta/topology-layout`, body, { params: { scope } })
+    .then((res) => unwrapAgentApi(res, '保存拓扑布局失败'))
+}
+
 /** 最近 N 条 trace 的 RAG 聚合趋势 */
 export function getAgentRagSummary(limit = 30) {
   return axios
@@ -506,4 +519,14 @@ export function addBenchmarkCase(payload) {
   return axios
     .post(`${API_PREFIX}/agent-traces/self-opt/benchmark/add`, payload)
     .then((res) => unwrapAgentApi(res, '新增基准用例失败'))
+}
+
+/**
+ * 静默错答 SKILL（主 trace SUCCESS + 快照 qualityIssue）；GET，需后端开启 skill-analysis 与 silent-error。
+ * @param {{ taskId: string, traceId?: string, snapshotId?: string }} params
+ */
+export function analyzeSilentErrorSkill(params) {
+  return axios
+    .get(`${API_PREFIX}/agent-skill/v1/silent-error/analyze`, { params })
+    .then((res) => unwrapAgentApi(res, '静默错答 SKILL 分析失败'))
 }

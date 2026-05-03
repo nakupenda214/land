@@ -89,7 +89,7 @@ export function useFileUploadPage() {
 
   const {
     currentViewType,
-    preprocessGridfsId,
+    preprocessGridfsId: _preprocessGridfsId,
     isPreprocessAvailable,
     recognitionMdContent,
     recognitionMdLoading,

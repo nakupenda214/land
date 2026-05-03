@@ -150,7 +150,6 @@ export function useProjectStomp({
   const scheduleReconnect = (projectId) => {
     if (isDisconnecting || reconnectTimer || !shouldStayConnected(projectId)) return
     if (reconnectAttempts >= maxReconnectAttempts) {
-      // eslint-disable-next-line no-console
       console.warn(`STOMP reconnect stopped after ${maxReconnectAttempts} attempts`)
       connectionState.value = 'stopped'
       return
@@ -189,7 +188,6 @@ export function useProjectStomp({
         subscribeProjectTopics(projectId)
         if (typeof onConnected === 'function') {
           Promise.resolve(onConnected(String(projectId || ''))).catch((error) => {
-            // eslint-disable-next-line no-console
             console.error('STOMP connected callback failed:', error)
           })
         }
@@ -197,21 +195,18 @@ export function useProjectStomp({
 
       client.onWebSocketClose = (event) => {
         if (isDisconnecting) return
-        // eslint-disable-next-line no-console
         console.warn('STOMP websocket closed:', event?.code, event?.reason || '')
         connectionState.value = 'disconnected'
         scheduleReconnect(projectId)
       }
 
       client.onWebSocketError = (event) => {
-        // eslint-disable-next-line no-console
         console.error('STOMP websocket error:', event)
         connectionState.value = 'error'
         scheduleReconnect(projectId)
       }
 
       client.onStompError = (frame) => {
-        // eslint-disable-next-line no-console
         console.error('STOMP broker error:', frame.headers?.message, frame.body)
         connectionState.value = 'error'
         scheduleReconnect(projectId)

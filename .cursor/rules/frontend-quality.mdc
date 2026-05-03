@@ -1,0 +1,14 @@
+---
+description: 'Land 前端质量基线：合并前验证与清洗约定'
+alwaysApply: false
+---
+
+## 合并前验证
+
+- 在 `e:\dev\Code\Js\land` 根目录执行 `npm run verify`（`build` + `test` + `eslint src`），须通过。
+- 行数与热点文件：`npm run metrics:src`（输出 JSON，含各一级目录行数与最大文件列表）。
+
+## 重构约定（与 backend refactor 原则对齐）
+
+- 行为不变、小步提交；重构与功能需求分 PR。
+- 巨型 SFC 优先：纯函数进 `src/utils`，状态与接口进 `src/composables/<域>/`，大块模板拆子组件。

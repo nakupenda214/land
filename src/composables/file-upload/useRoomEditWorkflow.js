@@ -63,17 +63,6 @@ export function useRoomEditWorkflow(options = {}) {
     return usageCategoryReverseMap?.[text] || 'UNKNOWN'
   }
 
-  const resolveFloorAreaTypeForUpdate = (value) => {
-    if (!value) return 'UNKNOWN'
-    const text = String(value)
-    if (text === 'BUILDABLE' || text === 'NON_BUILDABLE' || text === 'UNKNOWN') {
-      return text
-    }
-    if (text === '计容') return 'BUILDABLE'
-    if (text === '不计容') return 'NON_BUILDABLE'
-    return 'UNKNOWN'
-  }
-
   const resolveUsagePresetByCategory = (category) => {
     const normalized = resolveUsageCategoryForUpdate(category)
     const presetMap = {

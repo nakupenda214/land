@@ -7,6 +7,11 @@
 export function layoutGraphLr(nodes, edges) {
   const rawNodes = nodes || []
   const idSet = new Set(rawNodes.map((n) => n.id).filter(Boolean))
+  // 边端点必须都在 idSet 内才会进入邻接表；若 nodes 与 edges 偶发不同步，用边补全端点避免「孤立无连线」
+  for (const e of edges || []) {
+    if (e?.from) idSet.add(String(e.from))
+    if (e?.to) idSet.add(String(e.to))
+  }
   if (!idSet.size) return []
 
   if (!idSet.has('__START__')) {
@@ -70,6 +75,12 @@ export function layoutGraphLr(nodes, edges) {
   const GRAPH_ORIGIN_PAD_Y = 26
   const labelById = new Map(rawNodes.map((n) => [n.id, n.label || n.id]))
   if (!labelById.has('__START__')) labelById.set('__START__', '起点')
+  for (const id of idSet) {
+    if (labelById.has(id)) continue
+    const compact = String(id).replace(/_/g, '').toLowerCase()
+    if (compact === 'end') labelById.set(id, '结束')
+    else labelById.set(id, id)
+  }
 
   // 针对当前 LandAgent 图的关键环路做“水平 + 上下”混合排布，避免 plan/mql/semantic/mongo 重叠在一条直线上。
   const rowHint = new Map([
@@ -85,6 +96,10 @@ export function layoutGraphLr(nodes, edges) {
     ['feasibility_answer', 1],
     ['planner', 1],
     ['plan_executor', 2],
+    ['human_feedback', 3],
+    ['python_generate', 3],
+    ['python_execute', 4],
+    ['python_analyze', 2],
     ['mql_generate', 3],
     ['mql_validate', 2],
     ['semantic_mql', 1],
@@ -138,12 +153,17 @@ export function layoutGraphLr(nodes, edges) {
   return out
 }
 
-/** 与骨架里的终点 id 对齐，便于 GRAPH_EDGE 高亮 */
+/** 与骨架里的终点 id 对齐，便于 GRAPH_EDGE 高亮（与 Spring AI {@code StateGraph.END} = {@code __END__} 一致） */
 export function resolveCanonicalEndId(nodes) {
   const list = nodes || []
-  const endNode = list.find((n) => n && n.label === '结束')
-  if (endNode?.id) return String(endNode.id)
-  return 'END'
+  const byLabel = list.find((n) => n && String(n.label || '').trim() === '结束')
+  if (byLabel?.id) return String(byLabel.id)
+  const byId = list.find((n) => {
+    if (!n?.id) return false
+    return String(n.id).replace(/_/g, '').toLowerCase() === 'end'
+  })
+  if (byId?.id) return String(byId.id)
+  return '__END__'
 }
 
 export function normalizeGraphEndpoint(id, canonicalEndId) {
@@ -208,6 +228,56 @@ export function nodeIdFromLlmCallLabel(label) {
   if (!s) return ''
   const i = s.indexOf(':')
   return i > 0 ? s.slice(0, i) : s
+}
+
+/**
+ * 与 lc-agent {@code AgentGraphTopology#runtimeNodeIds()} 顺序一致（不含 __START__/END）。
+ * 用于「思考流 / LLM 分区」等与图执行序对齐；勿随意改序，改后端拓扑时请同步。
+ */
+export const AGENT_RUNTIME_LLM_STREAM_ORDER = Object.freeze([
+  'intent_classify',
+  'common_chat',
+  'knowledge_qa_answer',
+  'query_enhance',
+  'evidence_recall',
+  'schema_recall',
+  'mix_selector',
+  'feasibility_assessment',
+  'feasibility_answer',
+  'planner',
+  'plan_executor',
+  'python_generate',
+  'python_execute',
+  'python_analyze',
+  'mql_generate',
+  'mql_validate',
+  'semantic_mql',
+  'mongo_execute',
+  'answer_wrap'
+])
+
+const _llmStreamOrderIndex = new Map(AGENT_RUNTIME_LLM_STREAM_ORDER.map((id, i) => [id, i]))
+
+/**
+ * @param {string} nodeIdRaw
+ * @returns {string}
+ */
+export function canonicalRuntimeNodeIdForLlmStreamOrder(nodeIdRaw) {
+  const s = String(nodeIdRaw ?? '').trim()
+  if (!s) return ''
+  if (s === 'AnswerWrapNode') return 'answer_wrap'
+  return nodeIdFromLlmCallLabel(s)
+}
+
+/**
+ * @param {string} [nodeIdRaw]
+ * @returns {number} 已知节点为 0..n-1，未知为 9999
+ */
+export function agentRuntimeLlmStreamOrderIndex(nodeIdRaw) {
+  const id = canonicalRuntimeNodeIdForLlmStreamOrder(nodeIdRaw)
+  if (!id) return 9999
+  const i = _llmStreamOrderIndex.get(id)
+  return i != null ? i : 9999
 }
 
 function defaultNodeMetricsRow() {
@@ -315,6 +385,61 @@ export function buildNodeMetricsFromEvents(events) {
         r.fewShotRecall = kv
       }
     }
+  }
+  return out
+}
+
+/** 与后端 AgentTopologyLayoutPreferenceService 约定一致：规范化节点坐标表 */
+export function normalizeTopologyPositionMap(input) {
+  const out = {}
+  if (!input || typeof input !== 'object') return out
+  for (const [id, p] of Object.entries(input)) {
+    const x = Number(p?.x)
+    const y = Number(p?.y)
+    if (!id || !Number.isFinite(x) || !Number.isFinite(y)) continue
+    out[id] = { x, y }
+  }
+  return out
+}
+
+/**
+ * 骨架 SHA-256 前 16 个十六进制字符（与 Java fingerprintForSkeleton 对齐）。
+ * @param {{ id?: string }[]} layoutNodes
+ * @param {{ from?: string, to?: string }[]} skeletonEdges
+ */
+export async function computeSkeletonFingerprint(layoutNodes, skeletonEdges) {
+  const ids = (layoutNodes || [])
+    .map((n) => String(n?.id || '').trim())
+    .filter(Boolean)
+    .sort()
+  const es = (skeletonEdges || [])
+    .map((e) => `${String(e?.from || '').trim()}>${String(e?.to || '').trim()}`)
+    .filter((s) => s !== '>')
+    .sort()
+  const canonical = `${ids.join('\n')}|${es.join('\n')}`
+  const slice = canonical.length > 48000 ? canonical.slice(0, 48000) : canonical
+  const enc = new TextEncoder().encode(slice)
+  const buf = await crypto.subtle.digest('SHA-256', enc)
+  const hex = Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+  return hex.slice(0, 16)
+}
+
+/**
+ * 将服务端存的位置应用到当前骨架：仅保留当前骨架存在的节点 id（骨架增删后与存库指纹不一致时等价于取交集）。
+ */
+export function mergeTopologyLayoutPositions(serverPositions, currentNodeIds) {
+  const norm = normalizeTopologyPositionMap(serverPositions)
+  const idSet =
+    currentNodeIds instanceof Set
+      ? currentNodeIds
+      : new Set((currentNodeIds || []).map((x) => String(x || '').trim()).filter(Boolean))
+  const out = {}
+  if (!idSet.size) return out
+  for (const [k, v] of Object.entries(norm)) {
+    if (!idSet.has(k)) continue
+    out[k] = v
   }
   return out
 }

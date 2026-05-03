@@ -13,6 +13,7 @@
       <el-tab-pane label="执行拓扑" name="topology">
         <AgentTraceTopology
           v-if="layoutNodes.length"
+          layout-scope="self_opt"
           :layout-nodes="layoutNodes"
           :skeleton-edges="skeletonEdges"
           :trace-id="traceId"

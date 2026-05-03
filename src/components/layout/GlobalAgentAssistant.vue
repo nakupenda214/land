@@ -168,37 +168,102 @@
                 :placeholder="composerPlaceholder"
                 resize="none"
                 class="composer-input"
+                :disabled="awaitingHumanReview || (hitlReviewPending && hitlBarDismissed)"
                 @keydown.enter.exact.prevent="handleSend"
                 @keydown.shift.enter.stop
               />
               <div class="composer-actions">
+                <el-checkbox
+                  v-model="humanReviewEnabled"
+                  size="small"
+                  class="hitl-check"
+                  :disabled="streaming || awaitingHumanReview || (hitlReviewPending && hitlBarDismissed)"
+                >
+                  人工复核计划
+                </el-checkbox>
                 <span class="composer-hint">Enter 发送 · Shift+Enter 换行</span>
                 <el-button
                   type="primary"
                   round
                   class="send-btn"
                   :loading="streaming"
-                  :disabled="sending || !inputText.trim()"
+                  :disabled="sending || !inputText.trim() || awaitingHumanReview || (hitlReviewPending && hitlBarDismissed)"
                   @click="handleSend"
                 >
                   {{ streaming ? '生成中…' : '发送' }}
                 </el-button>
               </div>
             </div>
+            <div v-if="awaitingHumanReview" class="hitl-panel">
+              <p class="hitl-hint">
+                当前回答已挂起，等待您对<strong>执行计划</strong>复核。请填写说明后选择通过或驳回（将发起新的续跑请求）。点「稍后处理」仅收起本区：同一会话
+                Trace 仍为运行中，可再次打开抽屉继续复核。
+              </p>
+              <div v-if="hitlPlanPreview.trim()" class="hitl-plan-row">
+                <el-button type="primary" link size="small" @click="hitlPlanDialogVisible = true">查看待审计划</el-button>
+              </div>
+              <el-input
+                v-model="hitlNote"
+                type="textarea"
+                :autosize="{ minRows: 2, maxRows: 5 }"
+                placeholder="复核说明（必填）"
+                class="hitl-input"
+              />
+              <div class="hitl-actions">
+                <el-button size="small" text @click="dismissHumanReview">稍后处理</el-button>
+                <el-button type="success" size="small" :loading="hitlSubmitting" :disabled="streaming" @click="submitHumanReviewFeedback(true)">
+                  通过
+                </el-button>
+                <el-button type="danger" size="small" :loading="hitlSubmitting" :disabled="streaming" @click="submitHumanReviewFeedback(false)">
+                  驳回
+                </el-button>
+              </div>
+            </div>
+            <div v-else-if="hitlBarDismissed && hitlReviewPending" class="hitl-dismissed-strip">
+              <p class="hitl-hint">
+                已收起复核区。Trace 未结束：请点击「继续复核」填写说明并选择通过或驳回；请勿发送新问题直至完成复核。
+              </p>
+              <el-button type="primary" plain size="small" @click="resumeHumanReviewPanel">继续复核</el-button>
+            </div>
           </footer>
         </div>
       </div>
     </el-drawer>
+
+    <el-dialog
+      v-model="hitlPlanDialogVisible"
+      title="待审计划"
+      width="min(720px, 92vw)"
+      destroy-on-close
+      append-to-body
+      class="hitl-plan-dialog"
+    >
+      <div class="hitl-plan-dialog-body">
+        <template v-if="hitlPlanModel.mode === 'steps'">
+          <p v-if="hitlPlanModel.thoughtProcess" class="hitl-plan-thought">{{ hitlPlanModel.thoughtProcess }}</p>
+          <ol class="hitl-plan-steps">
+            <li v-for="st in hitlPlanModel.steps" :key="st.step" class="hitl-plan-step-row">
+              <span class="hitl-plan-step-no">#{{ st.step }}</span>
+              <code class="hitl-plan-tool">{{ st.toolToUse }}</code>
+              <span v-if="st.instruction" class="hitl-plan-inst">{{ st.instruction }}</span>
+            </li>
+          </ol>
+        </template>
+        <pre v-else-if="hitlPlanModel.mode === 'pretty'" class="hitl-plan-pre-dialog">{{ hitlPlanModel.pretty }}</pre>
+        <pre v-else class="hitl-plan-pre-dialog">{{ hitlPlanModel.pretty || hitlPlanPreview }}</pre>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { ArrowRight, ChatDotRound, Close, User } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import AgentAssistantGlyph from '@/components/layout/AgentAssistantGlyph.vue'
 import { chatAgentStream, formatAgentNodeLine } from '@/services/agent.service'
 import { renderAgentMarkdownHtml } from '@/utils/agent-markdown.js'
+import { parsePlanPreviewModel } from '@/utils/agent-plan-preview.js'
 
 const visible = ref(false)
 const showAgentFab = false
@@ -215,7 +280,81 @@ const composerPlaceholder =
   '请输入问题，例如「合同及地块在哪里查询」「帮我查 2025 年项目数量」…'
 
 const THREAD_KEY = 'global_agent_thread_id'
+const HITL_RESTORE_KEY = 'global_agent_hitl_restore'
 const threadId = ref(localStorage.getItem(THREAD_KEY) || '')
+const humanReviewEnabled = ref(false)
+const awaitingHumanReview = ref(false)
+const hitlNote = ref('')
+const hitlTraceId = ref('')
+const hitlSubmitting = ref(false)
+const hitlPlanPreview = ref('')
+/** 点「稍后处理」仅收起条 */
+const hitlBarDismissed = ref(false)
+/** 仍存在未完成的挂起复核（与 UI 是否展开无关） */
+const hitlReviewPending = ref(false)
+const hitlPlanDialogVisible = ref(false)
+const hitlPlanModel = computed(() => parsePlanPreviewModel(hitlPlanPreview.value))
+
+function persistGlobalHitl() {
+  try {
+    if (!hitlReviewPending.value) {
+      localStorage.removeItem(HITL_RESTORE_KEY)
+      return
+    }
+    const tid = String(threadId.value || '').trim()
+    const tr = String(hitlTraceId.value || '').trim()
+    if (!tid) return
+    localStorage.setItem(
+      HITL_RESTORE_KEY,
+      JSON.stringify({
+        threadId: tid,
+        traceId: tr,
+        dismissed: !!hitlBarDismissed.value
+      })
+    )
+  } catch {
+    /* ignore */
+  }
+}
+
+function clearGlobalHitlRestore() {
+  try {
+    localStorage.removeItem(HITL_RESTORE_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+function restoreGlobalHitl() {
+  try {
+    const raw = localStorage.getItem(HITL_RESTORE_KEY)
+    if (!raw) return
+    const o = JSON.parse(raw)
+    const savedTid = String(o.threadId || '').trim()
+    if (!savedTid) return
+    const cur = String(threadId.value || '').trim()
+    if (cur && savedTid !== cur) return
+    threadId.value = savedTid
+    localStorage.setItem(THREAD_KEY, savedTid)
+    const tr = String(o.traceId || '').trim()
+    if (tr) hitlTraceId.value = tr
+    hitlBarDismissed.value = !!o.dismissed
+    hitlReviewPending.value = true
+    awaitingHumanReview.value = !hitlBarDismissed.value
+  } catch {
+    /* ignore */
+  }
+}
+
+watch(
+  () => [hitlReviewPending.value, hitlBarDismissed.value, threadId.value, hitlTraceId.value],
+  () => persistGlobalHitl(),
+  { deep: false }
+)
+
+watch(visible, (v) => {
+  if (v) restoreGlobalHitl()
+})
 
 const scrollToBottom = async () => {
   await nextTick()
@@ -237,6 +376,19 @@ const makeMessage = (role, content = '') => ({
   reasoningLogs: role === 'assistant' ? [] : undefined,
   reasoningOpen: role === 'assistant'
 })
+
+function mergePythonIntoAssistantTraceStream(assistantMsg, section, chunk) {
+  if (!assistantMsg || !section || chunk == null || chunk === '') return
+  if (assistantMsg.role !== 'assistant') return
+  if (!assistantMsg.traceStream) assistantMsg.traceStream = ''
+  if (!assistantMsg._pyTraceIntro) assistantMsg._pyTraceIntro = {}
+  if (!assistantMsg._pyTraceIntro[section]) {
+    assistantMsg._pyTraceIntro[section] = true
+    const label = section === 'code' ? '代码' : section === 'stdout' ? '输出' : '解读'
+    assistantMsg.traceStream += `\n\n── Python·${label} ──\n`
+  }
+  assistantMsg.traceStream += String(chunk)
+}
 
 const formatNow = () => {
   const now = new Date()
@@ -290,11 +442,145 @@ const stopStreaming = () => {
 
 const clearMessages = () => {
   messages.value = []
+  awaitingHumanReview.value = false
+  hitlNote.value = ''
+  hitlPlanPreview.value = ''
+  hitlBarDismissed.value = false
+  hitlReviewPending.value = false
+  clearGlobalHitlRestore()
+}
+
+const dismissHumanReview = () => {
+  hitlBarDismissed.value = true
+  awaitingHumanReview.value = false
+  hitlNote.value = ''
+}
+
+const resumeHumanReviewPanel = () => {
+  hitlBarDismissed.value = false
+  awaitingHumanReview.value = true
+}
+
+async function submitHumanReviewFeedback(approved) {
+  const note = hitlNote.value.trim()
+  if (!note) {
+    ElMessage.warning('请填写复核说明')
+    return
+  }
+  if (!threadId.value) {
+    ElMessage.error('缺少会话 threadId，无法续跑')
+    return
+  }
+  if (streaming.value || hitlSubmitting.value) return
+  hitlSubmitting.value = true
+  hitlBarDismissed.value = false
+  messages.value.push(makeMessage('assistant', ''))
+  const assistantMsg = messages.value[messages.value.length - 1]
+  assistantMsg.streaming = true
+  await scrollToBottom()
+
+  let lastReasoningDedup = ''
+  const appendDedup = (msg, body, opts) => {
+    if (!body || !String(body).trim()) return
+    const key = `${opts.typeLabel || ''}|${String(body).trim()}`
+    if (key === lastReasoningDedup) return
+    lastReasoningDedup = key
+    appendReasoningEvent(msg, String(body).trim(), opts)
+  }
+
+  try {
+    streamAbortController = new AbortController()
+    streaming.value = true
+    await chatAgentStream({
+      payload: {
+        query: ' ',
+        threadId: threadId.value,
+        humanFeedbackContent: note,
+        rejectedPlan: !approved,
+        traceId: hitlTraceId.value || undefined
+      },
+      signal: streamAbortController.signal,
+      onStreamChunk: (chunk) => {
+        if (chunk) assistantMsg.content += chunk
+        scrollToBottom()
+      },
+      onStreamTrace: (chunk) => {
+        if (chunk) {
+          assistantMsg.traceStream = (assistantMsg.traceStream || '') + chunk
+          scrollToBottom()
+        }
+      },
+      onStreamPython: ({ section, chunk }) => {
+        mergePythonIntoAssistantTraceStream(assistantMsg, section, chunk)
+        scrollToBottom()
+      },
+      onStreamReasoning: (chunk, meta) => {
+        const t = String(chunk || '').trim()
+        if (!t) return
+        appendDedup(assistantMsg, meta?.node ? `[${meta.node}] ${t}` : t, { level: 'info', typeLabel: '思考' })
+      },
+      onThink: (evt) => {
+        const msg = evt?.payload?.message
+        if (msg) appendDedup(assistantMsg, msg, { level: 'info', typeLabel: '分析' })
+      },
+      onNode: (evt) => {
+        const line = formatAgentNodeLine(evt)
+        if (line) appendDedup(assistantMsg, line, { level: 'running', typeLabel: '阶段' })
+      },
+      onError: (evt) => {
+        const msg = String(
+          evt?.text || evt?.message || evt?.payload?.message || evt?.payload?.error || '流式发生错误'
+        ).trim()
+        if (msg) appendDedup(assistantMsg, msg, { level: 'error', typeLabel: '错误' })
+      },
+      onComplete: (info) => {
+        if (info?.threadId) {
+          threadId.value = info.threadId
+          localStorage.setItem(THREAD_KEY, info.threadId)
+        }
+        if (info?.awaitingHumanReview) {
+          hitlReviewPending.value = true
+          hitlBarDismissed.value = false
+          awaitingHumanReview.value = true
+          const fromSse = info?.planPreview != null ? String(info.planPreview) : ''
+          if (fromSse.trim()) hitlPlanPreview.value = fromSse.trim()
+          persistGlobalHitl()
+        } else {
+          hitlReviewPending.value = false
+          hitlBarDismissed.value = false
+          hitlPlanPreview.value = ''
+          awaitingHumanReview.value = false
+          hitlNote.value = ''
+          clearGlobalHitlRestore()
+        }
+        assistantMsg.streaming = false
+      }
+    })
+  } catch (e) {
+    if (e?.name !== 'AbortError') {
+      ElMessage.error(e?.message || '续跑失败')
+      appendDedup(assistantMsg, e?.message || '续跑失败', { level: 'error', typeLabel: '错误' })
+    }
+  } finally {
+    assistantMsg.streaming = false
+    streaming.value = false
+    streamAbortController = null
+    hitlSubmitting.value = false
+    await scrollToBottom()
+  }
 }
 
 const handleSend = async () => {
   const text = inputText.value.trim()
   if (!text || sending.value) return
+  if (awaitingHumanReview.value) {
+    ElMessage.warning('请先完成计划人工复核，或点击「稍后处理」')
+    return
+  }
+  if (hitlReviewPending.value && hitlBarDismissed.value) {
+    ElMessage.warning('会话仍在等待计划复核（Trace 未结束），请点击「继续复核」后再填写说明。')
+    return
+  }
 
   sending.value = true
   inputText.value = ''
@@ -316,7 +602,11 @@ const handleSend = async () => {
     streamAbortController = new AbortController()
     streaming.value = true
     const streamResult = await chatAgentStream({
-      payload: { query: text, threadId: threadId.value || undefined },
+      payload: {
+        query: text,
+        threadId: threadId.value || undefined,
+        ...(humanReviewEnabled.value ? { humanReview: true } : {})
+      },
       signal: streamAbortController.signal,
       onStreamChunk: (chunk) => {
         if (chunk) assistantMsg.content += chunk
@@ -327,6 +617,10 @@ const handleSend = async () => {
           assistantMsg.traceStream = (assistantMsg.traceStream || '') + chunk
           scrollToBottom()
         }
+      },
+      onStreamPython: ({ section, chunk }) => {
+        mergePythonIntoAssistantTraceStream(assistantMsg, section, chunk)
+        scrollToBottom()
       },
       onStreamReasoning: (chunk, meta) => {
         const text = String(chunk || '').trim()
@@ -385,10 +679,33 @@ const handleSend = async () => {
       onFinal: () => {
         assistantMsg.streaming = false
       },
-      onComplete: ({ threadId: tid }) => {
+      onTraceMeta: ({ threadId: tid, traceId }) => {
+        if (traceId) hitlTraceId.value = traceId
         if (tid) {
           threadId.value = tid
           localStorage.setItem(THREAD_KEY, tid)
+        }
+      },
+      onComplete: (info) => {
+        const tid = info?.threadId
+        if (tid) {
+          threadId.value = tid
+          localStorage.setItem(THREAD_KEY, tid)
+        }
+        if (info?.awaitingHumanReview) {
+          hitlReviewPending.value = true
+          hitlBarDismissed.value = false
+          awaitingHumanReview.value = true
+          const fromSse = info?.planPreview != null ? String(info.planPreview) : ''
+          if (fromSse.trim()) hitlPlanPreview.value = fromSse.trim()
+          persistGlobalHitl()
+        } else {
+          hitlReviewPending.value = false
+          hitlBarDismissed.value = false
+          hitlPlanPreview.value = ''
+          awaitingHumanReview.value = false
+          hitlNote.value = ''
+          clearGlobalHitlRestore()
         }
         assistantMsg.streaming = false
       }
@@ -1126,12 +1443,113 @@ const handleSend = async () => {
 
 .composer-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid #f1f5f9;
+}
+
+.hitl-check {
+  flex: 1 1 100%;
+  margin-right: auto;
+}
+
+.hitl-check :deep(.el-checkbox__label) {
+  font-size: 12px;
+  color: var(--agent-muted);
+}
+
+.hitl-panel {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px dashed rgba(79, 70, 229, 0.35);
+  background: rgba(79, 70, 229, 0.06);
+}
+
+.hitl-hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--agent-muted);
+  line-height: 1.45;
+}
+
+.hitl-input {
+  margin-bottom: 8px;
+}
+
+.hitl-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.hitl-plan-row {
+  margin-bottom: 6px;
+}
+
+.hitl-plan-dialog-body {
+  max-height: min(70vh, 720px);
+  overflow: auto;
+}
+
+.hitl-plan-thought {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--agent-muted);
+  line-height: 1.45;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.hitl-plan-steps {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.hitl-plan-step-row {
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.hitl-plan-step-no {
+  font-weight: 700;
+  margin-right: 6px;
+  color: #64748b;
+}
+
+.hitl-plan-tool {
+  font-size: 12px;
+  margin-right: 6px;
+}
+
+.hitl-plan-inst {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--agent-muted);
+}
+
+.hitl-plan-pre-dialog {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, monospace;
+}
+
+.hitl-dismissed-strip {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(234, 179, 8, 0.45);
+  background: rgba(234, 179, 8, 0.08);
 }
 
 .composer-hint {

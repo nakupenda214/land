@@ -209,16 +209,6 @@ const goProject = (row) => {
   })
 }
 
-const handlePrintSingle = (row) => {
-  if (!row || typeof row !== 'object') {
-    ElMessage.warning('当前行数据为空，无法打印')
-    return
-  }
-  printRows.value = [row]
-  printTitle.value = '项目详情打印报表'
-  triggerPrint()
-}
-
 const handlePrintSelected = () => {
   if (!selectedRows.value.length) {
     ElMessage.warning('请先勾选需要打印的项目')

@@ -973,15 +973,6 @@ const loadUsagePickerOptions = async () => {
   }
 }
 
-const openUsagePicker = async (row) => {
-  usagePickerTargetRow.value = row
-  usagePickerKeyword.value = ''
-  usagePickerVisible.value = true
-  if (!usagePickerOptions.value.length) {
-    await loadUsagePickerOptions()
-  }
-}
-
 const applyUsagePicker = (item) => {
   const target = usagePickerTargetRow.value
   if (!target || !item) return
