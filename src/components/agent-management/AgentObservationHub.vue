@@ -3,7 +3,7 @@
     <section class="panel snapshot-panel">
       <section class="sub-panel">
         <div class="sub-panel-head">
-          <h4 class="snap-h4">全链路指标（时间窗）</h4>
+          <h4 class="snap-h4">全链路指标</h4>
           <div class="panel-actions">
             <el-select v-model="snapHours" style="width: 130px" @change="loadSnapshot">
               <el-option :value="24" label="近 24h" />
@@ -15,7 +15,7 @@
         </div>
         <div class="kqa-grid kqa-grid--core">
           <div class="stat-card">
-            <div class="stat-label">请求总成功率（主口径）</div>
+            <div class="stat-label">请求总成功率</div>
             <div class="stat-value">{{ percentText(snap?.chainSummary?.successRate) }}</div>
           </div>
           <div class="stat-card">
@@ -97,7 +97,7 @@
       </section>
 
       <section class="sub-panel">
-        <h4 class="snap-h4">全局 RAG 指标（时间窗）</h4>
+        <h4 class="snap-h4">全局 RAG 指标</h4>
         <div class="rag-mode-switch">
           <span class="rag-mode-label">统计口径</span>
           <el-segmented
@@ -210,7 +210,7 @@
       </section>
 
       <section class="sub-panel">
-        <h4 class="snap-h4">LLM 指标（时间窗）</h4>
+        <h4 class="snap-h4">LLM 指标</h4>
         <div class="rag-mode-switch">
           <span class="rag-mode-label">筛选</span>
           <el-input v-model.trim="llmModelFilter" placeholder="按模型过滤" size="small" style="width: 220px" />
@@ -285,59 +285,13 @@
       </section>
     </section>
 
-    <section class="panel bad-panel">
-      <div class="panel-head">
-        <div>
-          <h3>Bad case 记录</h3>
-        </div>
-        <el-button :loading="badListLoading" @click="loadBadCases">刷新列表</el-button>
-      </div>
-
-      <el-table
-        v-loading="badListLoading"
-        :data="badCases"
-        stripe
-        empty-text="暂无 bad case"
-        class="bad-table"
-        :max-height="520"
-      >
-        <el-table-column prop="createdAt" label="时间" width="170">
-          <template #default="{ row }">
-            {{ formatTs(row.createdAt) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="traceId" label="traceId" min-width="120" show-overflow-tooltip />
-        <el-table-column prop="userQuery" label="userQuery" min-width="160" show-overflow-tooltip />
-        <el-table-column label="reasonCode" width="180" show-overflow-tooltip>
-          <template #default="{ row }">{{ formatReasonCode(row.reasonCode) }}</template>
-        </el-table-column>
-        <el-table-column prop="note" label="note" min-width="120" show-overflow-tooltip />
-        <el-table-column prop="tags" label="tags" width="140">
-          <template #default="{ row }">
-            <span class="tags-cell">{{ formatTags(row.tags) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="source" label="source" width="100" />
-      </el-table>
-      <div class="table-pager">
-        <el-pagination
-          v-model:current-page="badPageNum"
-          v-model:page-size="badPageSize"
-          :page-sizes="[10, 20, 50]"
-          layout="total, sizes, prev, pager, next"
-          :total="badTotal"
-          @current-change="loadBadCases"
-          @size-change="onBadCasePageSizeChange"
-        />
-      </div>
-    </section>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getAgentObservabilitySnapshot, getAgentRagSummary, listAgentBadCases, getAgentLlmSummary } from '@/services/agent-management.service.js'
+import { getAgentObservabilitySnapshot, getAgentRagSummary, getAgentLlmSummary } from '@/services/agent-management.service.js'
 
 const snapHours = ref(72)
 const snap = ref(null)
@@ -362,11 +316,6 @@ const ragAggregateModeOptions = [
   { label: '按 trace', value: 'trace' }
 ]
 
-const badCases = ref([])
-const badListLoading = ref(false)
-const badPageNum = ref(1)
-const badPageSize = ref(20)
-const badTotal = ref(0)
 const llmSummary = ref({})
 const llmLoading = ref(false)
 const llmModelFilter = ref('')
@@ -596,47 +545,10 @@ function formatTs(v) {
   return String(v)
 }
 
-function formatTags(tags) {
-  if (Array.isArray(tags)) return tags.join(', ')
-  return tags ? String(tags) : '—'
-}
-
-function formatReasonCode(code) {
-  const raw = code ? String(code).trim() : ''
-  if (!raw) return '—'
-  const labelMap = {
-    mql_generate_exhausted: '生成重试耗尽（mql_generate_exhausted）',
-    graph_stream_failed: '图流执行失败（graph_stream_failed）',
-    graph_stream_timeout: '图流执行超时（graph_stream_timeout）'
-  }
-  return labelMap[raw] || raw
-}
-
-async function loadBadCases() {
-  badListLoading.value = true
-  try {
-    const page = await listAgentBadCases(badPageNum.value, badPageSize.value)
-    badCases.value = page.records || []
-    badTotal.value = Number(page.total || 0)
-    badPageNum.value = Number(page.pageNum || badPageNum.value)
-    badPageSize.value = Number(page.pageSize || badPageSize.value)
-  } catch (e) {
-    ElMessage.error(e?.message || '加载 bad case 失败')
-  } finally {
-    badListLoading.value = false
-  }
-}
-
-function onBadCasePageSizeChange() {
-  badPageNum.value = 1
-  loadBadCases()
-}
-
 onMounted(() => {
   loadSnapshot()
   loadRagTrend()
   loadLlmSummaryData()
-  loadBadCases()
 })
 </script>
 
@@ -880,16 +792,6 @@ onMounted(() => {
   box-shadow:
     0 2px 7px rgba(47, 85, 128, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
-}
-
-.bad-table {
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.tags-cell {
-  font-size: 12px;
-  color: #4b5563;
 }
 
 code {

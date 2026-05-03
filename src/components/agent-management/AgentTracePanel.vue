@@ -9,7 +9,7 @@
           <div class="card-cap">
             <div class="card-cap-title">
               <span class="cap-dot" />
-              <span>TRACE 索引</span>
+              <span>TRACE</span>
             </div>
             <div class="card-cap-actions">
               <el-input
@@ -57,7 +57,7 @@
               v-model="obsQuery"
               type="textarea"
               :autosize="{ minRows: 1, maxRows: 3 }"
-              placeholder="自然语言提问，Enter 发送 · Shift+Enter 换行"
+              placeholder="Enter 发送 · Shift+Enter 换行"
               resize="none"
               class="obs-input"
               :disabled="obsStreaming"
@@ -91,7 +91,7 @@
         <template v-if="!selectedId">
           <div class="empty-detail">
             <div class="empty-orbit" />
-            <p>在上方控制条选择一条 trace，此处将展开拓扑、事件时间轴与原始 payload。</p>
+            <p>请选择一条 Trace</p>
           </div>
         </template>
         <template v-else>
@@ -112,36 +112,6 @@
             <div class="meta-chip">
               <span class="meta-label">time</span>
               <span class="meta-val">{{ formatTime(detail?.startedAt) }} → {{ formatTime(detail?.endedAt) }}</span>
-            </div>
-          </div>
-
-          <div v-if="ragSummary.totalCalls > 0" class="rag-metric-card">
-            <div class="rag-cap">RAG 指标</div>
-            <div class="rag-grid">
-              <div class="rag-kv">
-                <span class="rag-k">召回调用</span>
-                <span class="rag-v">{{ ragSummary.totalCalls }}</span>
-              </div>
-              <div class="rag-kv">
-                <span class="rag-k">召回结果（命中 / 空）</span>
-                <span class="rag-v">{{ ragSummary.hitEmptyText }}</span>
-              </div>
-              <div class="rag-kv">
-                <span class="rag-k">平均耗时</span>
-                <span class="rag-v">{{ ragSummary.avgDurationMs }}</span>
-              </div>
-              <div v-if="manualRagMetrics.recallProxyText" class="rag-kv">
-                <span class="rag-k">人工召回率 proxy</span>
-                <span class="rag-v">{{ manualRagMetrics.recallProxyText }}</span>
-              </div>
-              <div v-if="manualRagMetrics.precisionProxyText" class="rag-kv">
-                <span class="rag-k">人工准确率 proxy</span>
-                <span class="rag-v">{{ manualRagMetrics.precisionProxyText }}</span>
-              </div>
-              <div v-if="manualRagMetrics.hitAt3Text" class="rag-kv">
-                <span class="rag-k">人工 Hit@3 proxy</span>
-                <span class="rag-v">{{ manualRagMetrics.hitAt3Text }}</span>
-              </div>
             </div>
           </div>
 
@@ -268,6 +238,7 @@
                       @open-prompt="openPromptInspect"
                       @open-response="openResponseInspect"
                       @open-query-result="openQueryResultInspect"
+                      @open-trace="onOpenChildTrace"
                     />
                   </div>
                 </section>
@@ -281,6 +252,7 @@
                   @open-prompt="openPromptInspect"
                   @open-response="openResponseInspect"
                   @open-query-result="openQueryResultInspect"
+                  @open-trace="onOpenChildTrace"
                 />
               </li>
             </ol>
@@ -334,7 +306,7 @@
             <el-collapse v-model="annoCollapseNames" class="anno-collapse">
               <el-collapse-item name="anno-panel">
                 <template #title>
-                  <span class="anno-cap-title">人工标注（当前 trace）</span>
+                  <span class="anno-cap-title">人工标注</span>
                 </template>
 
                 <el-form :model="ann" label-width="168px" class="anno-form" size="small">
@@ -738,66 +710,6 @@ const observedEdgeKeySet = computed(() => {
 
 const topologyNodeMetrics = computed(() => buildNodeMetricsFromEvents(events.value))
 
-const ragSummary = computed(() => {
-  const rows = events.value.filter((ev) => {
-    if (ev?.type !== 'TRACE_BAG') return false
-    const facet = String(ev?.payload?.facet || '')
-    return facet === 'rag_recall' || facet === 'schema_rough' || facet === 'few_shot_recall'
-  })
-  if (!rows.length) {
-    return {
-      totalCalls: 0,
-      hitEmptyText: '0 / 0',
-      avgDurationMs: '0ms',
-      callsByLaneText: ''
-    }
-  }
-  let hit = 0
-  let empty = 0
-  let sum = 0
-  let durN = 0
-  const byLane = new Map()
-  for (const ev of rows) {
-    const facet = String(ev?.payload?.facet || '')
-    const nodeId = String(ev?.payload?.nodeId || '')
-    let lane = nodeId || facet
-    if (facet === 'schema_rough') lane = 'schema_rough'
-    byLane.set(lane, (byLane.get(lane) || 0) + 1)
-
-    const kv = ev?.payload?.kv || {}
-    const out = String(kv.outcome || '')
-    // 与后端 ragSummary 一致：单次调用要么计命中要么计非命中，避免 HIT 与 empty 双计
-    if (out === 'HIT') {
-      hit += 1
-    } else {
-      empty += 1
-    }
-    const d = Number(kv.vectorDurationMs ?? kv.durationMs)
-    if (Number.isFinite(d) && d >= 0) {
-      sum += d
-      durN += 1
-    }
-  }
-  const total = rows.length
-  const callsByLaneText = [...byLane.entries()]
-    .map(([k, v]) => `${k}:${v}`)
-    .join(' | ')
-  return {
-    totalCalls: total,
-    hitEmptyText: `${hit} / ${empty}`,
-    avgDurationMs: `${durN ? Math.round(sum / durN) : 0}ms`,
-    callsByLaneText
-  }
-})
-
-
-function percent(v) {
-  const n = Number(v)
-  if (!Number.isFinite(n)) return '0.0%'
-  return `${(n * 100).toFixed(1)}%`
-}
-
-
 /** 根文档 finalAnswerPreview 或事件中 TRACE_BAG final_answer（仅详情区展示） */
 /** TRACE_BAG plan_step：与拓扑「一节点一框」一致，只表示沿图推进的步骤顺序 */
 const planStepChips = computed(() => {
@@ -1158,95 +1070,6 @@ function csvToCollectionList(s) {
     .filter(Boolean)
 }
 
-/** 基于两列集合名 + 当前表单，单 trace 可解释的 proxy（非 golden Recall@K） */
-const annoSetMetrics = computed(() => {
-  const recalled = new Set(csvToCollectionList(ann.dqRecalledCsv))
-  const used = new Set(csvToCollectionList(ann.dqUsedCsv))
-  const hasSets = recalled.size > 0 || used.size > 0
-  if (!hasSets) {
-    return { hasSets: false, coverageText: '', noiseText: '', autoAlignText: '' }
-  }
-  let inter = 0
-  for (const u of used) {
-    if (recalled.has(u)) inter += 1
-  }
-  const usedSize = used.size
-  const recSize = recalled.size
-  let coverageText = '—'
-  if (usedSize > 0) {
-    coverageText = `${((inter / usedSize) * 100).toFixed(1)}%（${inter}/${usedSize}）`
-  } else {
-    coverageText = '无执行集合'
-  }
-  let noiseText = '—'
-  if (recSize > 0) {
-    let extra = 0
-    for (const r of recalled) {
-      if (!used.has(r)) extra += 1
-    }
-    noiseText = `${((extra / recSize) * 100).toFixed(1)}%（${extra}/${recSize}）`
-  } else {
-    noiseText = '无召回相关集合'
-  }
-  let autoAlignText = ''
-  if (usedSize > 0 && recSize > 0) {
-    if (inter === usedSize) autoAlignText = '执行集合 ⊆ 召回相关（强一致）'
-    else if (inter > 0) autoAlignText = '部分重合：请结合业务判断是否漏召或列名不一致'
-    else autoAlignText = '无交集：请核对「召回相关」与「执行集合」是否填对'
-  }
-  return { hasSets: true, coverageText, noiseText, autoAlignText }
-})
-
-/** 知识问答链路最后一次证据向量检索（与后端一致：nodeId 为 evidence_recall） */
-const traceKqaRagLine = computed(() => {
-  let lastKv = null
-  for (const ev of events.value) {
-    if (ev?.type !== 'TRACE_BAG' || ev?.payload?.facet !== 'rag_recall') continue
-    if (String(ev?.payload?.nodeId || '') !== 'evidence_recall') continue
-    lastKv = ev?.payload?.kv || null
-  }
-  if (!lastKv) return ''
-  const out = lastKv.outcome != null ? String(lastKv.outcome) : ''
-  const eh =
-    lastKv.emptyHit === true ? '空召回' : lastKv.emptyHit === false ? '有命中' : ''
-  const rc = lastKv.retrievedCount != null ? String(lastKv.retrievedCount) : ''
-  const parts = []
-  if (out) parts.push(`outcome=${out}`)
-  if (eh) parts.push(eh)
-  if (rc) parts.push(`retrieved=${rc}`)
-  return parts.join('，')
-})
-
-/** 人工标注驱动的通用 RAG proxy，展示在上方 RAG 指标卡 */
-const manualRagMetrics = computed(() => {
-  const m = { recallProxyText: '', precisionProxyText: '', hitAt3Text: '', note: '' }
-  const route = String(ann.route || '').trim().toLowerCase()
-
-  // NL→MQL 场景：用「召回相关集合 vs 执行集合」做 proxy
-  if (!route || route === 'data_query') {
-    if (annoSetMetrics.value.hasSets) {
-      m.recallProxyText = annoSetMetrics.value.coverageText
-      const noisePct = Number.parseFloat(annoSetMetrics.value.noiseText || '')
-      m.precisionProxyText = Number.isFinite(noisePct) ? `${(100 - noisePct).toFixed(1)}%` : ''
-      const covNum = Number.parseFloat(annoSetMetrics.value.coverageText || '0')
-      if (Number.isFinite(covNum)) m.hitAt3Text = covNum > 0 ? '1（有命中）' : '0（无命中）'
-      m.note = 'NL→MQL 这里也用了 RAG；当前为集合级 proxy，非 golden Recall@K。'
-      return m
-    }
-  }
-
-  // 知识问答场景：用人工 yes/no 映射通用指标 proxy
-  if (route === 'knowledge_qa') {
-    if (ann.kqaRetrievalRelevant) {
-      m.precisionProxyText = ann.kqaRetrievalRelevant === 'yes' ? '100.0%' : ann.kqaRetrievalRelevant === 'no' ? '0.0%' : 'unclear'
-      m.recallProxyText = m.precisionProxyText
-      m.hitAt3Text = ann.kqaRetrievalRelevant === 'yes' ? '1（有命中）' : ann.kqaRetrievalRelevant === 'no' ? '0（无命中）' : ''
-      m.note = '知识问答暂以人工相关性映射 proxy；严格 Recall@K/MRR 需 golden 样本。'
-    }
-  }
-  return m
-})
-
 const showDataQueryAnno = computed(() => ann.route === 'data_query' || ann.route === '')
 const showKnowledgeQaAnno = computed(() => ann.route === 'knowledge_qa' || ann.route === '')
 
@@ -1325,6 +1148,17 @@ function onRowClick(row) {
   topologySelectedId.value = ''
   topologySelectedEdgeKey.value = ''
   loadDetail(id)
+}
+
+/** 自优化验证离线重放：打开子 trace（与列表点选一致） */
+function onOpenChildTrace(traceId) {
+  const id = String(traceId || '').trim()
+  if (!id) return
+  selectedId.value = id
+  topologySelectedId.value = ''
+  topologySelectedEdgeKey.value = ''
+  loadDetail(id)
+  ElMessage.success('已切换到子 Trace')
 }
 
 function onTopologySelect(id) {
@@ -1991,92 +1825,6 @@ watch(
   font-family: 'Fragment Mono', ui-monospace, monospace;
   font-size: 12px;
   color: #1a3456;
-}
-
-.rag-metric-card {
-  margin-bottom: 12px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid #b8e8e0;
-  background: linear-gradient(165deg, #f0fdfa 0%, #ecfeff 100%);
-}
-
-.rag-cap {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: #0f766e;
-  margin-bottom: 8px;
-}
-
-.rag-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.rag-kv {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px 8px;
-  border-radius: 8px;
-  background: #ffffff;
-  border: 1px solid #ccfbf1;
-}
-
-.rag-k {
-  font-size: 10px;
-  color: #64748b;
-}
-
-.rag-v {
-  font-family: 'Fragment Mono', ui-monospace, monospace;
-  font-size: 12px;
-  font-weight: 700;
-  color: #134e4a;
-}
-
-.rag-trend-card {
-  margin-bottom: 14px;
-  padding: 10px 12px 12px;
-  border-radius: 12px;
-  border: 1px solid #c7d8ff;
-  background: linear-gradient(165deg, #f6f8ff 0%, #eff4ff 100%);
-}
-
-.rag-grid--overall {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin-bottom: 8px;
-}
-
-.rag-kv--wide {
-  grid-column: 1 / -1;
-}
-
-.rag-mode-switch {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.rag-mode-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: #5c6f8d;
-}
-
-.rag-trend-table {
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.rag-lane-table {
-  border-radius: 10px;
-  overflow: hidden;
-  margin-bottom: 8px;
 }
 
 .anno-card {

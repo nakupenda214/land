@@ -38,6 +38,28 @@
         <span class="tbn">{{ traceBagLaneLabel(ev) }}</span>
         <span v-if="traceBagErrorCodeLabel(ev)" class="tbn">{{ traceBagErrorCodeLabel(ev) }}</span>
       </div>
+      <div v-if="isVerificationReplayBag(ev)" class="verification-replay">
+        <div class="verification-replay-head">
+          <span class="verification-replay-badge">验证重跑</span>
+          <span class="verification-replay-stage">{{ verificationStageLabel(verificationReplayKv(ev)?.stage) }}</span>
+          <span class="verification-replay-progress">
+            {{ verificationReplayKv(ev)?.index ?? '?' }} / {{ verificationReplayKv(ev)?.total ?? '?' }}
+          </span>
+          <el-tag :type="verificationReplayKv(ev)?.ok ? 'success' : 'danger'" size="small" effect="plain">
+            {{ verificationReplayKv(ev)?.ok ? '通过' : '失败' }}
+          </el-tag>
+          <span class="verification-replay-ms">{{ verificationReplayMs(ev) }}</span>
+        </div>
+        <p v-if="verificationReplayKv(ev)?.queryPreview" class="verification-replay-query">
+          {{ verificationReplayKv(ev)?.queryPreview }}
+        </p>
+        <div v-if="verificationReplayKv(ev)?.childTraceId" class="verification-replay-actions">
+          <el-button size="small" type="primary" plain @click="emitOpenChildTrace(verificationReplayKv(ev).childTraceId)">
+            打开子 Trace
+          </el-button>
+          <span class="verification-replay-traceid mono-clip">{{ verificationReplayKv(ev).childTraceId }}</span>
+        </div>
+      </div>
       <div v-if="showMongoResultButton(ev)" class="llm-inline-actions">
         <span class="llm-meta-chip">rowCount {{ ev?.payload?.detail?.rowCount ?? 0 }}</span>
         <el-button size="small" type="primary" plain @click="$emit('openQueryResult', ev)">查看查询结果</el-button>
@@ -68,7 +90,7 @@ defineProps({
   edgeKey: { type: String, default: '' }
 })
 
-defineEmits(['openPrompt', 'openResponse', 'openQueryResult'])
+const emit = defineEmits(['openPrompt', 'openResponse', 'openQueryResult', 'openTrace'])
 
 function hasLlmResponseBody(ev) {
   const p = ev?.payload
@@ -102,6 +124,39 @@ function traceBagErrorCodeLabel(ev) {
   if (code.includes('RETRY')) return `重试：${code}`
   if (code.includes('ERROR')) return `异常：${code}`
   return code
+}
+
+function verificationReplayKv(ev) {
+  if (ev?.type !== 'TRACE_BAG') return null
+  const kv = ev?.payload?.kv
+  if (!kv || typeof kv !== 'object') return null
+  if (String(kv.phase || '') !== 'VERIFICATION_REPLAY') return null
+  return kv
+}
+
+function isVerificationReplayBag(ev) {
+  return verificationReplayKv(ev) != null
+}
+
+function verificationStageLabel(stage) {
+  const s = String(stage || '')
+  if (s.includes('STAGE_1')) return '阶段1·当前 Bad'
+  if (s.includes('STAGE_2')) return '阶段2·同类历史'
+  if (s.includes('STAGE_3')) return '阶段3·基准'
+  return s || '—'
+}
+
+function verificationReplayMs(ev) {
+  const kv = verificationReplayKv(ev)
+  const ms = Number(kv?.elapsedMs)
+  if (!Number.isFinite(ms) || ms < 0) return ''
+  return `${ms} ms`
+}
+
+function emitOpenChildTrace(id) {
+  const tid = String(id || '').trim()
+  if (!tid) return
+  emit('openTrace', tid)
 }
 </script>
 
@@ -302,5 +357,70 @@ function traceBagErrorCodeLabel(ev) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.verification-replay {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #c7d2fe;
+  background: linear-gradient(135deg, rgba(238, 242, 255, 0.95), rgba(250, 245, 255, 0.9));
+}
+
+.verification-replay-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.verification-replay-badge {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #4338ca;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #e0e7ff;
+}
+
+.verification-replay-stage {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #312e81;
+}
+
+.verification-replay-progress {
+  font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+  font-size: 11px;
+  color: #475569;
+}
+
+.verification-replay-ms {
+  font-size: 10px;
+  color: #64748b;
+}
+
+.verification-replay-query {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #334155;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.verification-replay-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.verification-replay-traceid {
+  font-size: 10px;
+  color: #64748b;
+  max-width: min(420px, 55vw);
 }
 </style>

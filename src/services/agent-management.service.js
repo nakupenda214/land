@@ -315,6 +315,12 @@ export function listAgentBadCases(pageNum = 1, pageSize = 20) {
     })
 }
 
+export function deleteAgentBadCase(badCaseId) {
+  return axios
+    .delete(`${API_PREFIX}/agent-traces/bad-cases/${encodeURIComponent(badCaseId)}`)
+    .then((res) => unwrapAgentApi(res, '删除 bad case 失败'))
+}
+
 /** 记忆配置读取 */
 export function getAgentMemoryConfig() {
   return axios
@@ -372,4 +378,132 @@ export function getAgentVectorHealth(agentId) {
   return axios
     .get(`${API_PREFIX}/agent/rag/health`, { params: { agentId } })
     .then((res) => unwrapAgentApi(res, '查询向量健康度失败'))
+}
+
+/**
+ * 根据 trace 构建调试快照并创建优化任务。
+ * @param {string} traceId
+ * @param {object} [payload] 可选：{ qualityIssue?, humanFeedback? }，与后端 BuildDebugSnapshotRequest 对齐；不传则与旧行为一致。
+ */
+export function buildDebugSnapshot(traceId, payload) {
+  const url = `${API_PREFIX}/agent-traces/build-debug-snapshot/${encodeURIComponent(traceId)}`
+  const hasBody =
+    payload &&
+    typeof payload === 'object' &&
+    (payload.qualityIssue != null || payload.humanFeedback != null)
+  return axios.post(url, hasBody ? payload : undefined).then((res) => unwrapAgentApi(res, '构建调试快照失败'))
+}
+
+/** 向已落库快照追加一条人工反馈（revision 由后端递增） */
+export function appendSnapshotHumanFeedback(snapshotId, body) {
+  return axios
+    .post(
+      `${API_PREFIX}/agent-traces/self-opt/snapshots/${encodeURIComponent(snapshotId)}/human-feedback`,
+      body
+    )
+    .then((res) => unwrapAgentApi(res, '追加人工反馈失败'))
+}
+
+/** 查询单个自优化任务摘要 */
+export function getSelfOptimizeTask(taskId) {
+  return axios
+    .get(`${API_PREFIX}/agent-traces/self-opt/tasks/${encodeURIComponent(taskId)}`)
+    .then((res) => unwrapAgentApi(res, '查询自优化任务失败'))
+}
+
+export function deleteSelfOptimizeTask(taskId) {
+  return axios
+    .delete(`${API_PREFIX}/agent-traces/self-opt/tasks/${encodeURIComponent(taskId)}`)
+    .then((res) => unwrapAgentApi(res, '删除自优化任务失败'))
+}
+
+/** 查询自优化任务列表 */
+export function listSelfOptimizeTasks(params = {}) {
+  return axios
+    .get(`${API_PREFIX}/agent-traces/self-opt/tasks`, { params })
+    .then((res) => unwrapAgentApi(res, '查询自优化任务列表失败'))
+}
+
+/** 查询自优化快照详情 */
+export function getSelfOptimizeSnapshot(snapshotId) {
+  return axios
+    .get(`${API_PREFIX}/agent-traces/self-opt/snapshots/${encodeURIComponent(snapshotId)}`)
+    .then((res) => unwrapAgentApi(res, '查询自优化快照失败'))
+}
+
+/** 查询自优化任务事件 */
+export function getSelfOptimizeTaskEvents(taskId) {
+  return axios
+    .get(`${API_PREFIX}/agent-traces/self-opt/tasks/${encodeURIComponent(taskId)}/events`)
+    .then((res) => unwrapAgentApi(res, '查询自优化任务事件失败'))
+}
+
+/** 自优化图骨架（节点+边） */
+export function getSelfOptimizeGraphSkeleton() {
+  return axios
+    .get(`${API_PREFIX}/agent-traces/meta/selfopt-graph-skeleton`)
+    .then((res) => unwrapAgentApi(res, '查询自优化拓扑骨架失败'))
+}
+
+/** 执行单个自优化任务 */
+export function runSelfOptimizeTask(taskId) {
+  return axios
+    .post(`${API_PREFIX}/agent-traces/self-opt/run/${encodeURIComponent(taskId)}`)
+    .then((res) => unwrapAgentApi(res, '执行自优化任务失败'))
+}
+
+/** 批量执行待处理任务 */
+export function runPendingSelfOptimizeTasks(limit = 10) {
+  return axios
+    .post(`${API_PREFIX}/agent-traces/self-opt/run-pending`, null, { params: { limit } })
+    .then((res) => unwrapAgentApi(res, '执行待处理自优化任务失败'))
+}
+
+/** 执行低风险优化动作 */
+export function executeOptimizationAction(taskId) {
+  return axios
+    .post(`${API_PREFIX}/agent-traces/self-opt/execute/${encodeURIComponent(taskId)}`)
+    .then((res) => unwrapAgentApi(res, '执行优化动作失败'))
+}
+
+/** 按版本回滚优化动作 */
+export function rollbackOptimizationVersion(versionId) {
+  return axios
+    .post(`${API_PREFIX}/agent-traces/self-opt/rollback/${encodeURIComponent(versionId)}`)
+    .then((res) => unwrapAgentApi(res, '回滚优化版本失败'))
+}
+
+/** 触发优化版本验证 */
+export function verifyOptimizationVersion(versionId) {
+  return axios
+    .post(`${API_PREFIX}/agent-traces/self-opt/verify/${encodeURIComponent(versionId)}`)
+    .then((res) => unwrapAgentApi(res, '验证优化版本失败'))
+}
+
+/** 查询单个优化版本详情 */
+export function getOptimizationVersion(versionId) {
+  return axios
+    .get(`${API_PREFIX}/agent-traces/self-opt/versions/${encodeURIComponent(versionId)}`)
+    .then((res) => unwrapAgentApi(res, '查询优化版本失败'))
+}
+
+/** 查询优化版本列表（支持 taskId / actionType / executeStatus / verifyStatus / time） */
+export function listOptimizationVersions(params = {}) {
+  return axios
+    .get(`${API_PREFIX}/agent-traces/self-opt/versions`, { params })
+    .then((res) => unwrapAgentApi(res, '查询优化版本列表失败'))
+}
+
+/** 查询某任务下的全部优化版本（按 createTime desc） */
+export function listOptimizationVersionsByTask(taskId) {
+  return axios
+    .get(`${API_PREFIX}/agent-traces/self-opt/tasks/${encodeURIComponent(taskId)}/versions`)
+    .then((res) => unwrapAgentApi(res, '查询任务优化版本失败'))
+}
+
+/** 新增基准用例 */
+export function addBenchmarkCase(payload) {
+  return axios
+    .post(`${API_PREFIX}/agent-traces/self-opt/benchmark/add`, payload)
+    .then((res) => unwrapAgentApi(res, '新增基准用例失败'))
 }

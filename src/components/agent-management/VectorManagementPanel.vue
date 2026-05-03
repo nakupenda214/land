@@ -28,6 +28,9 @@
       <el-tab-pane name="retrieval" label="检索策略" lazy>
         <RetrievalSettingsPanel />
       </el-tab-pane>
+      <el-tab-pane name="selfoptBenchmark" label="基准用例管理" lazy>
+        <SelfOptimizeBenchmarkPanel />
+      </el-tab-pane>
     </el-tabs>
   </section>
 </template>
@@ -41,6 +44,7 @@ import FewShotPanel from '@/components/agent-management/FewShotPanel.vue'
 import SchemaVectorPanel from '@/components/agent-management/SchemaVectorPanel.vue'
 import RagQueryPanel from '@/components/agent-management/RagQueryPanel.vue'
 import RetrievalSettingsPanel from '@/components/agent-management/RetrievalSettingsPanel.vue'
+import SelfOptimizeBenchmarkPanel from '@/components/agent-management/SelfOptimizeBenchmarkPanel.vue'
 import { getSchemaVectorStatus } from '@/services/agent-management.service.js'
 
 const props = defineProps({

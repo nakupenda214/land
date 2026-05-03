@@ -13,6 +13,9 @@
       <el-tab-pane name="memory" label="记忆管理" lazy>
         <MemoryManagementPanel />
       </el-tab-pane>
+      <el-tab-pane name="selfoptTask" label="自优化任务" lazy>
+        <SelfOptimizeTaskPanel />
+      </el-tab-pane>
       <el-tab-pane name="llmConfig" label="LLM 配置" lazy>
         <LlmConfigPanel />
       </el-tab-pane>
@@ -26,6 +29,7 @@ import AgentTracePanel from '@/components/agent-management/AgentTracePanel.vue'
 import AgentObservationHub from '@/components/agent-management/AgentObservationHub.vue'
 import VectorManagementPanel from '@/components/agent-management/VectorManagementPanel.vue'
 import MemoryManagementPanel from '@/components/agent-management/MemoryManagementPanel.vue'
+import SelfOptimizeTaskPanel from '@/components/agent-management/SelfOptimizeTaskPanel.vue'
 import LlmConfigPanel from '@/components/agent-management/LlmConfigPanel.vue'
 
 const activeTab = ref('trace')
@@ -50,7 +54,8 @@ const agentId = 'default'
 
 .manage-tabs > :deep(.el-tabs__header) {
   position: relative;
-  z-index: 6;
+  /* 高于内容区内可能逃逸的 fixed/画布层，避免 Tab 标题栏被遮挡无法切换 */
+  z-index: 20;
 }
 
 .manage-tabs > :deep(.el-tabs__content) {

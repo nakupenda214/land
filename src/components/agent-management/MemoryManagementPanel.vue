@@ -86,7 +86,7 @@
               @keyup.enter="loadMessages"
               @clear="onFilterChange"
             />
-            <el-button :disabled="!selectedThreadId" :loading="loadingMessages" @click="loadMessages">查询明细</el-button>
+            <el-button :disabled="!selectedThreadId" :loading="loadingMessages" @click="loadMessages">查询</el-button>
             <el-button :disabled="!selectedThreadId" @click="refreshSummary(selectedSession)">刷新摘要</el-button>
             <el-button :disabled="!selectedThreadId" type="danger" plain @click="clearSummary(selectedSession)">清空摘要</el-button>
           </div>
@@ -126,10 +126,10 @@
           <el-table-column prop="role" label="角色" width="100" />
           <el-table-column label="内容" min-width="400">
             <template #default="{ row }">
-              <div class="msg-content-wrap">
-                <div class="msg-content" v-html="highlightMessage(row.content || '—')"></div>
+              <div class="msg-content-row">
+                <div class="msg-content msg-content--one-line" v-html="highlightMessage(row.content || '—')"></div>
                 <el-button
-                  v-if="String(row.content || '').length > 180"
+                  v-if="messageNeedsExpand(row.content)"
                   link
                   type="primary"
                   class="msg-view-btn"
@@ -346,6 +346,14 @@ function highlightMessage(text) {
   return safe.replace(reg, '<mark class="kw-highlight">$1</mark>')
 }
 
+/** 单行展示不下或含换行时显示「查看」 */
+function messageNeedsExpand(content) {
+  const s = String(content ?? '')
+  if (!s.trim()) return false
+  if (/[\r\n]/.test(s)) return true
+  return s.length > 72
+}
+
 function openContentViewer(content) {
   viewingMessageContent.value = String(content || '')
   messageViewerVisible.value = true
@@ -530,23 +538,27 @@ onMounted(async () => {
   margin-bottom: 10px;
 }
 
-.msg-content {
-  white-space: pre-wrap;
-  line-height: 1.5;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+.msg-content-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
-.msg-content-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.msg-content {
+  line-height: 1.5;
+  min-width: 0;
+}
+
+.msg-content--one-line {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .msg-view-btn {
-  align-self: flex-start;
+  flex-shrink: 0;
   padding: 0;
 }
 
