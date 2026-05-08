@@ -3,7 +3,7 @@ import { saveAs } from 'file-saver'
 import { ElMessage } from 'element-plus'
 
 const comparisonGroupMeta = [
-  { key: 'systemCalculated', title: '系统计算口径' },
+  { key: 'systemCalculated', title: '系统统计结果' },
   { key: 'projectPartyDeclared', title: '项目方声明口径' },
   { key: 'planningCalculated', title: '规划复核口径' }
 ]

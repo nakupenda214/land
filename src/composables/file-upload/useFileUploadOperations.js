@@ -35,7 +35,8 @@ export function useFileUploadOperations({ currentProject, projectOptions, refres
   } = useUploadDialog({
     currentProject,
     projectOptions,
-    startPolling
+    startPolling,
+    refreshData
   })
 
   const { startProcessing, cancelProcessing } = useParseActions({ startPolling })

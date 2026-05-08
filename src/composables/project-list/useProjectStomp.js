@@ -60,6 +60,22 @@ export function useProjectStomp({
     return active && current === String(projectId || '')
   }
 
+  const getLiveProjectId = () =>
+    typeof projectIdRef === 'function' ? String(projectIdRef() || '') : ''
+
+  /** 传输层保持 STOMP 连接，仅更换 project 相关订阅（及全局兜底 topic）。 */
+  const resubscribeForProject = (projectId) => {
+    if (!client?.connected || !projectId) return
+    currentProjectId = String(projectId)
+    connectionState.value = 'connected'
+    subscribeProjectTopics(projectId)
+    if (typeof onConnected === 'function') {
+      Promise.resolve(onConnected(String(projectId || ''))).catch((error) => {
+        console.error('STOMP resubscribe onConnected failed:', error)
+      })
+    }
+  }
+
   const disconnect = async (resetAttempts = true) => {
     isDisconnecting = true
     clearReconnectTimer()
@@ -147,8 +163,9 @@ export function useProjectStomp({
     )
   }
 
-  const scheduleReconnect = (projectId) => {
-    if (isDisconnecting || reconnectTimer || !shouldStayConnected(projectId)) return
+  const scheduleReconnect = () => {
+    const pid = getLiveProjectId()
+    if (isDisconnecting || reconnectTimer || !pid || !shouldStayConnected(pid)) return
     if (reconnectAttempts >= maxReconnectAttempts) {
       console.warn(`STOMP reconnect stopped after ${maxReconnectAttempts} attempts`)
       connectionState.value = 'stopped'
@@ -160,18 +177,31 @@ export function useProjectStomp({
     connectionState.value = 'reconnecting'
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null
-      connect(projectId, true)
+      const retryPid = getLiveProjectId()
+      if (!retryPid || !shouldStayConnected(retryPid)) return
+      connect(retryPid, true)
     }, 2000)
   }
 
   const connect = (projectId, isReconnect = false) => {
     if (!projectId) return
-    if (!isReconnect && client && currentProjectId === projectId) return
+    if (!isReconnect && client?.connected && String(currentProjectId) === String(projectId)) return
+
+    if (
+      !isReconnect
+      && client?.connected
+      && String(projectId) !== String(currentProjectId)
+      && shouldStayConnected(projectId)
+    ) {
+      resubscribeForProject(projectId)
+      return
+    }
 
     disconnect(!isReconnect).finally(() => {
-      if (!shouldStayConnected(projectId)) return
+      const livePid = getLiveProjectId() || String(projectId || '')
+      if (!livePid || !shouldStayConnected(livePid)) return
 
-      currentProjectId = String(projectId)
+      currentProjectId = String(livePid)
       connectionState.value = isReconnect ? 'reconnecting' : 'connecting'
       client = new Client({
         reconnectDelay: 0,
@@ -182,12 +212,15 @@ export function useProjectStomp({
       })
 
       client.onConnect = () => {
+        const subPid = getLiveProjectId()
+        if (!subPid || !shouldStayConnected(subPid)) return
         reconnectAttempts = 0
         reconnectCount.value = 0
         connectionState.value = 'connected'
-        subscribeProjectTopics(projectId)
+        currentProjectId = String(subPid)
+        subscribeProjectTopics(subPid)
         if (typeof onConnected === 'function') {
-          Promise.resolve(onConnected(String(projectId || ''))).catch((error) => {
+          Promise.resolve(onConnected(String(subPid || ''))).catch((error) => {
             console.error('STOMP connected callback failed:', error)
           })
         }
@@ -197,19 +230,19 @@ export function useProjectStomp({
         if (isDisconnecting) return
         console.warn('STOMP websocket closed:', event?.code, event?.reason || '')
         connectionState.value = 'disconnected'
-        scheduleReconnect(projectId)
+        scheduleReconnect()
       }
 
       client.onWebSocketError = (event) => {
         console.error('STOMP websocket error:', event)
         connectionState.value = 'error'
-        scheduleReconnect(projectId)
+        scheduleReconnect()
       }
 
       client.onStompError = (frame) => {
         console.error('STOMP broker error:', frame.headers?.message, frame.body)
         connectionState.value = 'error'
-        scheduleReconnect(projectId)
+        scheduleReconnect()
       }
 
       client.activate()

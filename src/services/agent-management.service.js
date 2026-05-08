@@ -4,11 +4,26 @@ const API_PREFIX = import.meta.env.DEV ? '/api/api' : '/api'
 
 function unwrapResponse(response, fallbackMessage) {
   const payload = response?.data
-  const code = Number(payload?.code)
-  if (Number.isNaN(code) || code === 200) {
-    return payload?.data
+  if (payload && typeof payload === 'object' && payload.success === false) {
+    throw new Error(payload.message || payload.msg || fallbackMessage || '请求失败')
   }
-  throw new Error(payload?.msg || fallbackMessage || '请求失败')
+  const code = Number(payload?.code)
+  // 无 code（如 lc-agent ApiResponse）视为成功；部分后端用 0 表示成功
+  if (!(Number.isNaN(code) || code === 200 || code === 0)) {
+    throw new Error(payload?.msg || payload?.message || fallbackMessage || '请求失败')
+  }
+  let data = payload?.data
+  // 网关二次包装：{ code:200, data: { success, message, data: 真实载荷 } }
+  if (
+    data &&
+    typeof data === 'object' &&
+    data.success === true &&
+    'data' in data &&
+    data.data !== undefined
+  ) {
+    data = data.data
+  }
+  return data
 }
 
 export function listBusinessKnowledge(agentId, keyword) {
@@ -121,8 +136,17 @@ export function refreshFewShotVectorStore() {
     .then((res) => unwrapResponse(res, '刷新 few-shot 向量失败'))
 }
 
-export function listLlmProfiles() {
-  return axios.get(`${API_PREFIX}/llm-config/profiles`).then((res) => unwrapResponse(res, '查询 LLM 配置失败'))
+export function listLlmProfiles(params = {}) {
+  const { pageNum = 1, pageSize = 10 } = params
+  return axios
+    .get(`${API_PREFIX}/llm-config/profiles`, { params: { pageNum, pageSize } })
+    .then((res) => unwrapResponse(res, '查询 LLM 配置失败'))
+}
+
+export function listLlmProfileOptions() {
+  return axios
+    .get(`${API_PREFIX}/llm-config/profiles/options`)
+    .then((res) => unwrapResponse(res, '查询 LLM 配置选项失败'))
 }
 
 export function listLlmNodes() {
@@ -167,6 +191,17 @@ export function getLlmEffectiveConfig(nodeId) {
   return axios
     .get(`${API_PREFIX}/llm-config/effective/${encodeURIComponent(nodeId)}`)
     .then((res) => unwrapResponse(res, '查询生效配置失败'))
+}
+
+/** 批量查询节点生效配置（单次请求，nodeIds 为节点 ID 列表） */
+export function getLlmEffectiveConfigs(nodeIds) {
+  const ids = (nodeIds || []).filter(Boolean)
+  if (!ids.length) {
+    return Promise.resolve([])
+  }
+  return axios
+    .get(`${API_PREFIX}/llm-config/effective`, { params: { nodeIds: ids.join(',') } })
+    .then((res) => unwrapResponse(res, '批量查询生效配置失败'))
 }
 
 export function getRetrievalSettings() {
@@ -376,6 +411,20 @@ export function clearAgentMemorySummary(threadId) {
   return axios
     .post(`${API_PREFIX}/agent-traces/memory/sessions/${encodeURIComponent(threadId)}/clear-summary`)
     .then((res) => unwrapAgentApi(res, '清空会话摘要失败'))
+}
+
+/** 清空某会话全部消息（保留会话头） */
+export function clearAgentSessionMessages(threadId) {
+  return axios
+    .post(`${API_PREFIX}/agent-traces/memory/sessions/${encodeURIComponent(threadId)}/clear-messages`)
+    .then((res) => unwrapAgentApi(res, '清空会话消息失败'))
+}
+
+/** 删除整个会话（消息 + 会话头） */
+export function deleteAgentMemorySession(threadId) {
+  return axios
+    .delete(`${API_PREFIX}/agent-traces/memory/sessions/${encodeURIComponent(threadId)}`)
+    .then((res) => unwrapAgentApi(res, '删除会话失败'))
 }
 
 /**

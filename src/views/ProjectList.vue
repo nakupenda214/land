@@ -1,10 +1,10 @@
 <template>
-  <div class="archive-container">
-    
+  <div class="archive-container" v-loading="projectWorkspaceBootstrapping" element-loading-text="正在加载项目列表…">
     <ProjectFilterBar
       v-model="filterProject"
       :project-options="projectOptions"
       :current-project-id="currentProjectInfo.id"
+      :options-loading="projectOptionsLoading"
       @search="handleGlobalSearch"
       @request-options="ensureProjectOptionsLoaded"
       @create-project="showCreateProjectDialog = true"
@@ -137,7 +137,6 @@
             :loading="projectEditLoading"
             :set-form-ref="setProjectEditRef"
             @submit="submitProjectUpdate"
-            @reset="resetProjectForm"
           />
         </el-tab-pane>
       </el-tabs>
@@ -152,24 +151,20 @@
       :selected-comparison-groups="selectedComparisonGroups"
     />
 
-
-
-
-            <ProjectDetailDialog
-        v-model="detailDialogVisible"
-        :room-sum-info="roomSumInfo"
-        :report-audit-info="reportAuditInfo"
-        :room-info-data="roomInfoData"
-        :detail-loading="detailLoading"
-        :current-detail-row="currentDetailRow"
-        :can-jump-audit="canJumpAuditFromDetail"
-        :report-basic-info-form="reportBasicInfoForm"
-        :report-basic-info-saving="reportBasicInfoSaving"
-        @jump-audit="handleJumpAuditFromDetail"
-        @save-basic-info="saveReportBasicInfo"
-        @update:propertyCertificateNumber="(v) => (reportBasicInfoForm.propertyCertificateNumber = v)"
-        @update:propertyAreaConfirmationNoticeNumber="(v) => (reportBasicInfoForm.propertyAreaConfirmationNoticeNumber = v)"
-      />
+    <ProjectDetailDialog
+      v-model="detailDialogVisible"
+      :report-audit-info="reportAuditInfo"
+      :room-info-data="roomInfoData"
+      :detail-loading="detailLoading"
+      :current-detail-row="currentDetailRow"
+      :can-jump-audit="canJumpAuditFromDetail"
+      :report-basic-info-form="reportBasicInfoForm"
+      :report-basic-info-saving="reportBasicInfoSaving"
+      @jump-audit="handleJumpAuditFromDetail"
+      @save-basic-info="saveReportBasicInfo"
+      @update:propertyCertificateNumber="(v) => (reportBasicInfoForm.propertyCertificateNumber = v)"
+      @update:propertyAreaConfirmationNoticeNumber="(v) => (reportBasicInfoForm.propertyAreaConfirmationNoticeNumber = v)"
+    />
 
       <ContractEditDialog
         v-model="contractDialogVisible"
@@ -239,7 +234,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch , onUnmounted, nextTick} from 'vue'
+import { ref, onMounted, computed, watch, onUnmounted, nextTick, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { DataAnalysis, DocumentChecked, DocumentCopy, FolderOpened, Location, List, EditPen } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -248,20 +243,7 @@ import { createProject } from '@/services/project.service'
 import { usePrint } from '@/hooks/usePrint.ts'
 import { useProjectSelector } from '@/composables/project-list/useProjectSelector'
 import ProjectFilterBar from '@/components/project-list/ProjectFilterBar.vue'
-import UnknownUsagePolicyCard from '@/components/project-list/UnknownUsagePolicyCard.vue'
-import SummaryTableCard from '@/components/project-list/SummaryTableCard.vue'
-import SummaryComparisonCard from '@/components/project-list/SummaryComparisonCard.vue'
-import PrintSummaryBlock from '@/components/project-list/PrintSummaryBlock.vue'
-import ProjectDetailDialog from '@/components/project-list/ProjectDetailDialog.vue'
-import ContractEditDialog from '@/components/project-list/ContractEditDialog.vue'
-import ContractWorkspaceDialog from '@/components/project-list/ContractWorkspaceDialog.vue'
-import LandParcelEditDialog from '@/components/project-list/LandParcelEditDialog.vue'
-import ProjectEditForm from '@/components/project-list/ProjectEditForm.vue'
-import ContractLandTab from '@/components/project-list/ContractLandTab.vue'
 import ArchiveFolderTab from '@/components/project-list/ArchiveFolderTab.vue'
-import OperationAuditTab from '@/components/project-list/OperationAuditTab.vue'
-import PlanningReviewTab from '@/components/project-list/PlanningReviewTab.vue'
-import ProjectPartySummaryTab from '@/components/project-list/ProjectPartySummaryTab.vue'
 import { useContractLandManagement } from '@/composables/project-list/useContractLandManagement'
 import { useProjectEditManagement } from '@/composables/project-list/useProjectEditManagement'
 import { useSurveySummary } from '@/composables/project-list/useSurveySummary'
@@ -271,7 +253,30 @@ import { useProjectFileCollections } from '@/composables/project-list/useProject
 import { useProjectExport } from '@/composables/project-list/useProjectExport'
 import { useProjectDetailDialog } from '@/composables/project-list/useProjectDetailDialog'
 
-
+/** 默认 Tab 保持同步导入；其余 Tab / 弹窗异步分包，减轻首次进入「项目信息」的解析与下载耗时 */
+const UnknownUsagePolicyCard = defineAsyncComponent(() =>
+  import('@/components/project-list/UnknownUsagePolicyCard.vue')
+)
+const SummaryTableCard = defineAsyncComponent(() => import('@/components/project-list/SummaryTableCard.vue'))
+const SummaryComparisonCard = defineAsyncComponent(() =>
+  import('@/components/project-list/SummaryComparisonCard.vue')
+)
+const PrintSummaryBlock = defineAsyncComponent(() => import('@/components/project-list/PrintSummaryBlock.vue'))
+const ProjectDetailDialog = defineAsyncComponent(() => import('@/components/project-list/ProjectDetailDialog.vue'))
+const ContractEditDialog = defineAsyncComponent(() => import('@/components/project-list/ContractEditDialog.vue'))
+const ContractWorkspaceDialog = defineAsyncComponent(() =>
+  import('@/components/project-list/ContractWorkspaceDialog.vue')
+)
+const LandParcelEditDialog = defineAsyncComponent(() =>
+  import('@/components/project-list/LandParcelEditDialog.vue')
+)
+const ProjectEditForm = defineAsyncComponent(() => import('@/components/project-list/ProjectEditForm.vue'))
+const ContractLandTab = defineAsyncComponent(() => import('@/components/project-list/ContractLandTab.vue'))
+const OperationAuditTab = defineAsyncComponent(() => import('@/components/project-list/OperationAuditTab.vue'))
+const PlanningReviewTab = defineAsyncComponent(() => import('@/components/project-list/PlanningReviewTab.vue'))
+const ProjectPartySummaryTab = defineAsyncComponent(() =>
+  import('@/components/project-list/ProjectPartySummaryTab.vue')
+)
 
 // const handlePrint = () => window.print()
 const { isPrinting, triggerPrint } = usePrint()
@@ -357,6 +362,8 @@ const {
 
 const projectOptionsLoaded = ref(false)
 const projectOptionsLoading = ref(false)
+/** 首进页面：拉项目列表 + 恢复选中项期间的全局反馈，避免误以为卡死 */
+const projectWorkspaceBootstrapping = ref(false)
 let projectOptionsLoadingPromise = null
 
 const ensureProjectOptionsLoaded = async () => {
@@ -383,6 +390,55 @@ const applyCurrentProjectMeta = (projectId) => {
   currentProjectInfo.id = pid
   currentProjectInfo.name = projectItem.name
   currentProjectInfo.code = projectItem.code || `XM-${pid.padStart(3, '0')}`
+  currentProjectInfo.status = '已归档'
+  return true
+}
+
+/** 与 projectFilterStatus 配套：在拉取项目列表前恢复 currentProjectInfo，使归档 Tab 可与列表请求并行 */
+const PROJECT_FILTER_DISPLAY_META = 'projectFilterDisplayMeta'
+
+function persistProjectFilterDisplayMeta() {
+  try {
+    const id = String(currentProjectInfo.id || '')
+    if (!id) return
+    localStorage.setItem(
+      PROJECT_FILTER_DISPLAY_META,
+      JSON.stringify({
+        id,
+        name: currentProjectInfo.name || '',
+        code: currentProjectInfo.code || ''
+      })
+    )
+  } catch {
+    /* ignore */
+  }
+}
+
+function readProjectFilterDisplayMeta() {
+  try {
+    const raw = localStorage.getItem(PROJECT_FILTER_DISPLAY_META)
+    if (!raw) return null
+    const o = JSON.parse(raw)
+    if (!o || typeof o !== 'object') return null
+    return {
+      id: String(o.id || ''),
+      name: String(o.name || ''),
+      code: String(o.code || '')
+    }
+  } catch {
+    return null
+  }
+}
+
+function applyCachedProjectWorkspaceMeta(projectId) {
+  const idStr = String(projectId || '')
+  if (!idStr) return false
+  const cached = readProjectFilterDisplayMeta()
+  if (!cached || cached.id !== idStr) return false
+  filterProject.value = idStr
+  currentProjectInfo.id = idStr
+  currentProjectInfo.name = cached.name || '…'
+  currentProjectInfo.code = cached.code || `XM-${idStr.padStart(3, '0')}`
   currentProjectInfo.status = '已归档'
   return true
 }
@@ -420,7 +476,6 @@ watch(
 )
 
 const {
-  roomSumInfo,
   detailDialogVisible,
   roomInfoData,
   detailLoading,
@@ -573,8 +628,7 @@ const {
   projectUpdateForm,
   projectEditRules,
   setProjectEditRef,
-  submitProjectUpdate,
-  resetProjectForm
+  submitProjectUpdate
 } = useProjectEditManagement({
   activeTab,
   filterProject,
@@ -595,6 +649,7 @@ const handleGlobalSearch = async () => {
     ElMessage.warning('当前项目不存在或列表尚未同步，请稍后重试')
     return
   }
+  persistProjectFilterDisplayMeta()
   if (activeTab.value === 'contractLandEdit') {
     await fetchContractListByProjectId(projectId)
   } else if (activeTab.value === 'summary') {
@@ -652,7 +707,8 @@ watch(filterProject, (newVal, oldVal) => {
     }
   } else {
     // 1. 清空本地缓存
-    localStorage.removeItem('projectFilterStatus');
+    localStorage.removeItem('projectFilterStatus')
+    localStorage.removeItem(PROJECT_FILTER_DISPLAY_META)
     // 2. 清空所有项目相关数据
     reportList.value = [];
     resetSummaryMetrics();
@@ -709,12 +765,20 @@ watch(activeTab, async (tab, _prevTab) => {
 
   if (tab === 'contractLandEdit') {
     await fetchContractListByProjectId(currentProjectInfo.id)
+  } else if (tab === 'summary') {
+    // 汇总表数据仅在「查询」且当前 tab 为 summary 时拉取；从归档等 tab 切过来需补拉一次
+    await fetchSurveyReports(currentProjectInfo.id)
   }
 })
 
 // 页面初始化：恢复项目选择并加载数据
 onMounted(async () => {
-  if (initialReturnTab.value && ['summary', 'contractLandEdit', 'projectEdit', 'archives', 'planningReview', 'projectPartySummary', 'operationAudit'].includes(initialReturnTab.value)) {
+  if (
+    initialReturnTab.value &&
+    ['summary', 'contractLandEdit', 'projectEdit', 'archives', 'planningReview', 'projectPartySummary', 'operationAudit'].includes(
+      initialReturnTab.value
+    )
+  ) {
     activeTab.value = initialReturnTab.value
     initialReturnTab.value = ''
   } else if (String(route.query.openAuditFileId || '').trim()) {
@@ -723,35 +787,53 @@ onMounted(async () => {
     activeTab.value = 'archives'
   }
 
-  // B. 决定选中哪个项目（去掉人为延迟，首进即加载）
-  await ensureProjectOptionsLoaded()
   const queryProjectId = route.query.projectId
   const savedProjectId = localStorage.getItem('projectFilterStatus')
   let targetProjectId = ''
 
-  if (queryProjectId) {
-    targetProjectId = String(queryProjectId)
-    filterProject.value = targetProjectId
-    await handleGlobalSearch()
-  } else if (savedProjectId) {
-    const exists = projectOptions.value.some((p) => String(p.id) === String(savedProjectId))
-    if (exists) {
-      targetProjectId = String(savedProjectId)
+  projectWorkspaceBootstrapping.value = true
+  try {
+    if (queryProjectId) {
+      targetProjectId = String(queryProjectId)
+      if (!applyCachedProjectWorkspaceMeta(targetProjectId)) {
+        filterProject.value = targetProjectId
+      }
+    } else if (savedProjectId) {
+      applyCachedProjectWorkspaceMeta(savedProjectId)
+    }
+
+    await ensureProjectOptionsLoaded()
+
+    if (queryProjectId) {
+      targetProjectId = String(queryProjectId)
       filterProject.value = targetProjectId
       await handleGlobalSearch()
-    } else {
-      localStorage.removeItem('projectFilterStatus')
+    } else if (savedProjectId) {
+      const exists = projectOptions.value.some((p) => String(p.id) === String(savedProjectId))
+      if (exists) {
+        targetProjectId = String(savedProjectId)
+        filterProject.value = targetProjectId
+        await handleGlobalSearch()
+      } else {
+        localStorage.removeItem('projectFilterStatus')
+        localStorage.removeItem(PROJECT_FILTER_DISPLAY_META)
+        Object.assign(currentProjectInfo, {
+          id: '',
+          name: '请选择项目',
+          code: '-',
+          status: '-'
+        })
+        filterProject.value = ''
+      }
     }
-  }
 
-  if (targetProjectId) {
-    restoreRefreshCdStatus(targetProjectId)
+    if (targetProjectId) {
+      restoreRefreshCdStatus(targetProjectId)
+    }
+  } finally {
+    projectWorkspaceBootstrapping.value = false
   }
 })
-
-
-
-
 
 </script>
 

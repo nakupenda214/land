@@ -116,9 +116,9 @@ const props = defineProps({
 })
 
 const groupMeta = [
-  { key: 'systemCalculated', title: '系统计算口径' },
-  { key: 'projectPartyDeclared', title: '项目方声明口径' },
-  { key: 'planningCalculated', title: '规划复核口径' }
+  { key: 'systemCalculated', title: '实测报告对比结果' },
+  { key: 'projectPartyDeclared', title: '项目方统计比对结果' },
+  { key: 'planningCalculated', title: '规划复核对比结果' }
 ]
 
 const formatArea = (value) => {

@@ -16,9 +16,25 @@
       <el-table-column prop="id" label="ID" width="90" />
       <el-table-column prop="username" label="用户名" width="140" />
       <el-table-column prop="realName" label="姓名" width="120" />
-      <el-table-column label="权限类型" width="130">
+      <el-table-column label="权限类型" width="200">
         <template #default="{ row }">
-          <el-tag :type="tagType(row.userType)" size="small">{{ userTypeLabel(row.userType) }}</el-tag>
+          <el-select
+            v-if="showUserTypeEditor(row)"
+            :model-value="normalizeUserTypeForSelect(row.userType)"
+            size="small"
+            style="width: 168px"
+            :loading="assigningTypeId === row.id"
+            :disabled="assigningTypeId === row.id"
+            @update:model-value="(v) => onUserTypeChange(row, v)"
+          >
+            <el-option
+              v-for="opt in userTypeSelectOptions"
+              :key="opt.value"
+              :label="opt.label"
+              :value="opt.value"
+            />
+          </el-select>
+          <el-tag v-else :type="tagType(row.userType)" size="small">{{ userTypeLabel(row.userType) }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="phone" label="手机" width="130" />
@@ -37,7 +53,7 @@
           {{ formatTime(row.lastLogin) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="100" fixed="right">
+      <el-table-column label="操作" width="120" fixed="right">
         <template #default="{ row }">
           <el-button link type="danger" size="small" @click="onDelete(row)">删除</el-button>
         </template>
@@ -56,19 +72,15 @@
       />
     </div>
 
-    <p class="hint">
-      权限说明：<strong>超级管理员</strong>、<strong>管理员</strong>、<strong>开发人员</strong>、<strong>普通用户</strong>（自助注册默认）。提升权限请通过接口
-      <code>/user/create</code> 或由库内更新 <code>user_type</code>。
-    </p>
   </el-card>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh } from '@element-plus/icons-vue'
 import axios from 'axios'
-import { userTypeLabel } from '@/constants/userTypes'
+import { USER_TYPE_OPTIONS, userTypeLabel } from '@/constants/userTypes'
 
 const loading = ref(false)
 const rows = ref([])
@@ -77,6 +89,31 @@ const pageNum = ref(1)
 const pageSize = ref(20)
 const keyword = ref('')
 const togglingId = ref(null)
+const me = ref(null)
+const assigningTypeId = ref(null)
+
+const canAssignUserTypes = computed(() => {
+  const t = me.value?.userType
+  return t === 'SUPER_ADMIN' || t === 'ADMIN'
+})
+
+/** 下拉可选类型：管理员不出现「超级管理员」选项 */
+const userTypeSelectOptions = computed(() => {
+  if (me.value?.userType === 'SUPER_ADMIN') return USER_TYPE_OPTIONS
+  return USER_TYPE_OPTIONS.filter((o) => o.value !== 'SUPER_ADMIN')
+})
+
+function showUserTypeEditor(row) {
+  if (!canAssignUserTypes.value || !me.value) return false
+  if (row.id === me.value.id) return false
+  if (me.value.userType === 'ADMIN' && row.userType === 'SUPER_ADMIN') return false
+  return true
+}
+
+/** 历史 DEPT_USER 在下拉中与 USER 等价展示 */
+function normalizeUserTypeForSelect(userType) {
+  return userType === 'DEPT_USER' ? 'USER' : userType
+}
 
 function tagType(userType) {
   if (userType === 'SUPER_ADMIN') return 'danger'
@@ -132,6 +169,37 @@ async function onToggleActive(row, active) {
   }
 }
 
+async function loadMe() {
+  try {
+    const { data } = await axios.get('/api/auth/me')
+    if (Number(data.code) !== 200) {
+      me.value = null
+      return
+    }
+    me.value = data.data || null
+  } catch {
+    me.value = null
+  }
+}
+
+async function onUserTypeChange(row, newType) {
+  if (newType === normalizeUserTypeForSelect(row.userType)) return
+  assigningTypeId.value = row.id
+  try {
+    const { data } = await axios.put(`/api/user/user-type/${row.id}`, { userType: newType })
+    if (Number(data.code) !== 200) {
+      ElMessage.error(data.msg || '更新失败')
+      return
+    }
+    row.userType = newType
+    ElMessage.success(data.msg || '已更新权限类型')
+  } catch (e) {
+    ElMessage.error(e.response?.data?.msg || e.message || '更新失败')
+  } finally {
+    assigningTypeId.value = null
+  }
+}
+
 async function onDelete(row) {
   try {
     await ElMessageBox.confirm(`确定删除用户「${row.username}」？`, '确认', { type: 'warning' })
@@ -152,6 +220,7 @@ async function onDelete(row) {
 }
 
 onMounted(() => {
+  loadMe()
   loadList()
 })
 </script>

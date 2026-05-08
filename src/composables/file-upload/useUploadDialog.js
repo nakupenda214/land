@@ -6,6 +6,7 @@ export function useUploadDialog({
   currentProject,
   projectOptions,
   startPolling,
+  refreshData,
   uploadApi = batchUploadFiles
 }) {
   const uploadDialogVisible = ref(false)
@@ -67,6 +68,9 @@ export function useUploadDialog({
       .then((res) => {
         if (res.data && res.data.code === 200) {
           ElMessage.success('文件上传成功')
+          if (typeof refreshData === 'function') {
+            refreshData()
+          }
           startPolling()
         } else {
           const errorMsg = res.data?.msg || '服务器返回异常，上传失败'
@@ -114,7 +118,7 @@ export function useUploadDialog({
       .then(() => {
         handleRealUpload()
       })
-      .catch(() => {})
+      .catch(() => { })
   }
 
   return {

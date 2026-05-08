@@ -61,9 +61,9 @@ const props = defineProps({
 const emit = defineEmits(['update:selectedGroups'])
 
 const groupMeta = [
-  { key: 'systemCalculated', title: '系统计算口径', availableField: 'systemCalculatedAvailable' },
-  { key: 'projectPartyDeclared', title: '项目方声明口径', availableField: 'projectPartyDeclaredAvailable' },
-  { key: 'planningCalculated', title: '规划复核口径', availableField: 'planningCalculatedAvailable' }
+  { key: 'systemCalculated', title: '实测报告对比结果', availableField: 'systemCalculatedAvailable' },
+  { key: 'projectPartyDeclared', title: '项目方比对结果', availableField: 'projectPartyDeclaredAvailable' },
+  { key: 'planningCalculated', title: '规划复核对比结果', availableField: 'planningCalculatedAvailable' }
 ]
 
 const formatArea = (value) => {

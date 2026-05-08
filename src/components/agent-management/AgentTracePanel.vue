@@ -51,32 +51,71 @@
           </el-table>
         </aside>
 
-        <section class="obs-run-card">
-          <div class="obs-run-body">
+        <section class="obs-run-card" aria-label="观测发题">
+          <div class="obs-run-cap">
+            <span class="obs-run-cap-kicker">观测</span>
+            <span class="obs-run-cap-muted">Enter 发送 · Shift+Enter 换行</span>
+          </div>
+          <div class="obs-run-inner">
             <el-input
               v-model="obsQuery"
               type="textarea"
-              :autosize="{ minRows: 1, maxRows: 3 }"
-              placeholder="Enter 发送 · Shift+Enter 换行"
+              :autosize="{ minRows: 2, maxRows: 5 }"
+              placeholder="输入问题…"
               resize="none"
-              class="obs-input"
+              class="obs-input obs-input-full"
               :disabled="obsStreaming"
               @keydown.enter.exact.prevent="sendObservation"
               @keydown.shift.enter.stop
             />
-            <div class="obs-actions">
-              <el-checkbox v-model="obsHumanReview" size="small" class="obs-hitl-check" :disabled="obsStreaming">
-                人工复核计划
-              </el-checkbox>
-              <el-button plain size="small" class="obs-btn obs-btn-new" @click="resetObservationSession">新会话</el-button>
-              <div class="obs-actions-row">
-                <el-button v-if="obsStreaming" type="warning" plain size="small" class="obs-btn" @click="stopObservation">停止</el-button>
-                <el-button type="primary" class="obs-btn obs-btn-send" :loading="obsStreaming" :disabled="!obsQuery.trim()" @click="sendObservation">
-                  {{ obsStreaming ? '执行中…' : '发送' }}
+            <div class="obs-toolbar">
+              <div class="obs-toolbar-left">
+                <el-tooltip content="开启后，Planner 产出计划需人工通过再继续执行" placement="top">
+                  <div class="obs-hitl-switch" role="group" aria-label="人工复核计划">
+                    <el-switch v-model="obsHumanReview" size="small" :disabled="obsStreaming" />
+                    <span class="obs-hitl-switch-label">复核计划</span>
+                  </div>
+                </el-tooltip>
+              </div>
+              <div class="obs-toolbar-right">
+                <el-tooltip content="新会话（清空当前观测缓冲）" placement="top">
+                  <el-button
+                    :icon="CirclePlus"
+                    circle
+                    size="small"
+                    plain
+                    class="obs-tool-btn"
+                    aria-label="新会话"
+                    @click="resetObservationSession"
+                  />
+                </el-tooltip>
+                <el-button
+                  v-if="obsStreaming"
+                  type="warning"
+                  plain
+                  size="small"
+                  class="obs-stop-btn"
+                  aria-label="停止"
+                  @click="stopObservation"
+                >
+                  停止
                 </el-button>
+                <el-tooltip :content="obsQuery.trim() ? '发送' : '请先输入问题'" placement="top">
+                  <el-button
+                    type="primary"
+                    size="small"
+                    class="obs-send-btn"
+                    :icon="Promotion"
+                    round
+                    :loading="obsStreaming"
+                    :disabled="!obsQuery.trim()"
+                    aria-label="发送"
+                    @click="sendObservation"
+                  />
+                </el-tooltip>
               </div>
             </div>
-            <div v-if="obsAwaitingHumanReview" class="obs-hitl-bar">
+            <div v-if="showObsHitlPendingBar" class="obs-hitl-bar">
               <p class="obs-hitl-hint">
                 计划已挂起，请填写说明后选择通过或驳回（将发起新的 SSE 续跑）。关闭本区仅影响展示：同一会话 Trace 仍为运行中，可随时续跑。
               </p>
@@ -100,7 +139,7 @@
                 </el-button>
               </div>
             </div>
-            <div v-else-if="obsHitlBarDismissed && (obsHitlTraceId || obsThreadId)" class="obs-hitl-dismissed-strip">
+            <div v-else-if="showObsHitlDismissedStrip" class="obs-hitl-dismissed-strip">
               <p class="obs-hitl-hint">
                 已收起复核区。Trace 未结束：请点「继续复核」后填写说明并选择通过或驳回；需使用同一 threadId（见上方会话）发起续跑。
               </p>
@@ -129,27 +168,34 @@
         </template>
         <template v-else>
           <div class="detail-head">
-            <div>
-              <h3>{{ selectedSummary }}</h3>
-            </div>
-            <div class="detail-actions">
-              <el-button size="small" :loading="detailLoading" @click="reloadDetail">重载详情</el-button>
-            </div>
-          </div>
-
-          <div class="detail-meta">
-            <div class="meta-chip">
-              <span class="meta-label">status</span>
-              <span class="status-pill lg" :data-status="detail?.status">{{ detail?.status }}</span>
-            </div>
-            <div class="meta-chip">
-              <span class="meta-label">time</span>
-              <span class="meta-val">{{ formatTime(detail?.startedAt) }} → {{ formatTime(detail?.endedAt) }}</span>
+            <div class="detail-head-col">
+              <div class="detail-title-line">
+                <h3 class="detail-summary-heading" :title="selectedSummary">{{ selectedSummary }}</h3>
+                <el-tooltip content="重载详情" placement="left">
+                  <el-button
+                    :icon="Refresh"
+                    circle
+                    size="small"
+                    plain
+                    class="detail-reload-btn"
+                    :loading="detailLoading"
+                    aria-label="重载详情"
+                    @click="reloadDetail"
+                  />
+                </el-tooltip>
+              </div>
+              <div class="detail-subline" aria-label="Trace 状态与时间">
+                <span class="status-pill detail-status-pill" :data-status="detail?.status">{{
+                  traceStatusBrief(detail?.status)
+                }}</span>
+                <span class="detail-time-compact">{{ formatTraceWindowCompact(detail?.startedAt, detail?.endedAt) }}</span>
+              </div>
             </div>
           </div>
 
           <AgentTraceTopology
             v-if="layoutNodes.length"
+            v-model:positions="topologyPositions"
             layout-scope="agent_main"
             :layout-nodes="layoutNodes"
             :skeleton-edges="skeletonEdges"
@@ -222,15 +268,15 @@
           <div class="filter-bar">
             <span class="filter-label">事件类型</span>
             <el-checkbox-group v-model="typeFilterList" size="small" class="type-group">
-              <el-checkbox-button v-for="t in allTypes" :key="t" :label="t">
+              <el-checkbox-button v-for="t in allTypes" :key="t" :value="t">
                 {{ t }}
               </el-checkbox-button>
             </el-checkbox-group>
             <span class="filter-label">TRACE_BAG 分区</span>
             <el-radio-group v-model="traceBagLaneFilter" size="small" class="lane-group">
-              <el-radio-button label="all">全部</el-radio-button>
-              <el-radio-button label="governance">治理</el-radio-button>
-              <el-radio-button label="business">业务</el-radio-button>
+              <el-radio-button value="all">全部</el-radio-button>
+              <el-radio-button value="governance">治理</el-radio-button>
+              <el-radio-button value="business">业务</el-radio-button>
             </el-radio-group>
             <span v-if="typeFilterList.length" class="filter-hint">已选 {{ typeFilterList.length }} 类；清空则显示全部</span>
           </div>
@@ -320,51 +366,72 @@
             </ol>
           </el-scrollbar>
 
-          <div v-if="selectedId" class="final-answer-card">
+          <div v-if="llmStreamRows.length" class="final-answer-card reasoning-stream-card">
+            <el-collapse v-model="reasoningCollapseNames" class="reasoning-collapse">
+              <el-collapse-item name="reasoning-panel">
+                <template #title>
+                  <span class="reasoning-collapse-title">思考流（Reasoning）</span>
+
+                </template>
+                <div
+                  ref="llmStreamWrapRef"
+                  class="llm-stream-wrap"
+                  @scroll.passive="onLlmStreamScroll"
+                >
+                  <div v-for="row in llmStreamRows" :key="`llm-${row.nodeId}`" class="llm-stream-node">
+                    <div class="llm-stream-node-head">
+                      <span class="llm-stream-node-title">{{ row.nodeId }}</span>
+                      <span class="llm-stream-node-meta">{{ row.reasoningChars }} chars / {{ row.answerChars }} chars</span>
+                    </div>
+                    <div class="llm-stream-grid">
+                      <section class="llm-stream-pane">
+                        <h5>思考过程</h5>
+                        <div
+                          class="llm-stream-body"
+                          @scroll.passive="onLlmPaneScroll(row.nodeId, 'reasoning')"
+                          :ref="(el) => setLlmPaneRef(el, row.nodeId, 'reasoning')"
+                        >{{ row.reasoningText || '（无）' }}</div>
+                      </section>
+                      <section class="llm-stream-pane">
+                        <h5>正常回答</h5>
+                        <div
+                          class="llm-stream-body"
+                          @scroll.passive="onLlmPaneScroll(row.nodeId, 'answer')"
+                          :ref="(el) => setLlmPaneRef(el, row.nodeId, 'answer')"
+                        >{{ row.answerText || '（无）' }}</div>
+                      </section>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="!llmAutoFollow" class="llm-stream-float">
+                  <el-button size="small" type="primary" plain @click="resumeLlmAutoFollow">
+                    跟随最新内容
+                  </el-button>
+                </div>
+              </el-collapse-item>
+            </el-collapse>
+          </div>
+
+          <div v-if="selectedId && finalAnswerText" class="final-answer-card">
             <div class="final-answer-cap">模型最终答复</div>
-            <div v-if="finalAnswerText" class="final-answer-body agent-md" v-html="finalAnswerHtml" />
-            <div v-else class="final-answer-body final-answer-placeholder">
-              {{ finalAnswerPlaceholder }}
+            <div class="final-answer-body agent-md" v-html="finalAnswerHtml" />
+          </div>
+
+          <div v-if="selectedId && traceRasterUrl" class="final-answer-card trace-raster-chart-wrap">
+            <div class="final-answer-cap">Python 输出图表</div>
+            <div class="trace-raster-inner">
+              <img class="trace-raster-img" :src="traceRasterUrl" alt="" />
             </div>
           </div>
 
-          <div v-if="llmStreamRows.length" class="final-answer-card">
-            <div class="final-answer-cap">思考流（Reasoning）</div>
+          <div v-if="selectedId && traceChartHostVisible" class="final-answer-card trace-chart-card-wrap">
+            <div class="final-answer-cap">查询结果图表（ECharts）</div>
             <div
-              ref="llmStreamWrapRef"
-              class="llm-stream-wrap"
-              @scroll.passive="onLlmStreamScroll"
-            >
-              <div v-for="row in llmStreamRows" :key="`llm-${row.nodeId}`" class="llm-stream-node">
-                <div class="llm-stream-node-head">
-                  <span class="llm-stream-node-title">{{ row.nodeId }}</span>
-                  <span class="llm-stream-node-meta">{{ row.reasoningChars }} chars / {{ row.answerChars }} chars</span>
-                </div>
-                <div class="llm-stream-grid">
-                  <section class="llm-stream-pane">
-                    <h5>思考过程</h5>
-                    <div
-                      class="llm-stream-body"
-                      @scroll.passive="onLlmPaneScroll(row.nodeId, 'reasoning')"
-                      :ref="(el) => setLlmPaneRef(el, row.nodeId, 'reasoning')"
-                    >{{ row.reasoningText || '（无）' }}</div>
-                  </section>
-                  <section class="llm-stream-pane">
-                    <h5>正常回答</h5>
-                    <div
-                      class="llm-stream-body"
-                      @scroll.passive="onLlmPaneScroll(row.nodeId, 'answer')"
-                      :ref="(el) => setLlmPaneRef(el, row.nodeId, 'answer')"
-                    >{{ row.answerText || '（无）' }}</div>
-                  </section>
-                </div>
-              </div>
-            </div>
-            <div v-if="!llmAutoFollow" class="llm-stream-float">
-              <el-button size="small" type="primary" plain @click="resumeLlmAutoFollow">
-                跟随最新内容
-              </el-button>
-            </div>
+              :id="`agent-chart-${selectedId}-obs`"
+              class="trace-echarts-host"
+              role="img"
+              aria-label="查询结果图表"
+            />
           </div>
 
           <div v-if="selectedId" class="anno-card">
@@ -527,7 +594,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Loading } from '@element-plus/icons-vue'
+import { CirclePlus, Loading, Promotion, Refresh } from '@element-plus/icons-vue'
 import {
   getAgentGraphSkeleton,
   getAgentMongoQueryResult,
@@ -561,10 +628,16 @@ import {
   layoutGraphLr,
   resolveCanonicalEndId
 } from '@/components/agent-management/agent-trace-topology-layout.js'
+import {
+  buildRasterChartDataUrl,
+  coerceChartSpecForRender,
+  mountAgentAssistantChart
+} from '@/utils/agent-assistant-chart.js'
 
 const OBS_THREAD_KEY = 'agent_trace_obs_thread_id'
 /** 刷新后恢复：待人审 + 是否已点「稍后」收起条 */
 const OBS_HITL_PENDING_KEY = 'agent_trace_obs_hitl_pending'
+
 const limit = ref(50)
 const listLoading = ref(false)
 const detailLoading = ref(false)
@@ -578,6 +651,8 @@ const typeFilterList = ref([])
 const traceBagLaneFilter = ref('all')
 /** 拓扑节点点击 → 时间轴仅看相关事件 */
 const topologySelectedId = ref('')
+/** 拓扑节点坐标：父级持有；初始为空，进入页面后由 AgentTraceTopology 从后端拉取并回填 */
+const topologyPositions = ref({})
 /** 拓扑边点击 → 时间轴联动到 GRAPH_EDGE 事件 */
 const topologySelectedEdgeKey = ref('')
 
@@ -612,6 +687,25 @@ const obsHitlSubmitting = ref(false)
 const obsHitlPlanPreview = ref('')
 /** 点「稍后处理」仅收起条，不代表会话取消 */
 const obsHitlBarDismissed = ref(false)
+/**
+ * 待复核表单条：有 traceId 时仅在与列表所选 trace 一致时展示，避免换选其他行仍像在说当前 trace。
+ */
+const showObsHitlPendingBar = computed(() => {
+  if (!obsAwaitingHumanReview.value) return false
+  const tr = String(obsHitlTraceId.value || '').trim()
+  if (tr) return String(selectedId.value || '').trim() === tr
+  return true
+})
+/**
+ * 「稍后」收起后的提示条：同上，与 selectedId 对齐后再显示。
+ */
+const showObsHitlDismissedStrip = computed(() => {
+  if (!obsHitlBarDismissed.value) return false
+  if (!String(obsHitlTraceId.value || '').trim() && !String(obsThreadId.value || '').trim()) return false
+  const tr = String(obsHitlTraceId.value || '').trim()
+  if (tr) return String(selectedId.value || '').trim() === tr
+  return true
+})
 const obsHitlPlanDialogVisible = ref(false)
 /** Python 流合并进 reasoning 时，每 (node,section) 只加一次分段标题 */
 const obsPyReasoningPrefixed = ref(new Set())
@@ -641,6 +735,8 @@ const annSaving = ref(false)
 const annVersion = ref(null)
 /** 人工标注区默认折叠；name 存在时展开 */
 const annoCollapseNames = ref([])
+/** 思考流区默认可折叠，默认展开 */
+const reasoningCollapseNames = ref(['reasoning-panel'])
 
 const events = computed(() => {
   const e = detail.value?.events
@@ -886,48 +982,125 @@ const finalAnswerText = computed(() => {
   return ''
 })
 
-const finalAnswerPlaceholder = computed(() => {
-  const st = String(detail.value?.status || '').toUpperCase()
-  if (st === 'RUNNING') return '（进行中：尚未写入最终答复摘要）'
-  if (st === 'SUCCESS' && !finalAnswerText.value) {
-    return '（已完成：根文档无 finalAnswerPreview，且事件中无 final_answer 袋与答复类 LLM_RESPONSE；若刚升级前后端请重跑一条 trace）'
-  }
-  if (st === 'FAILED' || st === 'CANCELLED') return '（本 trace 无最终答复）'
-  return '（暂无最终答复摘要）'
+const finalAnswerHtml = computed(() => renderAgentMarkdownHtml(displayedFinalAnswerText.value))
+
+/** 根文档 rasterChartBase64 / rasterChartMime（Python stdout 剥离图，与 SSE complete 同步落库） */
+const traceRasterUrl = computed(() => {
+  const d = detail.value
+  if (!d) return null
+  const b64 = d.rasterChartBase64 ?? d.raster_chart_base64
+  const mime = d.rasterChartMime ?? d.raster_chart_mime
+  return buildRasterChartDataUrl(mime, b64)
 })
 
-const finalAnswerHtml = computed(() => renderAgentMarkdownHtml(displayedFinalAnswerText.value))
+/** 根文档 chartViewSpec / chartDataPreview（与 SSE complete 同步落库；旧 trace 无此字段） */
+const traceChartHostVisible = computed(() => {
+  if (!selectedId.value || !detail.value) return false
+  const raw = detail.value.chartViewSpec ?? detail.value.chart_view_spec
+  if (raw == null || !String(raw).trim()) return false
+  let spec
+  try {
+    spec = JSON.parse(String(raw))
+  } catch {
+    return false
+  }
+  let rows = []
+  const prevRaw = detail.value.chartDataPreview ?? detail.value.chart_data_preview
+  if (prevRaw != null && String(prevRaw).trim()) {
+    try {
+      const pr = JSON.parse(String(prevRaw))
+      if (Array.isArray(pr)) rows = pr
+    } catch {
+      /* ignore */
+    }
+  }
+  const eff = coerceChartSpecForRender(spec, rows) || spec
+  const t = String(eff?.type || '').toLowerCase()
+  return !!t && t !== 'table'
+})
+
+/** Trace 详情 ECharts：与 mountAgentAssistantChart 约定 id → #agent-chart-${id} */
+let traceChartMountGen = 0
+let traceChartLastMsg = null
+function disposeTraceDetailChart() {
+  if (traceChartLastMsg?.chartDispose) {
+    try {
+      traceChartLastMsg.chartDispose()
+    } catch {
+      /* ignore */
+    }
+    traceChartLastMsg = null
+  }
+}
 
 const LLM_STREAM_REASON_SEP = '\n\n── 同节点后续推理（trace 摘要）──\n\n'
 const LLM_STREAM_ANSWER_SEP = '\n\n── 同节点后续输出（trace）──\n\n'
 
+function llmStreamSafeMin(a, b) {
+  const fa = Number.isFinite(a)
+  const fb = Number.isFinite(b)
+  if (!fa && !fb) return Number.MAX_SAFE_INTEGER
+  if (!fa) return b
+  if (!fb) return a
+  return Math.min(a, b)
+}
+
 const llmStreamRows = computed(() => {
+  const evs = events.value
+  /** 节点在 trace 中首次出现 LLM 相关事件的序号（1-based，与事件时间线一致） */
+  const traceFirstIdx = {}
+  let scanIdx = 0
+  for (const ev of evs) {
+    scanIdx += 1
+    if (ev?.type === 'TRACE_BAG' && String(ev?.payload?.facet || '') === 'llm_reasoning') {
+      const kv = ev?.payload?.kv || {}
+      const nodeId = String(kv.nodeId || ev?.payload?.nodeId || '').trim() || 'unknown'
+      const preview = String(kv.reasoningPreview || '')
+      if (!preview) continue
+      const cur = traceFirstIdx[nodeId]
+      if (cur == null || scanIdx < cur) traceFirstIdx[nodeId] = scanIdx
+      continue
+    }
+    if (ev?.type === 'LLM_RESPONSE') {
+      const nodeId = String(ev?.source || '').trim() || 'unknown'
+      const payload = ev?.payload || {}
+      const text = String(payload.responseFull || payload.responsePreview || '')
+      if (!text) continue
+      const cur = traceFirstIdx[nodeId]
+      if (cur == null || scanIdx < cur) traceFirstIdx[nodeId] = scanIdx
+    }
+  }
+
   const merged = {}
   const live = liveLlmNodeStreams.value || {}
   const hadLiveReasoning = new Set()
   const hadLiveAnswer = new Set()
   for (const [nodeIdRaw, row] of Object.entries(live)) {
     const nodeId = String(nodeIdRaw || '').trim() || 'unknown'
+    const rowFs = Number(row?.firstSeen)
     const x = merged[nodeId] || {
       nodeId,
-      firstSeen: Number(row?.firstSeen ?? Number.MAX_SAFE_INTEGER),
+      firstSeen: Number.isFinite(rowFs) ? rowFs : Number.MAX_SAFE_INTEGER,
       reasoningText: String(row?.reasoningText || ''),
       answerText: String(row?.answerText || '')
     }
-    x.firstSeen = Math.min(x.firstSeen, Number(row?.firstSeen ?? Number.MAX_SAFE_INTEGER))
+    x.firstSeen = llmStreamSafeMin(
+      x.firstSeen,
+      Number.isFinite(rowFs) ? rowFs : Number.MAX_SAFE_INTEGER
+    )
     if (String(x.reasoningText || '').trim()) hadLiveReasoning.add(nodeId)
     if (String(x.answerText || '').trim()) hadLiveAnswer.add(nodeId)
     merged[nodeId] = x
   }
   let eventIdx = 0
-  for (const ev of events.value) {
+  for (const ev of evs) {
     eventIdx += 1
     const eventFirstSeen = 1000000 + eventIdx
     if (ev?.type === 'TRACE_BAG' && String(ev?.payload?.facet || '') === 'llm_reasoning') {
       const kv = ev?.payload?.kv || {}
       const nodeId = String(kv.nodeId || ev?.payload?.nodeId || '').trim() || 'unknown'
       const x = merged[nodeId] || { nodeId, firstSeen: eventFirstSeen, reasoningText: '', answerText: '' }
-      x.firstSeen = Math.min(x.firstSeen, eventFirstSeen)
+      x.firstSeen = llmStreamSafeMin(x.firstSeen, eventFirstSeen)
       const preview = String(kv.reasoningPreview || '')
       if (!preview) {
         merged[nodeId] = x
@@ -950,7 +1123,7 @@ const llmStreamRows = computed(() => {
       const text = String(payload.responseFull || payload.responsePreview || '')
       if (!text) continue
       const x = merged[nodeId] || { nodeId, firstSeen: eventFirstSeen, reasoningText: '', answerText: '' }
-      x.firstSeen = Math.min(x.firstSeen, eventFirstSeen)
+      x.firstSeen = llmStreamSafeMin(x.firstSeen, eventFirstSeen)
       if (hadLiveAnswer.has(nodeId)) {
         if (!x.answerText) x.answerText = text
       } else if (!x.answerText) {
@@ -961,6 +1134,8 @@ const llmStreamRows = computed(() => {
       merged[nodeId] = x
     }
   }
+
+  const maxEv = evs.length
   return Object.values(merged)
     .map((x) => ({
       ...x,
@@ -969,8 +1144,14 @@ const llmStreamRows = computed(() => {
     }))
     .filter((x) => x.reasoningChars > 0 || x.answerChars > 0)
     .sort((a, b) => {
-      // 以「首次出现顺序」为主：计划驱动时 Python 常在 MQL 之后，勿用静态拓扑序压过运行时序
-      if (a.firstSeen !== b.firstSeen) return a.firstSeen - b.firstSeen
+      // 统一时间线：trace 内序号优先；尚未落库的实时块排在 trace 之后（保持 live 内序）
+      const ta = traceFirstIdx[a.nodeId]
+      const tb = traceFirstIdx[b.nodeId]
+      const fa = Number.isFinite(a.firstSeen) ? a.firstSeen : Number.MAX_SAFE_INTEGER
+      const fb = Number.isFinite(b.firstSeen) ? b.firstSeen : Number.MAX_SAFE_INTEGER
+      const ka = Number.isFinite(ta) ? ta : maxEv + fa
+      const kb = Number.isFinite(tb) ? tb : maxEv + fb
+      if (ka !== kb) return ka - kb
       const oa = agentRuntimeLlmStreamOrderIndex(a.nodeId)
       const ob = agentRuntimeLlmStreamOrderIndex(b.nodeId)
       if (oa !== ob) return oa - ob
@@ -987,6 +1168,41 @@ function formatTime(ms) {
   } catch {
     return String(ms)
   }
+}
+
+/** 详情区短状态文案（与 data-status 配色仍用英文枚举） */
+function traceStatusBrief(statusRaw) {
+  const s = String(statusRaw || '').toUpperCase()
+  const m = {
+    SUCCESS: '成功',
+    RUNNING: '运行中',
+    AWAITING_HUMAN: '待人审',
+    FAILED: '失败',
+    CANCELLED: '已取消',
+    PENDING: '排队'
+  }
+  return m[s] || (statusRaw ? String(statusRaw) : '—')
+}
+
+/** 起止时间一行缩略：同日用「M/D HH:mm–HH:mm」，跨日再展开 */
+function formatTraceWindowCompact(startMs, endMs) {
+  if (startMs == null || startMs === '') return '—'
+  const a = new Date(Number(startMs))
+  if (Number.isNaN(a.getTime())) return '—'
+  const pad = (n) => String(n).padStart(2, '0')
+  const hm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  const md = (d) => `${d.getMonth() + 1}/${d.getDate()}`
+  if (endMs == null || endMs === '') {
+    return `${md(a)} ${hm(a)} → …`
+  }
+  const b = new Date(Number(endMs))
+  if (Number.isNaN(b.getTime())) {
+    return `${md(a)} ${hm(a)} → …`
+  }
+  if (a.toDateString() === b.toDateString()) {
+    return `${md(a)} ${hm(a)}–${hm(b)}`
+  }
+  return `${md(a)} ${hm(a)} → ${md(b)} ${hm(b)}`
 }
 
 function stopFinalAnswerTyping() {
@@ -1297,6 +1513,7 @@ async function loadDetail(id) {
   detailLoading.value = true
   try {
     detail.value = await getAgentTrace(id)
+    clearObsHitlIfTraceTerminal(detail.value)
     // 仅切换不同 trace 时清空观测 SSE 合并缓冲；同一 trace 重载详情时保留，避免思考流/最终区「整块消失」
     if (!sameTraceReload) {
       liveLlmNodeStreams.value = {}
@@ -1394,6 +1611,7 @@ function startPolling() {
     if (!id) return
     try {
       detail.value = await getAgentTrace(id)
+      clearObsHitlIfTraceTerminal(detail.value)
       syncObsHitlPlanFromDetail()
     } catch {
       /* 忽略单次失败 */
@@ -1470,6 +1688,17 @@ function restoreObsHitlPending() {
   } catch {
     /* ignore */
   }
+}
+
+/** Trace 已终局时强制收起复核 UI（防 SSE 误判或列表未刷新时的残留态） */
+function clearObsHitlIfTraceTerminal(d) {
+  const st = String(d?.status || '').toUpperCase()
+  if (st !== 'SUCCESS' && st !== 'FAILED' && st !== 'CANCELLED') return
+  obsAwaitingHumanReview.value = false
+  obsHitlBarDismissed.value = false
+  obsHitlPlanPreview.value = ''
+  obsHitlNote.value = ''
+  clearObsHitlPending()
 }
 
 /** 详情区与观测会话对齐时，用 Mongo 事件恢复「仍待人审」态（补 localStorage 丢失） */
@@ -1634,6 +1863,7 @@ async function submitHumanReviewFeedback(approved) {
     try {
       if (selectedId.value) {
         detail.value = await getAgentTrace(selectedId.value)
+        clearObsHitlIfTraceTerminal(detail.value)
         syncObsHitlPlanFromDetail()
       }
     } catch {
@@ -1833,6 +2063,60 @@ watch(
   { immediate: true }
 )
 
+watch(
+  () => [
+    selectedId.value,
+    detail.value?.chartViewSpec ?? detail.value?.chart_view_spec,
+    detail.value?.chartDataPreview ?? detail.value?.chart_data_preview,
+    detailLoading.value
+  ],
+  async () => {
+    const gen = ++traceChartMountGen
+    disposeTraceDetailChart()
+    if (detailLoading.value || !selectedId.value) return
+    const d = detail.value
+    if (!d) return
+    const sid = selectedId.value.trim()
+    const docId = String(d._id || d.traceId || '').trim()
+    if (docId && docId !== sid) return
+    const specRaw = d.chartViewSpec ?? d.chart_view_spec
+    const prevRaw = d.chartDataPreview ?? d.chart_data_preview
+    if (specRaw == null || !String(specRaw).trim()) return
+    let spec
+    try {
+      spec = JSON.parse(String(specRaw))
+    } catch {
+      return
+    }
+    const t = String(spec?.type || '').toLowerCase()
+    if (!t || t === 'table') return
+    let rows = []
+    if (prevRaw != null && String(prevRaw).trim()) {
+      try {
+        const pr = JSON.parse(String(prevRaw))
+        if (Array.isArray(pr)) rows = pr
+      } catch {
+        /* ignore */
+      }
+    }
+    const msg = { id: `${sid}-obs`, chartViewSpec: spec, chartPreviewRows: rows }
+    await nextTick()
+    await mountAgentAssistantChart(msg)
+    if (gen !== traceChartMountGen) {
+      if (typeof msg.chartDispose === 'function') {
+        try {
+          msg.chartDispose()
+        } catch {
+          /* ignore */
+        }
+      }
+      return
+    }
+    traceChartLastMsg = msg
+  },
+  { flush: 'post' }
+)
+
 watch(selectedId, (id) => {
   inspectVisible.value = false
   inspectTitle.value = ''
@@ -1840,6 +2124,7 @@ watch(selectedId, (id) => {
   onQueryResultClosed()
   topologySelectedEdgeKey.value = ''
   annoCollapseNames.value = []
+  reasoningCollapseNames.value = ['reasoning-panel']
   if (!id) resetAnnForm()
 })
 
@@ -1867,6 +2152,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  disposeTraceDetailChart()
   stopPolling()
   stopObservation()
   stopFinalAnswerTyping()
@@ -2158,6 +2444,12 @@ watch(
   background: #fffbeb;
 }
 
+.status-pill[data-status='AWAITING_HUMAN'] {
+  color: #6b21a8;
+  border-color: #e9d5ff;
+  background: #faf5ff;
+}
+
 .status-pill[data-status='FAILED'],
 .status-pill[data-status='CANCELLED'] {
   color: #b91c1c;
@@ -2211,23 +2503,64 @@ watch(
 }
 
 .detail-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
   margin-bottom: 12px;
 }
 
-.detail-head h3 {
+.detail-head-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.detail-title-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.detail-summary-heading {
   margin: 0;
-  font-size: 16px;
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
   font-weight: 600;
   color: #204977;
-  max-width: 80ch;
   line-height: 1.45;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
+  word-break: break-word;
+}
+
+.detail-reload-btn {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.detail-subline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.detail-status-pill {
+  font-size: 11px;
+  padding: 1px 8px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  font-weight: 700;
+}
+
+.detail-time-compact {
+  font-family: 'Fragment Mono', ui-monospace, monospace;
+  font-size: 11px;
+  color: #64748b;
+  letter-spacing: -0.02em;
 }
 
 .mono-clip {
@@ -2239,43 +2572,6 @@ watch(
 .detail-sub {
   margin: 0;
   color: #5c6f8d;
-}
-
-.detail-actions {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-}
-
-.detail-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.meta-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  border-radius: 12px;
-  background: #f4f8ff;
-  border: 1px solid #dce7f8;
-}
-
-.meta-label {
-  font-size: 10px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: #5978a5;
-  font-weight: 700;
-}
-
-.meta-val {
-  font-family: 'Fragment Mono', ui-monospace, monospace;
-  font-size: 12px;
-  color: #1a3456;
 }
 
 .anno-card {
@@ -2764,6 +3060,104 @@ watch(
   background: linear-gradient(165deg, #f0fdfa 0%, #ecfeff 100%);
 }
 
+.trace-chart-card-wrap .trace-echarts-host {
+  margin-top: 10px;
+  height: 260px;
+  width: 100%;
+  min-height: 200px;
+  border-radius: 10px;
+  border: 1px solid rgba(14, 116, 144, 0.22);
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.trace-raster-chart-wrap .trace-raster-inner {
+  margin-top: 10px;
+  padding: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(14, 116, 144, 0.22);
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.trace-raster-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.reasoning-stream-card {
+  padding-bottom: 14px;
+  /* 子组件默认白底与卡片渐变叠在一起会在顶缘露出白条；裁剪圆角内区域 */
+  overflow: hidden;
+}
+
+.reasoning-collapse {
+  border: none;
+  background: transparent;
+  --el-collapse-border-color: transparent;
+  /* Element Plus：头/内容区默认 var(--el-fill-color-blank)，盖住卡片渐变 */
+  --el-collapse-header-bg-color: transparent;
+  --el-collapse-content-bg-color: transparent;
+}
+
+.reasoning-collapse :deep(.el-collapse-item) {
+  background: transparent;
+  border: none;
+}
+
+.reasoning-collapse :deep(.el-collapse-item__header) {
+  align-items: center;
+  padding: 0 0 12px;
+  min-height: auto;
+  line-height: 1.35;
+  border-bottom: 1px solid rgba(13, 148, 136, 0.28);
+  font-weight: inherit;
+  background-color: transparent !important;
+}
+
+.reasoning-collapse :deep(.el-collapse-item__header.is-active) {
+  background-color: transparent !important;
+}
+
+.reasoning-collapse :deep(.el-collapse-item__header:hover) {
+  background-color: rgba(255, 255, 255, 0.28) !important;
+}
+
+.reasoning-collapse :deep(.el-collapse-item__title) {
+  background: transparent;
+}
+
+.reasoning-collapse :deep(.el-collapse-item__arrow) {
+  margin-right: 8px;
+}
+
+.reasoning-collapse-title {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #0f766e;
+}
+
+.reasoning-collapse-meta {
+  margin-left: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  font-family: 'Fragment Mono', ui-monospace, monospace;
+}
+
+.reasoning-collapse :deep(.el-collapse-item__wrap) {
+  border-bottom: none;
+  background-color: transparent;
+}
+
+.reasoning-collapse :deep(.el-collapse-item__content) {
+  padding: 14px 0 0;
+  background-color: transparent;
+}
+
 .final-answer-cap {
   font-size: 16px;
   font-weight: 800;
@@ -2782,13 +3176,6 @@ watch(
   word-break: break-word;
   max-height: 360px;
   overflow: auto;
-}
-
-.final-answer-body.final-answer-placeholder {
-  font-size: 13px;
-  color: #64748b;
-  font-style: italic;
-  max-height: none;
 }
 
 .final-answer-body.agent-md :deep(h1),
@@ -3040,7 +3427,7 @@ watch(
 .obs-run-card {
   position: relative;
   margin: 0;
-  padding: 14px;
+  padding: 12px 14px 14px;
   border: none;
   border-radius: 0;
   box-shadow: none;
@@ -3048,18 +3435,92 @@ watch(
   min-width: 0;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  gap: 8px;
+  justify-content: flex-start;
 }
 
-.obs-run-body {
+.obs-run-cap {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: baseline;
+  justify-content: space-between;
   gap: 10px;
+  flex-wrap: wrap;
+}
+
+.obs-run-cap-kicker {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: #5978a5;
+}
+
+.obs-run-cap-muted {
+  font-size: 10px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.obs-run-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.obs-input-full {
+  width: 100%;
+}
+
+.obs-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.obs-toolbar-left,
+.obs-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.obs-toolbar-right {
+  margin-left: auto;
+}
+
+.obs-hitl-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: default;
+}
+
+.obs-hitl-switch-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  user-select: none;
+}
+
+.obs-tool-btn {
+  border-color: #c5d4ec !important;
+}
+
+.obs-send-btn {
+  min-width: 36px;
+  padding: 6px 12px;
+}
+
+.obs-stop-btn {
+  font-weight: 700;
 }
 
 .obs-input {
-  flex: 1 1 220px;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
@@ -3158,17 +3619,6 @@ watch(
   box-sizing: border-box;
 }
 
-.obs-hitl-check {
-  width: 100%;
-  align-self: flex-start;
-  line-height: 1.25;
-}
-
-.obs-hitl-check :deep(.el-checkbox__label) {
-  font-size: 11px;
-  white-space: normal;
-}
-
 .obs-input :deep(.el-textarea__inner) {
   font-family: inherit;
   border-radius: 12px;
@@ -3176,49 +3626,15 @@ watch(
   line-height: 1.45;
 }
 
-.obs-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex-shrink: 0;
-  width: 96px;
-}
-
-.obs-actions-row {
-  display: flex;
-  gap: 6px;
-  min-width: 0;
-}
-
-.obs-actions-row .obs-btn {
-  width: auto;
-  flex: 1 1 0;
-  min-width: 0;
-}
-
-.obs-btn {
-  width: 100%;
-  min-width: 0;
-  margin-left: 0 !important;
-  margin-right: 0 !important;
-}
-
-.obs-actions :deep(.el-button) {
-  min-width: 0;
-}
-
-.obs-btn-send {
-  flex: 1;
-}
-
 @media (max-width: 1100px) {
-  .obs-run-body {
+  .obs-toolbar {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .obs-actions {
-    width: 100%;
+  .obs-toolbar-right {
+    margin-left: 0;
+    justify-content: flex-end;
   }
 }
 

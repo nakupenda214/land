@@ -31,7 +31,7 @@ export function useBatchPoller(apiCheckFunction, onPollingEnd) {
         abortController.value = new AbortController();
         // 调用查询接口，无需传递 batchId，仅传递 abort 信号
         const res = await apiCheckFunction({ signal: abortController.value.signal });
-        
+
         // 兼容你后端的分页返回格式（records 数组），和 refreshData 逻辑一致
         let rawList = [];
         if (Array.isArray(res.data.data)) {
@@ -45,10 +45,11 @@ export function useBatchPoller(apiCheckFunction, onPollingEnd) {
         }
 
         // 关键修改：统一判断 item.fileState（你后端返回的字段），而非 item.status
-        const hasPending = rawList.some(item => 
-          ['UPLOADING','PENDING','PARSING'].includes(item.fileState)
+        // WAITING_POST_PROCESS：前端展示为「上传中」；同步落库完成，批量后处理任务仍在线程池排队/执行中
+        const hasPending = rawList.some((item) =>
+          ['UPLOADING', 'WAITING_POST_PROCESS', 'PENDING', 'PARSING'].includes(item.fileState)
         );
-        
+
         if (!hasPending) {
           stopPolling(); // 无未完成文件，终止轮询
           // 调用回调，刷新表格展示最终状态

@@ -389,6 +389,12 @@ export function buildNodeMetricsFromEvents(events) {
   return out
 }
 
+/** 与 AgentTraceTopology 中 localStorage 键一致 */
+export function topologyLayoutLocalStorageKey(scope) {
+  const s = String(scope || 'agent_main').trim() || 'agent_main'
+  return `agent_trace_topology_default_layout_v1_${s}`
+}
+
 /** 与后端 AgentTopologyLayoutPreferenceService 约定一致：规范化节点坐标表 */
 export function normalizeTopologyPositionMap(input) {
   const out = {}

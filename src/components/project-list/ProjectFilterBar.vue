@@ -10,9 +10,10 @@
           <div class="brand-title-row">
             <span class="brand-title">项目工作区</span>
           </div>
-          <div class="current-project" :class="{ empty: !selectedProjectName }">
+          <div class="current-project" :class="{ empty: !selectedProjectName && !optionsLoading }">
             <el-icon class="hint-icon"><InfoFilled /></el-icon>
-            <span v-if="selectedProjectName">当前查看：{{ selectedProjectName }}</span>
+            <span v-if="optionsLoading">正在同步项目列表…</span>
+            <span v-else-if="selectedProjectName">当前查看：{{ selectedProjectName }}</span>
             <span v-else>未选择项目，请先在右侧输入关键词并选择项目</span>
           </div>
         </div>
@@ -100,6 +101,11 @@ const props = defineProps({
   currentProjectId: {
     type: [String, Number],
     default: ''
+  },
+  /** 首屏拉取项目列表时提示，避免长时间无文案 */
+  optionsLoading: {
+    type: Boolean,
+    default: false
   }
 })
 

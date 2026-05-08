@@ -16,7 +16,7 @@
       <el-tab-pane name="selfoptTask" label="自优化任务" lazy>
         <SelfOptimizeTaskPanel />
       </el-tab-pane>
-      <el-tab-pane name="llmConfig" label="LLM 配置" lazy>
+      <el-tab-pane name="llmConfig" label="节点管理" lazy>
         <LlmConfigPanel />
       </el-tab-pane>
     </el-tabs>
@@ -88,6 +88,22 @@ const agentId = 'default'
   height: 3px;
   border-radius: 3px;
   background: linear-gradient(90deg, #4c8dff 0%, #8a73ff 100%);
+}
+
+/* 各 Tab 内表格「操作」列：表头与单元格居中，列宽由各自 width 收紧 */
+.agent-management-page :deep(.el-table th.col-actions .cell),
+.agent-management-page :deep(.el-table td.col-actions .cell) {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.agent-management-page :deep(.el-table td.col-actions .el-button + .el-button) {
+  margin-left: 6px;
 }
 
 </style>

@@ -13,13 +13,6 @@ const usageCategoryMap = {
 }
 
 export function useProjectDetailDialog({ currentProjectInfo, rawTableData, fetchSurveyReports }) {
-  const roomSumInfo = reactive({
-    buildingAreaSum: '0.00',
-    innerAreaSum: '0.00',
-    balconyAreaSum: '0.00',
-    sharedAreaSum: '0.00'
-  })
-
   const detailDialogVisible = ref(false)
   const roomInfoData = ref([])
   const detailLoading = ref(false)
@@ -72,19 +65,6 @@ export function useProjectDetailDialog({ currentProjectInfo, rawTableData, fetch
 
     try {
       resetAuditInfo()
-
-      const summaryRow = rawTableData.value.find((item) => item.id === row.id)
-      if (summaryRow) {
-        roomSumInfo.buildingAreaSum = Number(summaryRow.roomInfoBuildingAreaSum || 0).toFixed(2)
-        roomSumInfo.innerAreaSum = Number(summaryRow.roomInfoInnerAreaSum || 0).toFixed(2)
-        roomSumInfo.balconyAreaSum = Number(summaryRow.roomInfoBalconyAreaSum || 0).toFixed(2)
-        roomSumInfo.sharedAreaSum = Number(summaryRow.roomInfoSharedAreaSum || 0).toFixed(2)
-      } else {
-        roomSumInfo.buildingAreaSum = '0.00'
-        roomSumInfo.innerAreaSum = '0.00'
-        roomSumInfo.balconyAreaSum = '0.00'
-        roomSumInfo.sharedAreaSum = '0.00'
-      }
 
       try {
         const reportRes = await querySurveyReports({
@@ -189,7 +169,6 @@ export function useProjectDetailDialog({ currentProjectInfo, rawTableData, fetch
   }
 
   return {
-    roomSumInfo,
     detailDialogVisible,
     roomInfoData,
     detailLoading,

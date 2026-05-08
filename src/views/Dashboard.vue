@@ -8,10 +8,9 @@
           </div>
           <div class="brand-copy">
             <div class="brand-title-row">
-              <span class="brand-title">首页项目工作台</span>
+              <span class="brand-title">项目列表</span>
               <span class="brand-pill">总项目 {{ total }}</span>
             </div>
-            <p class="brand-desc">支持多维条件筛选，快速进入项目详情进行档案、合同和实测数据处理</p>
           </div>
         </div>
         <div class="filter-row">
@@ -23,15 +22,6 @@
             @keyup.enter="handleSearch"
           >
             <template #prefix><el-icon><OfficeBuilding /></el-icon></template>
-          </el-input>
-          <el-input
-            v-model.trim="queryForm.location"
-            class="filter-item"
-            placeholder="项目位置"
-            clearable
-            @keyup.enter="handleSearch"
-          >
-            <template #prefix><el-icon><Location /></el-icon></template>
           </el-input>
           <el-date-picker
             v-model="queryForm.projectTimeRange"
@@ -77,18 +67,17 @@
       >
         <el-table-column type="selection" width="48" align="center" />
         <el-table-column prop="projectName" label="项目名称" min-width="220" show-overflow-tooltip />
-        <el-table-column prop="location" label="项目位置" min-width="180" show-overflow-tooltip />
         <el-table-column prop="projectTime" label="项目时间" min-width="120" align="center" />
         <el-table-column prop="surveyReportFileCount" label="实测报告数" width="120" align="center" />
         <el-table-column prop="contractFileCount" label="合同文件数" width="120" align="center" />
         <el-table-column prop="transferor" label="出让方" min-width="160" show-overflow-tooltip />
         <el-table-column prop="transferee" label="受让方" min-width="180" show-overflow-tooltip />
-        <el-table-column label="操作" width="350" align="center" fixed="right">
+        <el-table-column label="操作" width="200" align="center" fixed="right">
           <template #default="{ row }">
-            <el-space :size="40">
+            <div class="project-table-actions">
               <el-button class="biz-btn action-primary btn-sm" @click="goProject(row)">进入项目</el-button>
               <el-button class="biz-btn action-danger btn-sm" @click="handleDeleteProject(row)">删除项目</el-button>
-            </el-space>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -121,7 +110,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { DataAnalysis, Location, OfficeBuilding } from '@element-plus/icons-vue'
+import { DataAnalysis, OfficeBuilding } from '@element-plus/icons-vue'
 import { deleteProjectById, queryProjectDetails } from '@/services/project.service'
 import { useDashboardPrint } from '@/composables/dashboard/useDashboardPrint'
 import { usePrint } from '@/hooks/usePrint.ts'
@@ -133,7 +122,6 @@ const queryForm = reactive({
   pageNum: 1,
   pageSize: 20,
   projectName: '',
-  location: '',
   projectTimeRange: []
 })
 
@@ -162,7 +150,6 @@ const buildPayload = () => {
     sortField: 'updateTime',
     sortDirection: 'desc',
     projectName: queryForm.projectName || undefined,
-    location: queryForm.location || undefined,
     projectTimeStart: start ? formatMonth(start) : undefined,
     projectTimeEnd: end ? formatMonth(end) : undefined
   }
@@ -190,7 +177,6 @@ const handleSearch = async () => {
 
 const handleReset = async () => {
   queryForm.projectName = ''
-  queryForm.location = ''
   queryForm.projectTimeRange = []
   queryForm.pageNum = 1
   queryForm.pageSize = 20
@@ -296,7 +282,7 @@ onMounted(() => {
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-start;
-  gap: 14px 16px;
+  gap: 12px 10px;
   padding: 14px;
   border: 1px solid var(--home-soft-border);
   border-radius: var(--home-card-radius);
@@ -305,26 +291,27 @@ onMounted(() => {
 
 .filter-brand {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  min-width: 260px;
-  max-width: 380px;
+  align-items: center;
+  gap: 10px;
+  min-width: 200px;
+  max-width: 340px;
 }
 
 .brand-icon-wrap {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   background: linear-gradient(145deg, #2563eb 0%, #1e40af 100%);
-  box-shadow: 0 10px 24px -12px rgba(30, 64, 175, 0.75);
+  box-shadow: 0 8px 18px -10px rgba(30, 64, 175, 0.72);
 }
 
 .brand-icon {
   color: #fff;
-  font-size: 22px;
+  font-size: 18px;
 }
 
 .brand-copy {
@@ -335,20 +322,23 @@ onMounted(() => {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
+  line-height: 1.25;
 }
 
 .brand-title {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 700;
+  letter-spacing: 0.01em;
   color: #1e293b;
 }
 
 .brand-pill {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: #1e40af;
-  padding: 2px 10px;
+  padding: 1px 8px;
+  line-height: 1.5;
   border-radius: 999px;
   border: 1px solid #bfdbfe;
   background: #eff6ff;
@@ -361,12 +351,13 @@ onMounted(() => {
   color: #607286;
 }
 
-  .filter-row {
-  flex: 1 1 640px;
+.filter-row {
+  /* 仅「项目名称 + 月范围」两列；勿保留第三列空轨，否则与右侧按钮之间会出现大块留白 */
+  flex: 1 1 auto;
   min-width: 0;
   display: grid;
-  grid-template-columns: 1fr 1fr 1.4fr;
-  gap: 14px;
+  grid-template-columns: minmax(160px, 1fr) minmax(260px, 320px);
+  gap: 10px;
   align-items: center;
 }
 
@@ -379,8 +370,10 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding-left: 12px;
+  flex-shrink: 0;
+  gap: 8px;
+  padding-left: 8px;
+  margin-left: 2px;
   border-left: 1px dashed #d3ddea;
 }
 
@@ -461,6 +454,20 @@ onMounted(() => {
 .project-table {
   flex: 1;
 }
+
+.project-table-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+  vertical-align: middle;
+}
+
+:deep(.project-table-actions .el-button + .el-button) {
+  margin-left: 0;
+}
+
 :deep(.project-table .el-table__body tr.row-selected > td.el-table__cell) {
   background: #edf4fb !important;
 }

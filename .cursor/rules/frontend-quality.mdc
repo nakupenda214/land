@@ -12,3 +12,4 @@ alwaysApply: false
 
 - 行为不变、小步提交；重构与功能需求分 PR。
 - 巨型 SFC 优先：纯函数进 `src/utils`，状态与接口进 `src/composables/<域>/`，大块模板拆子组件。
+- 重路由页（如 `ProjectList.vue`）：非首屏 Tab/大弹窗用 `defineAsyncComponent` 分包；若首屏依赖慢接口（如全量项目列表），须给可见的 loading（页面或筛选条），必要时用本地缓存元数据与主列表请求并行，避免「白屏像卡死」。

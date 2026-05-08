@@ -49,7 +49,7 @@
 </template>
 
 <script setup>
-import { computed, markRaw, onUnmounted, ref, watch } from 'vue'
+import { computed, markRaw, nextTick, onMounted, onUnmounted, ref, unref, watch } from 'vue'
 import { Minus, Plus } from '@element-plus/icons-vue'
 import { VueFlow } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
@@ -59,7 +59,8 @@ import {
   computeSkeletonFingerprint,
   edgeKey,
   mergeTopologyLayoutPositions,
-  normalizeTopologyPositionMap
+  normalizeTopologyPositionMap,
+  topologyLayoutLocalStorageKey
 } from './agent-trace-topology-layout.js'
 import { getTopologyLayout, putTopologyLayout } from '@/services/agent-management.service.js'
 import AgentTraceFlowNode from './AgentTraceFlowNode.vue'
@@ -76,19 +77,21 @@ const props = defineProps({
   layoutScope: { type: String, default: 'agent_main' }
 })
 
+/** 父级持有（如 AgentTracePanel）可避免「重载详情」仅刷新子树时与 Vue Flow 内部状态脱节导致坐标回退 */
+const positions = defineModel('positions', {
+  type: Object,
+  default: () => ({})
+})
+
 const emit = defineEmits(['select-node', 'clear-node', 'select-edge'])
 
 const ZOOM_MIN = 0.1
 const ZOOM_MAX = 2.6
-const REMOTE_LAYOUT_DEBOUNCE_MS = 650
+/** 拖动结束后若此时间内无新拖动，则将布局写入数据库 */
+const REMOTE_LAYOUT_SAVE_IDLE_MS = 2000
 
-function defaultLayoutStorageKey(scope) {
-  const s = String(scope || 'agent_main').trim() || 'agent_main'
-  return `agent_trace_topology_default_layout_v1_${s}`
-}
 const zoom = ref(1)
 const flowIns = ref(null)
-const positionOverride = ref({})
 
 const nodeTypes = {
   traceNode: markRaw(AgentTraceFlowNode)
@@ -236,7 +239,7 @@ const flowNodes = computed(() => {
     const seq = nodeVisitSeqMap.value.get(n.id) || []
     const order = seq.length ? seq[0] : null
     const edgeHit = nodeEdgeHitStats.value.get(n.id) || { inCount: 0, outCount: 0 }
-    const p = positionOverride.value[n.id]
+    const p = positions.value[n.id]
     return {
       id: n.id,
       type: 'traceNode',
@@ -260,6 +263,8 @@ const flowNodes = computed(() => {
 
 const remoteSaveTimer = ref(null)
 let remoteLoadTimer = null
+/** 避免多次 loadRemoteLayoutAndMerge 乱序完成把 positions 写成空 */
+let loadLayoutReqGen = 0
 const REMOTE_LAYOUT_LOAD_DEBOUNCE_MS = 220
 
 function normalizePositionMap(input) {
@@ -268,7 +273,7 @@ function normalizePositionMap(input) {
 
 function loadDefaultLayout() {
   try {
-    const raw = localStorage.getItem(defaultLayoutStorageKey(props.layoutScope))
+    const raw = localStorage.getItem(topologyLayoutLocalStorageKey(props.layoutScope))
     if (!raw) return {}
     return normalizePositionMap(JSON.parse(raw))
   } catch {
@@ -276,34 +281,41 @@ function loadDefaultLayout() {
   }
 }
 
-function scheduleRemoteSave(map) {
+async function pushTopologyLayoutToServer(mapNorm) {
   const scope = String(props.layoutScope || 'agent_main').trim() || 'agent_main'
+  const nodes = props.layoutNodes || []
+  const edges = props.skeletonEdges || []
+  if (!nodes.length || !mapNorm || !Object.keys(mapNorm).length) return
+  try {
+    const fp = await computeSkeletonFingerprint(nodes, edges)
+    if (!fp) return
+    await putTopologyLayout(scope, {
+      layoutSchemaVersion: 1,
+      skeletonFingerprint: fp,
+      positions: mapNorm
+    })
+  } catch (e) {
+    if (import.meta.env.DEV) {
+      console.warn('[AgentTraceTopology] 保存拓扑布局到服务端失败（未登录/网络/校验）:', e?.message || e)
+    }
+  }
+}
+
+function scheduleRemoteSave(map) {
   if (remoteSaveTimer.value) {
     clearTimeout(remoteSaveTimer.value)
     remoteSaveTimer.value = null
   }
   remoteSaveTimer.value = setTimeout(async () => {
     remoteSaveTimer.value = null
-    const nodes = props.layoutNodes || []
-    const edges = props.skeletonEdges || []
-    if (!nodes.length) return
-    try {
-      const fp = await computeSkeletonFingerprint(nodes, edges)
-      if (!fp) return
-      const positions = normalizePositionMap(map)
-      await putTopologyLayout(scope, {
-        layoutSchemaVersion: 1,
-        skeletonFingerprint: fp,
-        positions
-      })
-    } catch {
-      // 未登录或网络失败：仅本地已保存
-    }
-  }, REMOTE_LAYOUT_DEBOUNCE_MS)
+    const positionsNorm = normalizePositionMap(map)
+    await pushTopologyLayoutToServer(positionsNorm)
+  }, REMOTE_LAYOUT_SAVE_IDLE_MS)
 }
 
+/** 本地即时落盘（离线/未登录兜底）；数据库写入见 scheduleRemoteSave（2s 空闲防抖） */
 function saveDefaultLayout(map) {
-  const key = defaultLayoutStorageKey(props.layoutScope)
+  const key = topologyLayoutLocalStorageKey(props.layoutScope)
   try {
     localStorage.setItem(key, JSON.stringify(normalizePositionMap(map)))
   } catch {
@@ -315,33 +327,46 @@ function saveDefaultLayout(map) {
 async function loadRemoteLayoutAndMerge() {
   const nodes = props.layoutNodes || []
   if (!nodes.length) return
+  const gen = ++loadLayoutReqGen
   const scope = String(props.layoutScope || 'agent_main').trim() || 'agent_main'
   const nodeIds = nodes.map((n) => String(n?.id || '').trim()).filter(Boolean)
   const idSet = new Set(nodeIds)
-  const local = loadDefaultLayout()
+  const localNorm = normalizePositionMap(loadDefaultLayout())
+  const prevNorm = normalizePositionMap(positions.value || {})
   let remotePositions = {}
+  let remoteFp = ''
   try {
     const data = await getTopologyLayout(scope)
     remotePositions = (data && data.positions) || {}
+    remoteFp = String(data?.skeletonFingerprint || '')
+      .trim()
+      .toLowerCase()
   } catch {
     remotePositions = {}
   }
-  const mergedRemote = mergeTopologyLayoutPositions(remotePositions, idSet)
-  const merged =
-    Object.keys(mergedRemote).length > 0 ? { ...mergedRemote } : { ...normalizePositionMap(local) }
-  positionOverride.value = merged
+  let localFp = ''
+  try {
+    localFp = (await computeSkeletonFingerprint(nodes, props.skeletonEdges || [])).toLowerCase()
+  } catch {
+    localFp = ''
+  }
+  /** 仅当指纹一致时信任服务端坐标；否则不把 remote 混进来（防旧骨架污染） */
+  const remoteSafe =
+    remoteFp && localFp && remoteFp === localFp
+      ? mergeTopologyLayoutPositions(remotePositions, idSet)
+      : {}
+  /**
+   * 本机 localStorage 优先于远端：拖动后会立刻写 localStorage，数据库 2s 防抖；
+   * 若此前实现「指纹一致只用远端」会在「刷新早于写库」或「PUT 失败」时把本机布局直接丢掉。
+   */
+  const merged = {}
+  for (const id of idSet) {
+    const pick = localNorm[id] ?? remoteSafe[id] ?? prevNorm[id]
+    if (pick) merged[id] = pick
+  }
+  if (gen !== loadLayoutReqGen) return
+  positions.value = merged
 }
-
-onUnmounted(() => {
-  if (remoteSaveTimer.value) {
-    clearTimeout(remoteSaveTimer.value)
-    remoteSaveTimer.value = null
-  }
-  if (remoteLoadTimer) {
-    clearTimeout(remoteLoadTimer)
-    remoteLoadTimer = null
-  }
-})
 
 const edgeSeqInfo = computed(() => {
   const m = new Map()
@@ -499,14 +524,24 @@ function onNodeClick({ node }) {
 }
 
 /**
- * 从 Vue Flow 实例读取当前所有节点坐标并写入本地 + 防抖同步服务端（无需再点「设为默认布局」）。
+ * Vue Flow 1.x 中 store.getNodes 为 ComputedRef，不是函数；旧版曾暴露为 getNodes()。
+ */
+function getNodesArrayFromFlowStore(store) {
+  if (!store?.getNodes) return null
+  const g = store.getNodes
+  const list = typeof g === 'function' ? g() : unref(g)
+  return Array.isArray(list) && list.length ? list : null
+}
+
+/**
+ * 从 Vue Flow 实例读取当前所有节点坐标：localStorage 即时写入，数据库在 2s 无新拖动后写入。
  */
 function snapshotPositionsFromFlow() {
-  const nodes = flowIns.value?.getNodes?.()
-  if (!Array.isArray(nodes) || !nodes.length) {
+  const nodes = getNodesArrayFromFlowStore(flowIns.value)
+  if (!nodes) {
     return null
   }
-  const m = { ...positionOverride.value }
+  const m = { ...(positions.value || {}) }
   for (const n of nodes) {
     const x = Number(n?.position?.x)
     const y = Number(n?.position?.y)
@@ -519,12 +554,29 @@ function snapshotPositionsFromFlow() {
 function persistLayoutFromFlow() {
   const snap = snapshotPositionsFromFlow()
   if (!snap) return
-  positionOverride.value = snap
+  positions.value = snap
   saveDefaultLayout(snap)
 }
 
-function onNodeDragStop() {
-  persistLayoutFromFlow()
+/**
+ * node-drag-stop 时以事件携带的节点坐标为准（getNodes() 在个别版本/时机下会滞后一帧，导致写入仍是自动布局坐标）。
+ */
+function onNodeDragStop(evt) {
+  const fromFlow = snapshotPositionsFromFlow()
+  const base = fromFlow ? { ...fromFlow } : { ...(positions.value || {}) }
+  const dragged = Array.isArray(evt?.nodes) && evt.nodes.length ? evt.nodes : evt?.node ? [evt.node] : []
+  for (const n of dragged) {
+    const x = Number(n?.position?.x)
+    const y = Number(n?.position?.y)
+    if (!n?.id || !Number.isFinite(x) || !Number.isFinite(y)) continue
+    base[n.id] = { x, y }
+  }
+  if (Object.keys(base).length) {
+    positions.value = base
+    saveDefaultLayout(base)
+    return
+  }
+  void nextTick(() => persistLayoutFromFlow())
 }
 
 function onEdgeClick({ edge }) {
@@ -534,6 +586,33 @@ function onEdgeClick({ edge }) {
     to: edge.target,
     key: edge.id || edgeKey(edge.source, edge.target)
   })
+}
+
+function syncFlowSnapshotToModelAndLocal() {
+  const snap = snapshotPositionsFromFlow()
+  if (!snap || !Object.keys(snap).length) return
+  positions.value = snap
+  try {
+    localStorage.setItem(
+      topologyLayoutLocalStorageKey(props.layoutScope),
+      JSON.stringify(normalizePositionMap(snap))
+    )
+  } catch {
+    /* ignore */
+  }
+}
+
+function flushPendingLayoutPersistence() {
+  if (remoteSaveTimer.value) {
+    clearTimeout(remoteSaveTimer.value)
+    remoteSaveTimer.value = null
+  }
+  syncFlowSnapshotToModelAndLocal()
+  void pushTopologyLayoutToServer(normalizePositionMap(positions.value || {}))
+}
+
+function onPageHideForTopologyLayout() {
+  flushPendingLayoutPersistence()
 }
 
 watch(
@@ -547,6 +626,27 @@ watch(
   },
   { deep: true, immediate: true }
 )
+
+onMounted(() => {
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', onPageHideForTopologyLayout)
+  }
+})
+
+onUnmounted(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('pagehide', onPageHideForTopologyLayout)
+  }
+  if (remoteSaveTimer.value) {
+    clearTimeout(remoteSaveTimer.value)
+    remoteSaveTimer.value = null
+  }
+  if (remoteLoadTimer) {
+    clearTimeout(remoteLoadTimer)
+    remoteLoadTimer = null
+  }
+  flushPendingLayoutPersistence()
+})
 </script>
 
 <style scoped>

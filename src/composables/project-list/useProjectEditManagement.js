@@ -18,9 +18,7 @@ export function useProjectEditManagement({
   const projectUpdateForm = reactive({
     id: '',
     projectName: '',
-    location: '',
-    projectTime: '',
-    remark: ''
+    projectTime: ''
   })
 
   const projectEditRules = reactive({
@@ -40,9 +38,7 @@ export function useProjectEditManagement({
       if (res?.data?.code === 200 && projectOriginal) {
         projectUpdateForm.id = projectOriginal.id
         projectUpdateForm.projectName = projectOriginal.projectName || ''
-        projectUpdateForm.location = projectOriginal.location || ''
         projectUpdateForm.projectTime = projectOriginal.projectTime || ''
-        projectUpdateForm.remark = projectOriginal.remark || ''
       }
     } catch (error) {
       console.error('拉取项目原始数据失败:', error)
@@ -83,9 +79,7 @@ export function useProjectEditManagement({
       const requestData = {
         id: projectUpdateForm.id,
         projectName: projectUpdateForm.projectName,
-        location: projectUpdateForm.location,
-        projectTime: projectUpdateForm.projectTime,
-        remark: projectUpdateForm.remark
+        projectTime: projectUpdateForm.projectTime
       }
 
       const res = await axios.put('/api/project/update', requestData)
@@ -101,23 +95,6 @@ export function useProjectEditManagement({
     } finally {
       projectEditLoading.value = false
     }
-  }
-
-  const resetProjectForm = () => {
-    if (!projectEditRef.value) return
-
-    projectEditRef.value.clearValidate()
-    Object.assign(projectUpdateForm, {
-      location: '',
-      projectTime: '',
-      remark: ''
-    })
-
-    if (filterProject.value) {
-      fetchProjectOriginalData(filterProject.value)
-    }
-
-    ElMessage.info('表单已重置')
   }
 
   watch(activeTab, (newVal) => {
@@ -142,7 +119,6 @@ export function useProjectEditManagement({
     projectEditRules,
     setProjectEditRef,
     fetchProjectOriginalData,
-    submitProjectUpdate,
-    resetProjectForm
+    submitProjectUpdate
   }
 }

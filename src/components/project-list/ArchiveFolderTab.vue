@@ -129,7 +129,7 @@
             </div>
           </div>
 
-          <div class="table-wrap" v-loading="fileLoading">
+          <div ref="tableWrapRef" class="table-wrap" v-loading="fileLoading">
             <el-empty v-if="!selectedArchiveId" description="选择归档夹后展示文件" />
             <template v-else>
               <el-table
@@ -286,10 +286,20 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="uploadDialogVisible" title="文件上传" width="640px" class="upload-archive-dialog" @closed="resetUploadForm">
+    <el-dialog
+      v-model="uploadDialogVisible"
+      title="文件上传"
+      width="640px"
+      class="upload-archive-dialog"
+      :before-close="handleUploadDialogBeforeClose"
+      :close-on-click-modal="!isUploadServerProcessing"
+      :close-on-press-escape="!isUploadServerProcessing"
+      :show-close="!isUploadServerProcessing"
+      @closed="resetUploadForm"
+    >
       <el-form label-position="top" class="upload-form">
         <el-row :gutter="14" class="upload-grid">
-          <el-col :span="12" class="upload-meta-col">
+          <el-col :span="24" class="upload-meta-col">
             <el-form-item label="文件归类">
               <el-select v-model="uploadForm.fileContextType" class="upload-select">
                 <el-option label="合同文件" value="CONTRACT" />
@@ -317,75 +327,115 @@
             </el-form-item>
           </el-col>
 
-          <el-col :span="12" class="upload-drop-col">
-            <el-upload
-              class="upload-dropzone"
-              drag
-              action="#"
-              :auto-upload="false"
-              multiple
-              :file-list="uploadFiles"
-              :on-change="handleUploadFileChange"
-              :on-remove="handleUploadFileRemove"
-            >
-              <div class="upload-drop-inner">
-                <div class="upload-icon-wrap" aria-hidden="true">
-                  <el-icon class="upload-icon"><UploadFilled /></el-icon>
+          <el-col :span="24" class="upload-drop-col">
+            <div class="upload-unified-panel">
+              <div class="upload-panel-toolbar" :class="{ 'is-empty': !uploadFiles.length }">
+                <div v-if="uploadFiles.length" class="upload-toolbar-main">
+                  <span class="upload-toolbar-stat">
+                    <strong>{{ uploadFiles.length }}</strong>
+                    <span class="muted">个文件</span>
+                  </span>
+                  <span class="upload-toolbar-dot" aria-hidden="true">·</span>
+                  <span class="upload-toolbar-stat">
+                    <span class="muted">合计</span>
+                    <strong>{{ formatFileSize(selectedTotalBytes) }}</strong>
+                  </span>
+                  <template v-if="topFileGroups.length">
+                    <span class="upload-toolbar-dot" aria-hidden="true">·</span>
+                    <span class="upload-toolbar-chips">
+                      <span v-for="g in topFileGroups" :key="g.key" class="group-chip">{{ g.label }} {{ g.count }}</span>
+                    </span>
+                  </template>
                 </div>
-                <div class="upload-drop-title">拖拽文件到这里</div>
-                <div class="upload-drop-sub">或点击选择文件上传</div>
-                <div class="upload-drop-hint">支持多选；上传后会自动进入解析流程</div>
-              </div>
-            </el-upload>
-
-            <el-progress
-              v-if="uploadLoading"
-              :percentage="uploadProgress"
-              :stroke-width="10"
-              :show-text="true"
-              class="upload-progress"
-            />
-            <div v-if="uploadLoading" class="upload-progress-bytes">
-              已上传 {{ formatFileSize(uploadUploadedBytes) }} / {{ formatFileSize(uploadTotalBytes) }}
-              <span v-if="uploadSpeedText" class="upload-speed">· {{ uploadSpeedText }}</span>
-              <span v-if="uploadEtaText" class="upload-eta">· 剩余 {{ uploadEtaText }}</span>
-            </div>
-            <div v-if="uploadLoading" class="upload-progress-tip">
-              进度条仅表示文件传输到服务器的进度，不代表解析完成。
-            </div>
-
-            <div v-if="uploadFiles.length" class="upload-summary">
-              <div class="upload-summary-head">
-                <div class="upload-summary-title">已选文件</div>
-                <el-button class="upload-clear-btn" size="small" text type="danger" :disabled="uploadLoading" @click="clearUploadFiles">
+                <p v-else class="upload-toolbar-placeholder">添加文件后在此查看数量、合计大小与后缀分布</p>
+                <el-button
+                  class="upload-clear-btn"
+                  size="small"
+                  text
+                  type="danger"
+                  :disabled="uploadLoading || !uploadFiles.length"
+                  @click="clearUploadFiles"
+                >
                   清空
                 </el-button>
               </div>
-              <div class="upload-summary-kpis">
-                <div class="upload-kpi">
-                  <span class="k">数量</span>
-                  <span class="v">{{ uploadFiles.length }}</span>
+
+              <el-upload
+                class="upload-dropzone"
+                :class="{ 'is-compact': uploadFiles.length > 0 }"
+                drag
+                action="#"
+                :auto-upload="false"
+                multiple
+                :show-file-list="false"
+                :file-list="uploadFiles"
+                :on-change="handleUploadFileChange"
+                :on-remove="handleUploadFileRemove"
+              >
+                <div v-if="!uploadFiles.length" class="upload-drop-inner">
+                  <div class="upload-icon-wrap" aria-hidden="true">
+                    <el-icon class="upload-icon"><UploadFilled /></el-icon>
+                  </div>
+                  <div class="upload-drop-title">拖拽文件到这里</div>
+                  <div class="upload-drop-sub">或点击选择文件上传</div>
+                  <div class="upload-drop-hint">支持多选；上传后会自动进入解析流程</div>
                 </div>
-                <div class="upload-kpi">
-                  <span class="k">总大小</span>
-                  <span class="v">{{ formatFileSize(selectedTotalBytes) }}</span>
+                <div v-else class="upload-drop-compact">
+                  <el-icon class="upload-drop-compact-icon"><UploadFilled /></el-icon>
+                  <div class="upload-drop-compact-text">
+                    <span class="upload-drop-compact-title">继续添加文件</span>
+                    <span class="upload-drop-compact-sub">拖拽到此处，或点击选择（支持多选）</span>
+                  </div>
                 </div>
-                <div v-if="uploadSpeedText" class="upload-kpi">
-                  <span class="k">速度</span>
-                  <span class="v">{{ uploadSpeedText }}</span>
+              </el-upload>
+
+              <div v-if="uploadFiles.length" class="upload-file-list-wrap">
+                <div class="upload-file-list-head">
+                  <span>待上传列表</span>
+                  <span class="upload-file-list-meta">共 {{ uploadFiles.length }} 项，可在下方滚动查看</span>
+                </div>
+                <div class="upload-file-scroll">
+                  <div v-for="(item, idx) in uploadFiles" :key="item.uid ?? idx" class="file-row">
+                    <span class="fn" :title="uploadFileDisplayName(item)">{{ uploadFileDisplayName(item) }}</span>
+                    <span class="fs">{{ formatFileSize(uploadFileSize(item)) }}</span>
+                    <el-button
+                      class="file-row-remove"
+                      type="danger"
+                      link
+                      size="small"
+                      :disabled="uploadLoading"
+                      :icon="Close"
+                      @click.stop="removeOneUploadFile(item)"
+                    />
+                  </div>
                 </div>
               </div>
-              <div v-if="topFileGroups.length" class="upload-summary-groups">
-                <span v-for="g in topFileGroups" :key="g.key" class="group-chip">{{ g.label }} {{ g.count }}</span>
+
+              <div v-if="uploadLoading" class="upload-phase-label">{{ uploadPhaseLabel }}</div>
+              <el-progress
+                v-if="uploadLoading"
+                :indeterminate="isUploadServerProcessing"
+                :percentage="uploadProgress"
+                :stroke-width="10"
+                :show-text="!isUploadServerProcessing"
+                class="upload-progress"
+              />
+              <div v-if="uploadLoading" class="upload-progress-bytes">
+                <template v-if="isUploadServerProcessing">
+                  已发送 {{ formatFileSize(uploadUploadedBytes) }}
+                  <span class="upload-progress-phase-hint">· 等待服务端处理（此阶段不可取消）</span>
+                </template>
+                <template v-else>
+                  已上传 {{ formatFileSize(uploadUploadedBytes) }} / {{ formatFileSize(uploadTotalBytes) }}
+                  <span v-if="uploadSpeedText" class="upload-speed">· {{ uploadSpeedText }}</span>
+                  <span v-if="uploadEtaText" class="upload-eta">· 剩余 {{ uploadEtaText }}</span>
+                </template>
               </div>
-              <div class="upload-summary-files">
-                <div v-for="f in previewFiles" :key="f.key" class="file-row">
-                  <span class="fn" :title="f.name">{{ f.name }}</span>
-                  <span class="fs">{{ formatFileSize(f.size) }}</span>
-                </div>
-                <div v-if="uploadFiles.length > previewFiles.length" class="more">
-                  还有 {{ uploadFiles.length - previewFiles.length }} 个…
-                </div>
+              <div v-if="uploadLoading" class="upload-progress-tip">
+                <template v-if="isUploadServerProcessing">
+                  服务端正在写入存储并提交后处理任务，请保持页面打开直至完成。
+                </template>
+                <template v-else>传输阶段可点击「取消上传」中断；进度条仅表示浏览器到服务器的传输进度。</template>
               </div>
             </div>
           </el-col>
@@ -397,8 +447,10 @@
             已选择 <b>{{ uploadFiles.length }}</b> 个文件
           </span>
           <div>
-            <el-button @click="uploadDialogVisible = false">取消</el-button>
-            <el-button type="primary" :loading="uploadLoading" :disabled="uploadFiles.length === 0" @click="handleBatchUpload">
+            <el-button :disabled="isUploadServerProcessing" @click="uploadDialogVisible = false">
+              {{ uploadLoading && uploadPhase === 'transferring' ? '取消上传' : '取消' }}
+            </el-button>
+            <el-button type="primary" :loading="uploadLoading" :disabled="uploadFiles.length === 0 || uploadLoading" @click="handleBatchUpload">
               确认上传
             </el-button>
           </div>
@@ -477,9 +529,10 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, Folder, FolderAdd, FolderOpened, Picture, Refresh, UploadFilled } from '@element-plus/icons-vue'
+import { Close, Delete, Folder, FolderAdd, FolderOpened, Picture, Refresh, UploadFilled } from '@element-plus/icons-vue'
 import CalibrationWorkspaceDialog from '@/components/file-upload/CalibrationWorkspaceDialog.vue'
 import TaskParseFlowDetailPanel from '@/components/layout/TaskParseFlowDetailPanel.vue'
 import PlanningReviewAuditDialog from '@/components/project-list/PlanningReviewAuditDialog.vue'
@@ -545,6 +598,7 @@ const fileTypeOptions = [
 ]
 
 const fileStateOptions = [
+  { label: '上传中', value: 'WAITING_POST_PROCESS' },
   { label: '上传中', value: 'UPLOADING' },
   { label: '待解析', value: 'WAITING_PARSE' },
   { label: '待处理', value: 'PENDING' },
@@ -562,6 +616,36 @@ const fileLoading = ref(false)
 const batchDeleteLoading = ref(false)
 const batchParseLoading = ref(false)
 const uploadLoading = ref(false)
+/** null | 'transferring' | 'server_processing' — 与服务端「字节发完后同步落库」阶段对齐 */
+const uploadPhase = ref(null)
+const uploadAbortController = ref(null)
+
+const isUploadServerProcessing = computed(
+  () => uploadLoading.value && uploadPhase.value === 'server_processing'
+)
+
+const uploadPhaseLabel = computed(() => {
+  if (!uploadLoading.value) return ''
+  if (uploadPhase.value === 'server_processing') return '处理阶段 · 服务端正在入库'
+  return '传输阶段 · 正在上传数据'
+})
+
+const isUploadAbortError = (error) =>
+  axios.isCancel(error) || error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError'
+
+const handleUploadDialogBeforeClose = (done) => {
+  if (!uploadLoading.value) {
+    done()
+    return
+  }
+  if (uploadPhase.value === 'server_processing') {
+    ElMessage.warning('文件已传至服务器，正在入库与提交后处理，请稍候。此阶段不可取消。')
+    return
+  }
+  uploadAbortController.value?.abort()
+  done()
+}
+
 const createLoading = ref(false)
 const createDialogVisible = ref(false)
 const uploadDialogVisible = ref(false)
@@ -691,14 +775,6 @@ const topFileGroups = computed(() => {
     .map((g) => ({ ...g, label: fileExtLabel(g.ext) }))
 })
 
-const previewFiles = computed(() => {
-  return uploadFiles.value.slice(0, 4).map((item, idx) => {
-    const name = String(item?.raw?.name ?? item?.name ?? `文件${idx + 1}`)
-    const size = Number(item?.raw?.size ?? item?.size ?? 0)
-    return { key: `${name}-${idx}`, name, size: Number.isFinite(size) ? size : 0 }
-  })
-})
-
 const uploadSpeedBps = ref(0)
 const uploadEtaSec = ref(null)
 let uploadSpeedTimer = null
@@ -779,7 +855,36 @@ const queryForm = reactive({
   pageNum: 1,
   pageSize: 20
 })
-const tableBodyHeight = 670
+/** 由 table-wrap 可视高度减去分页条动态计算，避免固定 670px 裁切 pager-row */
+const tableWrapRef = ref(null)
+const tableBodyHeight = ref(360)
+let tableWrapResizeObserver = null
+
+const updateTableBodyHeight = () => {
+  const wrap = tableWrapRef.value
+  if (!wrap) return
+  requestAnimationFrame(() => {
+    const el = tableWrapRef.value
+    if (!el) return
+    const pager = el.querySelector('.pager-row')
+    const reserve = (pager ? pager.getBoundingClientRect().height : 0) + 8
+    const next = Math.floor(el.clientHeight - reserve)
+    tableBodyHeight.value = Math.max(160, next)
+  })
+}
+
+const bindTableWrapResizeObserver = () => {
+  const el = tableWrapRef.value
+  if (!el || typeof ResizeObserver === 'undefined') return
+  if (tableWrapResizeObserver) {
+    tableWrapResizeObserver.disconnect()
+    tableWrapResizeObserver = null
+  }
+  tableWrapResizeObserver = new ResizeObserver(() => updateTableBodyHeight())
+  tableWrapResizeObserver.observe(el)
+  updateTableBodyHeight()
+}
+
 const currentProject = computed(() => String(props.projectId || ''))
 const splitContainerRef = ref(null)
 const treePanelWidth = ref(320)
@@ -876,6 +981,7 @@ const { handleAuditPass } = useCalibrationActions({
 
 const stateLabelMap = {
   UPLOADING: '上传中',
+  WAITING_POST_PROCESS: '上传中',
   WAITING_PARSE: '待解析',
   PENDING: '待处理',
   PARSING: '解析中',
@@ -1034,6 +1140,12 @@ const scheduleReadAck = () => {
 
 const handleIncomingNotification = (payload, topicHint = '') => {
   if (!payload || typeof payload !== 'object') return
+  if (
+    String(payload?.projectId || '')
+    && String(payload.projectId) !== String(props.projectId || '')
+  ) {
+    return
+  }
   const messageId = extractMessageId(payload)
   if (!registerHandledMessageId(messageId)) return
   if (messageId) {
@@ -1486,6 +1598,7 @@ const stopSplitterDrag = () => {
   window.removeEventListener('mousemove', handleSplitterMouseMove)
   window.removeEventListener('mouseup', stopSplitterDrag)
   document.body.classList.remove('resizing-splitter')
+  nextTick(() => updateTableBodyHeight())
 }
 
 const handleSplitterMouseDown = () => {
@@ -1497,7 +1610,22 @@ const handleSplitterMouseDown = () => {
 
 const handleWindowResize = () => {
   treePanelWidth.value = clampTreePanelWidth(treePanelWidth.value)
+  updateTableBodyHeight()
 }
+
+watch(
+  () => props.active,
+  (isActive) => {
+    if (!isActive) return
+    nextTick(() => {
+      bindTableWrapResizeObserver()
+    })
+  }
+)
+
+watch([selectedArchiveId, fileLoading], () => {
+  nextTick(() => updateTableBodyHeight())
+})
 
 const handlePageChange = (page) => {
   queryForm.pageNum = page
@@ -1822,6 +1950,8 @@ const handleBatchParse = async () => {
 const resetUploadForm = () => {
   uploadFiles.value = []
   uploadLoading.value = false
+  uploadPhase.value = null
+  uploadAbortController.value = null
   uploadProgress.value = 0
   uploadUploadedBytes.value = 0
   uploadTotalBytes.value = 0
@@ -1847,6 +1977,18 @@ const handleUploadFileRemove = (_, list) => {
   uploadFiles.value = list
 }
 
+const uploadFileDisplayName = (item) => String(item?.raw?.name ?? item?.name ?? '未命名文件')
+
+const uploadFileSize = (item) => {
+  const size = Number(item?.raw?.size ?? item?.size ?? 0)
+  return Number.isFinite(size) ? size : 0
+}
+
+const removeOneUploadFile = (file) => {
+  const uid = file?.uid
+  uploadFiles.value = uploadFiles.value.filter((f) => (uid != null ? f.uid !== uid : f !== file))
+}
+
 const handleBatchUpload = async () => {
   if (!props.projectId || !selectedArchiveId.value) {
     ElMessage.warning('请先选择归档夹')
@@ -1861,7 +2003,12 @@ const handleBatchUpload = async () => {
     return
   }
 
+  uploadAbortController.value?.abort()
+  const ac = new AbortController()
+  uploadAbortController.value = ac
+
   uploadLoading.value = true
+  uploadPhase.value = 'transferring'
   uploadProgress.value = 0
   uploadUploadedBytes.value = 0
   uploadTotalBytes.value = 0
@@ -1885,32 +2032,55 @@ const handleBatchUpload = async () => {
 
     const res = await batchUploadFiles(formData, {
       params,
+      signal: ac.signal,
       onUploadProgress: (event) => {
-        if (!event.total) return
-        uploadUploadedBytes.value = Number(event.loaded || 0)
-        uploadTotalBytes.value = Number(event.total || 0)
-        uploadProgress.value = Math.min(99, Math.round((event.loaded / event.total) * 100))
+        const total = Number(event.total || 0)
+        const loaded = Number(event.loaded || 0)
+        uploadUploadedBytes.value = loaded
+        if (total > 0) {
+          uploadTotalBytes.value = total
+          if (loaded >= total) {
+            uploadPhase.value = 'server_processing'
+          }
+          uploadProgress.value = Math.min(99, Math.round((loaded / total) * 100))
+        }
       }
     })
     if (res.data?.code === 200) {
       uploadProgress.value = 100
-      uploadUploadedBytes.value = uploadTotalBytes.value
-      ElMessage.success(res.data?.msg || '上传请求已成功提交，请点击“刷新”查看解析状态')
+      if (uploadTotalBytes.value > 0) {
+        uploadUploadedBytes.value = uploadTotalBytes.value
+      }
+      ElMessage.success(
+        res.data?.msg ||
+          '上传已完成。若未看到新文件，请确认未按状态筛选，或稍候待后处理完成后再刷新。'
+      )
+      uploadLoading.value = false
+      uploadPhase.value = null
+      uploadAbortController.value = null
+      stopUploadSpeedMeter()
       uploadDialogVisible.value = false
+      queryForm.pageNum = 1
       fetchArchiveFiles({ force: true })
     } else {
       ElMessage.warning(res.data?.msg || '文件上传失败')
     }
   } catch (error) {
-    console.error('文件上传失败:', error)
-    const backendMsg =
-      error?.response?.data?.msg ||
-      error?.response?.data?.message ||
-      error?.message ||
-      '文件上传失败'
-    ElMessage.error(backendMsg)
+    if (isUploadAbortError(error)) {
+      ElMessage.info('已取消上传')
+    } else {
+      console.error('文件上传失败:', error)
+      const backendMsg =
+        error?.response?.data?.msg ||
+        error?.response?.data?.message ||
+        error?.message ||
+        '文件上传失败'
+      ElMessage.error(backendMsg)
+    }
   } finally {
     uploadLoading.value = false
+    uploadPhase.value = null
+    uploadAbortController.value = null
     stopUploadSpeedMeter()
   }
 }
@@ -2035,9 +2205,20 @@ defineExpose({
 
 onMounted(() => {
   window.addEventListener('resize', handleWindowResize)
+  nextTick(() => {
+    bindTableWrapResizeObserver()
+  })
 })
 
 onBeforeUnmount(() => {
+  if (tableWrapResizeObserver) {
+    try {
+      tableWrapResizeObserver.disconnect()
+    } catch {
+      /* ignore */
+    }
+    tableWrapResizeObserver = null
+  }
   flushReadAckNow()
   stopSplitterDrag()
   window.removeEventListener('resize', handleWindowResize)
@@ -2502,11 +2683,12 @@ onBeforeUnmount(() => {
 }
 
 .pager-row {
+  flex-shrink: 0;
   margin-top: 8px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 6px 2px;
+  padding: 8px 6px 10px;
   border-top: 1px solid #e8eef5;
 }
 
@@ -2705,6 +2887,83 @@ onBeforeUnmount(() => {
   width: 100%;
 }
 
+.upload-unified-panel {
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 18px 44px -34px rgba(15, 23, 42, 0.22);
+  padding: 12px 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.upload-panel-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.upload-panel-toolbar.is-empty {
+  align-items: center;
+}
+
+.upload-toolbar-placeholder {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  line-height: 1.45;
+  flex: 1;
+  min-width: 0;
+}
+
+.upload-toolbar-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-width: 0;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.upload-toolbar-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.upload-toolbar-stat .muted {
+  color: #64748b;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.upload-toolbar-stat strong {
+  font-weight: 900;
+  font-size: 14px;
+}
+
+.upload-toolbar-dot {
+  color: #cbd5e1;
+  font-weight: 700;
+  user-select: none;
+}
+
+.upload-toolbar-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
 :deep(.upload-dropzone .el-upload-dragger) {
   border-radius: 18px;
   border: 1px dashed rgba(148, 163, 184, 0.45);
@@ -2713,10 +2972,19 @@ onBeforeUnmount(() => {
   transition: transform 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease;
 }
 
+:deep(.upload-dropzone.is-compact .el-upload-dragger) {
+  padding: 10px 14px;
+  min-height: 0;
+}
+
 :deep(.upload-dropzone .el-upload-dragger:hover) {
   border-color: rgba(37, 99, 235, 0.55);
   box-shadow: 0 22px 54px -40px rgba(37, 99, 235, 0.5);
   transform: translateY(-1px);
+}
+
+:deep(.upload-dropzone.is-compact .el-upload-dragger:hover) {
+  transform: none;
 }
 
 :deep(.upload-dropzone.is-dragover .el-upload-dragger) {
@@ -2725,24 +2993,97 @@ onBeforeUnmount(() => {
   box-shadow: 0 26px 60px -44px rgba(37, 99, 235, 0.6);
 }
 
-:deep(.upload-archive-dialog .el-upload-list--text) {
-  margin: 10px 0 0;
-  padding: 0;
+.upload-drop-compact {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
 }
 
-:deep(.upload-archive-dialog .el-upload-list--text .el-upload-list__item) {
-  border: 1px solid rgba(148, 163, 184, 0.26);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.92);
+.upload-drop-compact-icon {
+  font-size: 22px;
+  color: rgba(37, 99, 235, 0.88);
+  flex-shrink: 0;
+}
+
+.upload-drop-compact-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.upload-drop-compact-title {
+  font-size: 13px;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.upload-drop-compact-sub {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.upload-file-list-wrap {
+  margin-top: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(248, 250, 252, 0.65);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.upload-file-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #334155;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.75);
 }
 
-:deep(.upload-archive-dialog .el-upload-list--text .el-upload-list__item:hover) {
-  border-color: rgba(148, 163, 184, 0.4);
+.upload-file-list-meta {
+  font-weight: 600;
+  color: #94a3b8;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.upload-file-scroll {
+  max-height: min(240px, 40vh);
+  overflow: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.file-row-remove {
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
+.upload-phase-label {
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #1e293b;
+  letter-spacing: 0.2px;
+}
+
+.upload-progress-phase-hint {
+  color: #64748b;
+  font-weight: 600;
 }
 
 .upload-progress {
-  margin-top: 12px;
+  margin-top: 8px;
 }
 
 :deep(.upload-progress .el-progress-bar__outer) {
@@ -2778,76 +3119,12 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
-.upload-summary {
-  margin-top: 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.26);
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 18px 44px -34px rgba(15, 23, 42, 0.26);
-  padding: 10px 12px;
-}
-
-.upload-summary-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.upload-summary-title {
-  font-size: 13px;
-  font-weight: 900;
-  color: #0f172a;
-  letter-spacing: 0.2px;
-}
-
 :deep(.upload-clear-btn.el-button) {
   padding-left: 8px;
   padding-right: 8px;
   border-radius: 10px;
   font-weight: 800;
-}
-
-.upload-summary-kpis {
-  margin-top: 8px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.upload-kpi {
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(248, 250, 252, 0.7);
-  padding: 8px 10px;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  min-width: 0;
-}
-
-.upload-kpi .k {
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.upload-kpi .v {
-  color: #0f172a;
-  font-size: 13px;
-  font-weight: 900;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.upload-summary-groups {
-  margin-top: 10px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-shrink: 0;
 }
 
 .group-chip {
@@ -2859,16 +3136,6 @@ onBeforeUnmount(() => {
   font-size: 11px;
   font-weight: 800;
   line-height: 1.6;
-}
-
-.upload-summary-files {
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 140px;
-  overflow: auto;
-  padding-right: 2px;
 }
 
 .file-row {
@@ -2898,13 +3165,6 @@ onBeforeUnmount(() => {
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
-}
-
-.upload-summary-files .more {
-  padding: 4px 2px 0;
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 700;
 }
 
 :deep(.upload-archive-dialog .el-button) {

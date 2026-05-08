@@ -8,115 +8,46 @@
     :close-on-click-modal="true"
     :destroy-on-close="false"
   >
-    <div class="summary-grid">
-      <article class="summary-card summary-card--manual">
-        <header class="summary-card__head">
-          <div class="summary-card__icon" aria-hidden="true">
-            <el-icon><Histogram /></el-icon>
-          </div>
-          <div class="summary-card__head-text">
-            <h3 class="summary-card__title">面积汇总（人工）</h3>
-            <p class="summary-card__subtitle">解析后的户室面积加总</p>
-          </div>
-        </header>
-        <div class="summary-card__body">
-          <div class="stat-row">
-            <span class="stat-row__label">建筑面积</span>
-            <span class="stat-row__value">{{ roomSumInfo.buildingAreaSum }}</span>
-            <span class="stat-row__unit">㎡</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-row__label">套内面积</span>
-            <span class="stat-row__value">{{ roomSumInfo.innerAreaSum }}</span>
-            <span class="stat-row__unit">㎡</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-row__label">阳台面积</span>
-            <span class="stat-row__value">{{ roomSumInfo.balconyAreaSum }}</span>
-            <span class="stat-row__unit">㎡</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-row__label">公摊面积</span>
-            <span class="stat-row__value">{{ roomSumInfo.sharedAreaSum }}</span>
-            <span class="stat-row__unit">㎡</span>
+    <!-- 顶部仅保留校验摘要：全宽横排，便于在补录与户室表之前快速把握结论 -->
+    <section class="audit-overview" aria-label="校验信息">
+      <div class="audit-overview__intro">
+        <div class="audit-overview__icon" aria-hidden="true">
+          <el-icon><CircleCheck /></el-icon>
+        </div>
+        <div class="audit-overview__intro-text">
+          <h4 class="audit-overview__title">校验信息</h4>
+          <p class="audit-overview__subtitle">用途与面积校验结果</p>
+        </div>
+      </div>
+      <div class="audit-overview__metrics">
+        <div class="audit-metric">
+          <span class="audit-metric__label">待确认面积</span>
+          <span class="audit-metric__value audit-metric__value--warn">{{ reportAuditInfo.pendingConfirmArea }}</span>
+          <span class="audit-metric__unit">㎡</span>
+        </div>
+        <div class="audit-metric">
+          <span class="audit-metric__label">未知用途数量</span>
+          <span class="audit-metric__value">{{ reportAuditInfo.unknownUsageCount }}</span>
+          <span class="audit-metric__unit">条</span>
+        </div>
+        <div class="audit-metric">
+          <span class="audit-metric__label">未知用途</span>
+          <div class="audit-metric__tag-wrap">
+            <el-tag size="small" effect="light" round :type="reportAuditInfo.hasUnknownUsage === 1 ? 'warning' : 'success'">
+              {{ reportAuditInfo.hasUnknownUsage === 1 ? '有' : '无' }}
+            </el-tag>
           </div>
         </div>
-      </article>
-
-      <article class="summary-card summary-card--audit">
-        <header class="summary-card__head">
-          <div class="summary-card__icon" aria-hidden="true">
-            <el-icon><CircleCheck /></el-icon>
-          </div>
-          <div class="summary-card__head-text">
-            <h3 class="summary-card__title">校验信息</h3>
-            <p class="summary-card__subtitle">用途与面积校验结果</p>
-          </div>
-        </header>
-        <div class="summary-card__body">
-          <div class="stat-row">
-            <span class="stat-row__label">待确认面积</span>
-            <span class="stat-row__value stat-row__value--warn">{{ reportAuditInfo.pendingConfirmArea }}</span>
-            <span class="stat-row__unit">㎡</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-row__label">未知用途数量</span>
-            <span class="stat-row__value">{{ reportAuditInfo.unknownUsageCount }}</span>
-            <span class="stat-row__unit">条</span>
-          </div>
-          <div class="stat-row stat-row--tags">
-            <span class="stat-row__label">未知用途</span>
-            <span class="stat-row__tags">
-              <el-tag size="small" effect="light" round :type="reportAuditInfo.hasUnknownUsage === 1 ? 'warning' : 'success'">
-                {{ reportAuditInfo.hasUnknownUsage === 1 ? '有' : '无' }}
-              </el-tag>
-            </span>
-          </div>
-          <div class="stat-row stat-row--tags">
-            <span class="stat-row__label">校验状态</span>
-            <span class="stat-row__tags">
-              <el-tag size="small" effect="light" round :type="reportAuditInfo.isVerified === 1 ? 'success' : 'danger'">
-                {{ reportAuditInfo.isVerified === 1 ? '通过' : '不通过' }}
-              </el-tag>
-            </span>
+        <div class="audit-metric">
+          <span class="audit-metric__label">校验状态</span>
+          <div class="audit-metric__tag-wrap">
+            <el-tag size="small" effect="light" round :type="reportAuditInfo.isVerified === 1 ? 'success' : 'danger'">
+              {{ reportAuditInfo.isVerified === 1 ? '通过' : '不通过' }}
+            </el-tag>
           </div>
         </div>
-      </article>
-
-      <article class="summary-card summary-card--ocr">
-        <header class="summary-card__head">
-          <div class="summary-card__icon" aria-hidden="true">
-            <el-icon><Document /></el-icon>
-          </div>
-          <div class="summary-card__head-text">
-            <h3 class="summary-card__title">OCR 对比</h3>
-            <p class="summary-card__subtitle">来自实测报告查询页 OCR 字段</p>
-          </div>
-        </header>
-        <div class="summary-card__body">
-          <div class="stat-row">
-            <span class="stat-row__label">建筑面积（OCR）</span>
-            <span class="stat-row__value">{{ reportAuditInfo.roomInfoBuildingAreaSumFromOcr }}</span>
-            <span class="stat-row__unit">㎡</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-row__label">套内面积（OCR）</span>
-            <span class="stat-row__value">{{ reportAuditInfo.roomInfoInnerAreaSumFromOcr }}</span>
-            <span class="stat-row__unit">㎡</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-row__label">阳台面积（OCR）</span>
-            <span class="stat-row__value">{{ reportAuditInfo.roomInfoBalconyAreaSumFromOcr }}</span>
-            <span class="stat-row__unit">㎡</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-row__label">公摊面积（OCR）</span>
-            <span class="stat-row__value">{{ reportAuditInfo.roomInfoSharedAreaSumFromOcr }}</span>
-            <span class="stat-row__unit">㎡</span>
-          </div>
-        </div>
-      </article>
-    </div>
+      </div>
+    </section>
 
     <div v-if="reportAuditInfo.verificationErrorReason && reportAuditInfo.verificationErrorReason !== '-'" class="verify-error">
       <el-icon class="verify-error__icon"><WarningFilled /></el-icon>
@@ -136,7 +67,7 @@
                   :model-value="reportBasicInfoForm.propertyCertificateNumber"
                   maxlength="80"
                   clearable
-                  placeholder="请输入或从报告中核对后补录"
+                  placeholder="请输入"
                   @update:model-value="(v) => emit('update:propertyCertificateNumber', v)"
                 />
               </el-form-item>
@@ -147,7 +78,7 @@
                   :model-value="reportBasicInfoForm.propertyAreaConfirmationNoticeNumber"
                   maxlength="80"
                   clearable
-                  placeholder="请输入或从报告中核对后补录"
+                  placeholder="请输入"
                   @update:model-value="(v) => emit('update:propertyAreaConfirmationNoticeNumber', v)"
                 />
               </el-form-item>
@@ -228,11 +159,10 @@
 
 <script setup>
 import { computed, onBeforeUnmount, ref } from 'vue'
-import { Histogram, CircleCheck, Document, WarningFilled, Select } from '@element-plus/icons-vue'
+import { CircleCheck, WarningFilled, Select } from '@element-plus/icons-vue'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
-  roomSumInfo: { type: Object, required: true },
   reportAuditInfo: { type: Object, required: true },
   roomInfoData: { type: Array, default: () => [] },
   detailLoading: { type: Boolean, default: false },
@@ -292,54 +222,31 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.summary-card {
-  position: relative;
-  overflow: hidden;
+.audit-overview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 14px 18px;
+  padding: 14px 16px;
   border-radius: 14px;
   border: 1px solid rgba(148, 163, 184, 0.35);
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 100%);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98) 0%, rgba(240, 253, 244, 0.35) 100%);
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.9) inset,
-    0 10px 28px -16px rgba(15, 23, 42, 0.12);
+    0 10px 28px -16px rgba(15, 23, 42, 0.1);
 }
 
-.summary-card::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  border-radius: 14px 0 0 14px;
-}
-
-.summary-card--manual::before {
-  background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
-}
-
-.summary-card--audit::before {
-  background: linear-gradient(180deg, #10b981 0%, #047857 100%);
-}
-
-.summary-card--ocr::before {
-  background: linear-gradient(180deg, #8b5cf6 0%, #6d28d9 100%);
-}
-
-.summary-card__head {
+.audit-overview__intro {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding: 14px 14px 10px 16px;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.85);
+  flex: 0 0 auto;
+  min-width: min(220px, 100%);
+  padding-right: 8px;
+  border-right: 1px solid rgba(226, 232, 240, 0.95);
 }
 
-.summary-card__icon {
+.audit-overview__icon {
   flex-shrink: 0;
   width: 40px;
   height: 40px;
@@ -349,28 +256,15 @@ onBeforeUnmount(() => {
   justify-content: center;
   font-size: 20px;
   color: #fff;
-}
-
-.summary-card--manual .summary-card__icon {
-  background: linear-gradient(145deg, #3b82f6 0%, #1d4ed8 100%);
-  box-shadow: 0 6px 14px -6px rgba(29, 78, 216, 0.55);
-}
-
-.summary-card--audit .summary-card__icon {
   background: linear-gradient(145deg, #10b981 0%, #059669 100%);
   box-shadow: 0 6px 14px -6px rgba(5, 150, 105, 0.45);
 }
 
-.summary-card--ocr .summary-card__icon {
-  background: linear-gradient(145deg, #a78bfa 0%, #7c3aed 100%);
-  box-shadow: 0 6px 14px -6px rgba(124, 58, 237, 0.45);
-}
-
-.summary-card__head-text {
+.audit-overview__intro-text {
   min-width: 0;
 }
 
-.summary-card__title {
+.audit-overview__title {
   margin: 0;
   font-size: 15px;
   font-weight: 700;
@@ -379,72 +273,61 @@ onBeforeUnmount(() => {
   line-height: 1.3;
 }
 
-.summary-card__subtitle {
+.audit-overview__subtitle {
   margin: 4px 0 0;
   font-size: 11.5px;
   line-height: 1.4;
   color: var(--biz-subtext, #64748b);
 }
 
-.summary-card__body {
-  padding: 10px 12px 12px 16px;
+.audit-overview__metrics {
+  flex: 1 1 520px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  align-items: stretch;
+}
+
+.audit-metric {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
+  justify-content: center;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(248, 250, 252, 0.85);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  min-height: 72px;
+  box-sizing: border-box;
 }
 
-.stat-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: baseline;
-  gap: 8px;
-  padding: 7px 10px;
-  border-radius: 8px;
-  font-size: 13px;
-  background: rgba(248, 250, 252, 0.65);
+.audit-metric__tag-wrap {
+  margin-top: auto;
 }
 
-.stat-row:nth-child(even) {
-  background: rgba(241, 245, 249, 0.75);
-}
-
-.stat-row--tags {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.stat-row__label {
+.audit-metric__label {
+  font-size: 12px;
+  font-weight: 600;
   color: #64748b;
-  font-weight: 500;
+  line-height: 1.3;
 }
 
-.stat-row__value {
-  font-weight: 700;
+.audit-metric__value {
+  font-size: 18px;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: #0f172a;
-  font-size: 14px;
-  text-align: right;
+  line-height: 1.2;
 }
 
-.stat-row__value--warn {
+.audit-metric__value--warn {
   color: #c2410c;
 }
 
-.stat-row__unit {
-  font-size: 12px;
+.audit-metric__unit {
+  font-size: 11px;
   font-weight: 600;
   color: #94a3b8;
-  min-width: 1.5em;
-  text-align: right;
-}
-
-.stat-row__tags {
-  display: flex;
-  justify-content: flex-end;
-  grid-column: 2 / -1;
-}
-
-.stat-row--tags .stat-row__label {
-  align-self: center;
 }
 
 .verify-error {
@@ -628,11 +511,28 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 
-@media (max-width: 1280px) {
-  .summary-grid {
-    grid-template-columns: 1fr;
+@media (max-width: 1100px) {
+  .audit-overview__intro {
+    flex: 1 1 100%;
+    border-right: none;
+    padding-right: 0;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.95);
   }
 
+  .audit-overview__metrics {
+    flex: 1 1 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .audit-overview__metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1280px) {
   .basic-info-panel__body {
     grid-template-columns: 1fr;
   }

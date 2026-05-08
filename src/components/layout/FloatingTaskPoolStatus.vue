@@ -21,42 +21,11 @@
     >
       <div class="task-body">
         <section class="summary-card">
-          <div class="summary-top">
-            <div class="summary-left">
-              <div class="status-pill" :class="`is-${healthTag.type}`">
-                <el-icon class="status-icon"><Cpu /></el-icon>
-                <span class="status-text">{{ healthTag.label }}</span>
-              </div>
-              <div class="summary-kpis">
-                <span class="kpi">运行中 <b>{{ runningCount }}</b></span>
-                <span class="dot">·</span>
-                <span class="kpi">排队 <b>{{ queueSize }}</b></span>
-                <span class="dot">·</span>
-                <span class="kpi">活跃线程 <b>{{ activeThreads }}</b></span>
-              </div>
-            </div>
-            <div class="summary-right">
-              <div class="summary-update">更新 {{ lastUpdateText }}</div>
-              <el-button
-                size="small"
-                class="refresh-btn"
-                type="primary"
-                plain
-                :icon="Refresh"
-                :loading="loading"
-                @click="refreshAll"
-              >
-                刷新
-              </el-button>
-            </div>
-          </div>
-
           <div class="metric-grid">
             <div class="pool-tuner" role="group" aria-label="线程池并发容量调整">
               <div class="pool-tuner__top">
                 <div class="pool-tuner__title-block">
                   <span class="pool-tuner__title">并发容量</span>
-                  <span class="pool-tuner__hint">生效值来自服务器；下方为待提交草稿</span>
                 </div>
                 <div
                   class="pool-tuner__state"
@@ -113,19 +82,6 @@
                 </div>
               </div>
 
-              <div class="pool-tuner__meter" aria-hidden="true">
-                <div class="pool-tuner__meter-track">
-                  <div
-                    class="pool-tuner__meter-core"
-                    :style="{ width: `${poolCoreSharePercent}%` }"
-                  />
-                </div>
-                <div class="pool-tuner__meter-cap">
-                  <span>核心相对上限</span>
-                  <span class="pool-tuner__meter-val">{{ poolCoreSharePercent }}%</span>
-                </div>
-              </div>
-
               <div class="pool-tuner__actions">
                 <el-button
                   size="small"
@@ -173,14 +129,30 @@
               <h2 class="running-card__title">运行中 / 排队任务</h2>
               <p class="running-card__subtitle">解析流水线与队列占用一览</p>
             </div>
-            <div class="running-card__stats" role="presentation">
-              <div class="running-card__stat running-card__stat--run">
-                <span class="running-card__stat-label">运行中</span>
-                <span class="running-card__stat-value">{{ listRunningCount }}</span>
+            <div class="running-card__head-actions">
+              <div class="running-card__stats" role="presentation">
+                <div class="running-card__stat running-card__stat--run">
+                  <span class="running-card__stat-label">运行中</span>
+                  <span class="running-card__stat-value">{{ listRunningCount }}</span>
+                </div>
+                <div class="running-card__stat running-card__stat--queue">
+                  <span class="running-card__stat-label">排队</span>
+                  <span class="running-card__stat-value">{{ listQueuedCount }}</span>
+                </div>
               </div>
-              <div class="running-card__stat running-card__stat--queue">
-                <span class="running-card__stat-label">排队</span>
-                <span class="running-card__stat-value">{{ listQueuedCount }}</span>
+              <div class="running-card__toolbar">
+                <div class="running-card__update">更新 {{ lastUpdateText }}</div>
+                <el-button
+                  size="small"
+                  class="refresh-btn"
+                  type="primary"
+                  plain
+                  :icon="Refresh"
+                  :loading="loading"
+                  @click="refreshAll"
+                >
+                  刷新
+                </el-button>
               </div>
             </div>
           </header>
@@ -420,7 +392,6 @@ const detailLoading = ref(false)
 const detailTask = ref(null)
 
 const runningTasks = computed(() => (Array.isArray(statusData.value?.runningTasks) ? statusData.value.runningTasks : []))
-const runningCount = computed(() => runningTasks.value.length)
 
 /** 抽屉宽度：略宽便于双列任务卡；打开时按视口计算 */
 const drawerWidthPx = ref(600)
@@ -453,12 +424,10 @@ const sortedRunningTasks = computed(() => {
 const listRunningCount = computed(() => runningTasks.value.filter((t) => String(t?.status || '').toUpperCase() === 'RUNNING').length)
 const listQueuedCount = computed(() => runningTasks.value.filter((t) => String(t?.status || '').toUpperCase() === 'QUEUED').length)
 
-const queueSize = computed(() => Number(statusData.value?.queueTasks?.queueSize || 0))
 const highPriorityCount = computed(() => Number(statusData.value?.queueTasks?.highPriorityCount || 0))
 const normalPriorityCount = computed(() => Number(statusData.value?.queueTasks?.normalPriorityCount || 0))
 const lowPriorityCount = computed(() => Number(statusData.value?.queueTasks?.lowPriorityCount || 0))
 
-const activeThreads = computed(() => Number(statusData.value?.threadPoolStatus?.activeThreadCount || 0))
 const coreThreads = computed(() => Number(statusData.value?.threadPoolStatus?.corePoolSize || 0))
 const maxThreads = computed(() => Number(statusData.value?.threadPoolStatus?.maximumPoolSize || 0))
 const poolSize = computed(() => Number(statusData.value?.threadPoolStatus?.poolSize || 0))
@@ -479,28 +448,11 @@ const memoryPercent = computed(() => {
 
 const systemCpuText = computed(() => formatPercent(systemCpu.value))
 
-const healthTag = computed(() => {
-  if (queueSize.value >= 20 || (maxThreads.value > 0 && activeThreads.value >= maxThreads.value)) {
-    return { label: '高负载', type: 'danger' }
-  }
-  if (queueSize.value > 0 || activeThreads.value > 0) {
-    return { label: '繁忙', type: 'warning' }
-  }
-  return { label: '空闲', type: 'success' }
-})
-
 /** 草稿是否与服务器当前生效值不一致 */
 const poolDirty = computed(() => {
   const c = Number(poolForm.value.corePoolSize)
   const m = Number(poolForm.value.maximumPoolSize)
   return c !== coreThreads.value || m !== maxThreads.value
-})
-
-/** 草稿：核心占最大线程比例，用于可视化条 */
-const poolCoreSharePercent = computed(() => {
-  const m = Math.max(1, Number(poolForm.value.maximumPoolSize) || 1)
-  const c = Math.max(0, Number(poolForm.value.corePoolSize) || 0)
-  return Math.min(100, Math.round((c / m) * 1000) / 10)
 })
 
 const resetPoolDraftToLive = () => {
@@ -924,87 +876,6 @@ onBeforeUnmount(() => {
     0 12px 30px -22px rgba(15, 23, 42, 0.28);
 }
 
-.summary-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.summary-left {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-weight: 800;
-  font-size: 13px;
-  width: fit-content;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: rgba(255, 255, 255, 0.75);
-  color: #0f172a;
-}
-
-.status-pill.is-success {
-  border-color: var(--semantic-success-border);
-  background: var(--semantic-success-bg);
-  color: var(--semantic-success-text);
-}
-
-.status-pill.is-warning {
-  border-color: var(--semantic-warning-border);
-  background: var(--semantic-warning-bg);
-  color: var(--semantic-warning-text);
-}
-
-.status-pill.is-danger {
-  border-color: var(--semantic-danger-border);
-  background: var(--semantic-danger-bg);
-  color: var(--semantic-danger-text);
-}
-
-.status-icon {
-  font-size: 16px;
-}
-
-.summary-kpis {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  color: #475569;
-  font-size: 12px;
-}
-
-.summary-kpis b {
-  color: #0f172a;
-  font-weight: 800;
-}
-
-.dot {
-  opacity: 0.6;
-}
-
-.summary-right {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-}
-
-.summary-update {
-  font-size: 12px;
-  color: #64748b;
-}
-
 .refresh-btn {
   border-radius: 10px;
   font-weight: 700;
@@ -1071,13 +942,6 @@ onBeforeUnmount(() => {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--pool-slate);
-}
-
-.pool-tuner__hint {
-  font-size: 11px;
-  line-height: 1.35;
-  color: var(--pool-muted);
-  max-width: 42ch;
 }
 
 .pool-tuner__state {
@@ -1230,48 +1094,6 @@ onBeforeUnmount(() => {
   background: linear-gradient(180deg, transparent, rgba(100, 116, 139, 0.35), transparent);
   align-self: stretch;
   justify-self: center;
-}
-
-.pool-tuner__meter {
-  position: relative;
-  z-index: 1;
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px dashed rgba(100, 116, 139, 0.35);
-}
-
-.pool-tuner__meter-track {
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.08);
-  overflow: hidden;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06) inset;
-}
-
-.pool-tuner__meter-core {
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--pool-teal), #14b8a6);
-  box-shadow: 0 0 12px rgba(13, 148, 136, 0.35);
-  transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.pool-tuner__meter-cap {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 6px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--pool-muted);
-}
-
-.pool-tuner__meter-val {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  color: var(--pool-teal);
 }
 
 .pool-tuner__actions {
@@ -1462,6 +1284,29 @@ onBeforeUnmount(() => {
   line-height: 1.4;
   color: var(--rc-muted);
   max-width: 36ch;
+}
+
+.running-card__head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 10px 14px;
+  flex: 1;
+  min-width: 0;
+}
+
+.running-card__toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.running-card__update {
+  font-size: 12px;
+  color: var(--rc-muted);
 }
 
 .running-card__stats {

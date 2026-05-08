@@ -55,125 +55,114 @@
         </div>
       </header>
 
-      <div ref="formsTableWrapRef" class="planning-table-wrap">
-        <el-table
-          ref="formsTableRef"
-          class="project-tab-el-table planning-el-table"
-          :data="forms"
-          border
-          stripe
-          row-key="id"
-          :max-height="formsTableHeight"
-          scrollbar-always-on
-          highlight-current-row
-          @row-click="handleFormRowClick"
-        >
-          <el-table-column type="index" width="52" label="序号" align="center" fixed="left" />
-          <el-table-column prop="phase" label="期数" width="90" align="center" />
-          <el-table-column prop="propertyCertificateNumber" label="不动产权证编号" min-width="170" show-overflow-tooltip />
-          <el-table-column prop="contractApprovalNumber" label="合同/批文编号" min-width="170" show-overflow-tooltip />
+      <div class="party-form-dashboard">
+        <el-empty v-if="!formsLoading && !forms.length" class="party-form-empty" description="暂无项目方汇总主表数据" />
 
-          <el-table-column label="声明汇总·建面(㎡)" align="center">
-            <el-table-column label="合同约定" width="102" align="right">
-              <template #default="{ row }">{{ formatNum(row.declaredTotals?.contractAgreedTotalBuildingArea) }}</template>
-            </el-table-column>
-            <el-table-column label="计容" width="102" align="right">
-              <template #default="{ row }">{{ formatNum(row.declaredTotals?.buildableTotalBuildingArea) }}</template>
-            </el-table-column>
-            <el-table-column label="差值" width="102" align="right">
-              <template #default="{ row }">{{ formatNum(row.declaredTotals?.differenceTotalBuildingArea) }}</template>
-            </el-table-column>
-          </el-table-column>
-          <el-table-column label="声明汇总·商业(㎡)" align="center">
-            <el-table-column label="合同约定" width="102" align="right">
-              <template #default="{ row }">{{ formatNum(row.declaredTotals?.contractAgreedCommercialArea) }}</template>
-            </el-table-column>
-            <el-table-column label="计容" width="102" align="right">
-              <template #default="{ row }">{{ formatNum(row.declaredTotals?.buildableCommercialArea) }}</template>
-            </el-table-column>
-            <el-table-column label="差值" width="102" align="right">
-              <template #default="{ row }">{{ formatNum(row.declaredTotals?.differenceCommercialArea) }}</template>
-            </el-table-column>
-          </el-table-column>
-          <el-table-column label="声明汇总·住宅(㎡)" align="center">
-            <el-table-column label="合同约定" width="102" align="right">
-              <template #default="{ row }">{{ formatNum(row.declaredTotals?.contractAgreedResidentialArea) }}</template>
-            </el-table-column>
-            <el-table-column label="计容" width="102" align="right">
-              <template #default="{ row }">{{ formatNum(row.declaredTotals?.buildableResidentialArea) }}</template>
-            </el-table-column>
-            <el-table-column label="差值" width="102" align="right">
-              <template #default="{ row }">{{ formatNum(row.declaredTotals?.differenceResidentialArea) }}</template>
-            </el-table-column>
-          </el-table-column>
-
-          <el-table-column label="解析状态" width="110" align="center">
-            <template #default="{ row }">
-              <el-tag size="small" effect="light" :type="parseStatusTagType[row.parseStatus] || 'info'">
-                {{ parseStatusText[row.parseStatus] || '-' }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="是否已解析" width="100" align="center">
-            <template #default="{ row }">
-              <el-tag size="small" effect="light" :type="Number(row.isParsed) === 1 ? 'success' : 'info'">
-                {{ Number(row.isParsed) === 1 ? '已解析' : '未解析' }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="124" align="center" fixed="right">
-            <template #default="{ row }">
-              <span class="party-form-actions">
-                <el-button class="op-btn audit-btn" size="small" type="primary" plain @click.stop="openFormEdit(row)">编辑</el-button>
-                <el-button class="op-btn audit-btn" size="small" type="primary" plain @click.stop="openAudit(row)">审核</el-button>
-              </span>
-            </template>
-          </el-table-column>
-        </el-table>
-
-        <div
-          v-show="formsShowXScroll"
-          class="planning-table-x-float"
-          role="presentation"
-          aria-hidden="true"
-        >
-          <div
-            class="planning-table-x-float__edge planning-table-x-float__edge--left"
-            :class="{ 'is-active': formsCanScrollLeft }"
-          />
-          <div
-            class="planning-table-x-float__edge planning-table-x-float__edge--right"
-            :class="{ 'is-active': formsCanScrollRight }"
-          />
-          <el-tooltip content="向左" placement="left">
+        <template v-else-if="forms.length">
+          <div v-if="forms.length > 1 || formTotal > forms.length" class="party-form-toolbar">
+            <div v-if="forms.length > 1" class="party-form-picker">
+              <span class="party-form-picker__label">汇总文件</span>
+              <el-radio-group
+                v-model="activeFileRecordId"
+                size="small"
+                class="party-form-picker__group"
+                @change="onActiveFileRecordChange"
+              >
+                <el-radio-button
+                  v-for="(f, idx) in forms"
+                  :key="String(f.fileRecordId)"
+                  :label="String(f.fileRecordId)"
+                >
+                  第 {{ idx + 1 }} 份
+                </el-radio-button>
+              </el-radio-group>
+            </div>
             <el-button
-              v-show="formsCanScrollLeft"
-              class="planning-table-x-float__fab planning-table-x-float__fab--left"
-              circle
+              v-if="forms.length < formTotal"
+              class="party-form-load-more"
+              link
               type="primary"
-              aria-label="向左查看更多列"
-              @click="formsScrollBy(-300)"
+              :loading="formsLoadingMore"
+              @click="fetchMoreForms"
             >
-              <el-icon><DArrowLeft /></el-icon>
+              加载更多（{{ forms.length }}/{{ formTotal }}）
             </el-button>
-          </el-tooltip>
-          <el-tooltip content="向右" placement="right">
-            <el-button
-              v-show="formsCanScrollRight"
-              class="planning-table-x-float__fab planning-table-x-float__fab--right"
-              circle
-              type="primary"
-              aria-label="向右查看更多列"
-              @click="formsScrollBy(300)"
-            >
-              <el-icon><DArrowRight /></el-icon>
-            </el-button>
-          </el-tooltip>
-        </div>
+          </div>
+
+          <div v-if="displayedForm" class="party-form-focus">
+            <div class="party-form-meta" role="group" aria-label="当前主表状态">
+              <div class="party-form-meta__tags">
+                <el-tag size="small" effect="light" :type="parseStatusTagType[displayedForm.parseStatus] || 'info'">
+                  解析 {{ parseStatusText[displayedForm.parseStatus] || '-' }}
+                </el-tag>
+                <el-tag size="small" effect="light" :type="Number(displayedForm.isParsed) === 1 ? 'success' : 'info'">
+                  {{ Number(displayedForm.isParsed) === 1 ? '已解析' : '未解析' }}
+                </el-tag>
+                <span class="party-form-meta__fid" :title="String(displayedForm.fileRecordId || '')">
+                  fileRecordId {{ shortFileRecordId(displayedForm.fileRecordId) }}
+                </span>
+              </div>
+              <el-button class="op-btn audit-btn" size="small" type="primary" plain @click="openAudit(displayedForm)">
+                审核
+              </el-button>
+            </div>
+
+            <div class="party-declared-matrix-wrap">
+              <table class="party-declared-matrix" aria-label="声明汇总：建筑面积、商业面积、住宅面积（㎡）">
+                <tbody>
+                  <tr>
+                    <td class="party-declared-matrix__label">合同约定建筑面积</td>
+                    <td class="party-declared-matrix__value">
+                      {{ formatNum(displayedForm.declaredTotals?.contractAgreedTotalBuildingArea) }}
+                    </td>
+                    <td class="party-declared-matrix__label">计容建筑面积</td>
+                    <td class="party-declared-matrix__value">
+                      {{ formatNum(displayedForm.declaredTotals?.buildableTotalBuildingArea) }}
+                    </td>
+                    <td class="party-declared-matrix__label">差值</td>
+                    <td class="party-declared-matrix__value">
+                      {{ formatNum(displayedForm.declaredTotals?.differenceTotalBuildingArea) }}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="party-declared-matrix__label">合同约定商业面积</td>
+                    <td class="party-declared-matrix__value">
+                      {{ formatNum(displayedForm.declaredTotals?.contractAgreedCommercialArea) }}
+                    </td>
+                    <td class="party-declared-matrix__label">计容商业面积</td>
+                    <td class="party-declared-matrix__value">
+                      {{ formatNum(displayedForm.declaredTotals?.buildableCommercialArea) }}
+                    </td>
+                    <td class="party-declared-matrix__label">差值</td>
+                    <td class="party-declared-matrix__value">
+                      {{ formatNum(displayedForm.declaredTotals?.differenceCommercialArea) }}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="party-declared-matrix__label">合同约定住宅面积</td>
+                    <td class="party-declared-matrix__value">
+                      {{ formatNum(displayedForm.declaredTotals?.contractAgreedResidentialArea) }}
+                    </td>
+                    <td class="party-declared-matrix__label">计容住宅面积</td>
+                    <td class="party-declared-matrix__value">
+                      {{ formatNum(displayedForm.declaredTotals?.buildableResidentialArea) }}
+                    </td>
+                    <td class="party-declared-matrix__label">差值</td>
+                    <td class="party-declared-matrix__value">
+                      {{ formatNum(displayedForm.declaredTotals?.differenceResidentialArea) }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </template>
       </div>
     </section>
 
+    <!-- 主表下方「项目方实测汇总行」列表：产品要求暂不展示；改 true 可恢复 UI 与请求 -->
     <section
+      v-show="SHOW_PARTY_SUMMARY_ROWS_PANEL"
       ref="rowsPanelRef"
       class="rows-panel planning-panel planning-panel--modern project-tab-panel"
       v-loading="rowsLoading"
@@ -306,7 +295,6 @@
       :project-id="projectId"
       :file-record-id="currentAuditFileRecordId"
       :initial-file="currentAuditFile"
-      :variant="partySummaryDialogVariant"
       :main-form-draft="partySummaryMainFormDraft"
       @main-form-saved="onPartySummaryMainFormSaved"
     />
@@ -316,10 +304,7 @@
 <script setup>
 import { computed, reactive, ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import {
-  clampTableBodyHeight,
-  clampMainListTableHeightMultiLevel
-} from '@/composables/project-list/useElTableHeightClamp.js'
+import { clampTableBodyHeight } from '@/composables/project-list/useElTableHeightClamp.js'
 import {
   Document,
   Files,
@@ -339,6 +324,9 @@ const props = defineProps({
   active: { type: Boolean, default: false }
 })
 
+/** 为 false 时隐藏下方汇总行面板且不请求行接口；确认废弃后可删整块模板与相关逻辑 */
+const SHOW_PARTY_SUMMARY_ROWS_PANEL = false
+
 const formsLoading = ref(false)
 const formsLoadingMore = ref(false)
 const rowsLoading = ref(false)
@@ -352,11 +340,25 @@ const currentAuditFileRecordId = ref('')
 const currentAuditFile = ref(null)
 const activeFileRecordId = ref('')
 
-const PARTY_AUDIT_VARIANT_AUDIT = 'audit'
-const PARTY_AUDIT_VARIANT_MAIN_FORM = 'mainFormEdit'
-
-const partySummaryDialogVariant = ref(PARTY_AUDIT_VARIANT_AUDIT)
 const partySummaryMainFormDraft = ref(null)
+
+const buildMainFormDraftFromRow = (row) => ({
+  id: row?.id ?? null,
+  isParsed: row?.isParsed ?? null,
+  parseStatus: row?.parseStatus || '',
+  remark: row?.remark || '',
+  declaredTotals: {
+    contractAgreedTotalBuildingArea: row?.declaredTotals?.contractAgreedTotalBuildingArea ?? null,
+    buildableTotalBuildingArea: row?.declaredTotals?.buildableTotalBuildingArea ?? null,
+    differenceTotalBuildingArea: row?.declaredTotals?.differenceTotalBuildingArea ?? null,
+    contractAgreedCommercialArea: row?.declaredTotals?.contractAgreedCommercialArea ?? null,
+    buildableCommercialArea: row?.declaredTotals?.buildableCommercialArea ?? null,
+    differenceCommercialArea: row?.declaredTotals?.differenceCommercialArea ?? null,
+    contractAgreedResidentialArea: row?.declaredTotals?.contractAgreedResidentialArea ?? null,
+    buildableResidentialArea: row?.declaredTotals?.buildableResidentialArea ?? null,
+    differenceResidentialArea: row?.declaredTotals?.differenceResidentialArea ?? null
+  }
+})
 
 const parseStatusText = {
   SUCCESS: '成功',
@@ -389,8 +391,6 @@ const rowQuery = reactive({
 
 const partySummaryTabRef = ref(null)
 const rowsPanelRef = ref(null)
-const formsTableRef = ref(null)
-const formsTableWrapRef = ref(null)
 const rowsTableRef = ref(null)
 const rowsTableWrapRef = ref(null)
 const rowsTableCap = ref(260)
@@ -398,6 +398,7 @@ const rowsTableCap = ref(260)
 let partySummaryResizeObserver = null
 
 function measureRowsTableCap() {
+  if (!SHOW_PARTY_SUMMARY_ROWS_PANEL) return
   const panel = rowsPanelRef.value
   if (!panel) return
   const hero = panel.querySelector('.planning-hero')
@@ -413,14 +414,50 @@ function measureAllPartySummaryCaps() {
   measureRowsTableCap()
 }
 
-const formsTableHeight = computed(() => clampMainListTableHeightMultiLevel(forms.value.length))
 const rowsTableHeight = computed(() => clampTableBodyHeight(rowsTableCap.value, rows.value.length))
 
-const activeFormSelectionText = computed(() => {
-  if (!activeFileRecordId.value) return '未选择'
-  const id = activeFileRecordId.value
-  return id.length > 22 ? `${id.slice(0, 22)}…` : id
+/** 当前展示的汇总主表（默认第一份或与 activeFileRecordId 对应） */
+const displayedForm = computed(() => {
+  const list = forms.value
+  if (!list.length) return null
+  const id = String(activeFileRecordId.value || '')
+  if (!id) return list[0]
+  return list.find((f) => String(f.fileRecordId) === id) || list[0]
 })
+
+const activeFormSelectionText = computed(() => {
+  const list = forms.value
+  if (!list.length) return '暂无主表'
+  const id = String(activeFileRecordId.value || '')
+  const idx = list.findIndex((f) => String(f.fileRecordId) === id)
+  const n = idx >= 0 ? idx + 1 : 1
+  if (list.length === 1 && formTotal.value <= 1) return '本项 1 份汇总表'
+  return `第 ${n} 份 · 已加载 ${list.length}${formTotal.value > list.length ? ` / 共 ${formTotal.value}` : ''}`
+})
+
+const shortFileRecordId = (fid) => {
+  const s = String(fid ?? '')
+  if (!s) return '—'
+  return s.length > 16 ? `${s.slice(0, 16)}…` : s
+}
+
+function ensureActiveFormSelection() {
+  const list = forms.value
+  if (!list.length) {
+    activeFileRecordId.value = ''
+    return
+  }
+  const cur = String(activeFileRecordId.value || '')
+  if (!list.some((f) => String(f.fileRecordId) === cur)) {
+    activeFileRecordId.value = String(list[0].fileRecordId || '')
+  }
+  onActiveFileRecordChange()
+}
+
+function onActiveFileRecordChange() {
+  const row = forms.value.find((f) => String(f.fileRecordId) === String(activeFileRecordId.value))
+  handleFormRowClick(row || {})
+}
 
 onMounted(() => {
   nextTick(() => {
@@ -429,12 +466,10 @@ onMounted(() => {
       partySummaryResizeObserver = new ResizeObserver(() => measureAllPartySummaryCaps())
       if (partySummaryTabRef.value) partySummaryResizeObserver.observe(partySummaryTabRef.value)
     }
-    attachFormsTableScroll()
   })
 })
 
 onBeforeUnmount(() => {
-  detachFormsTableScroll()
   partySummaryResizeObserver?.disconnect()
   partySummaryResizeObserver = null
 })
@@ -442,7 +477,6 @@ onBeforeUnmount(() => {
 watch([() => forms.value.length, () => rows.value.length], () => {
   nextTick(() => {
     measureAllPartySummaryCaps()
-    attachFormsTableScroll()
   })
 })
 
@@ -450,13 +484,6 @@ watch(
   () => [rowQuery.pageNum, rowQuery.pageSize],
   () => nextTick(measureAllPartySummaryCaps)
 )
-
-const {
-  showXScrollProxy: formsShowXScroll,
-  canScrollLeft: formsCanScrollLeft,
-  canScrollRight: formsCanScrollRight,
-  scrollTableBy: formsScrollBy
-} = useSummaryTableHorizontalScroll(formsTableRef, forms)
 
 const {
   showXScrollProxy: rowsShowXScroll,
@@ -501,6 +528,7 @@ const fetchForms = async () => {
   if (!formQuery.projectId) {
     forms.value = []
     formTotal.value = 0
+    activeFileRecordId.value = ''
     return
   }
   formQuery.pageNum = 1
@@ -510,16 +538,20 @@ const fetchForms = async () => {
     if (res.data?.code !== 200) {
       forms.value = []
       formTotal.value = 0
+      activeFileRecordId.value = ''
       ElMessage.warning(res.data?.msg || '项目方汇总主表查询失败')
       return
     }
     const parsed = normalizePage(res.data?.data)
     forms.value = parsed.records
     formTotal.value = parsed.total
+    await nextTick()
+    ensureActiveFormSelection()
   } catch (error) {
     console.error('查询项目方汇总主表失败:', error)
     forms.value = []
     formTotal.value = 0
+    activeFileRecordId.value = ''
     ElMessage.error('查询项目方汇总主表失败，请稍后重试')
   } finally {
     formsLoading.value = false
@@ -546,8 +578,6 @@ const fetchMoreForms = async () => {
     if (parsed.records.length) {
       forms.value = [...forms.value, ...parsed.records]
       formQuery.pageNum = nextPage
-      await nextTick()
-      onFormsTableScroll()
     }
   } catch (error) {
     console.error('加载项目方汇总主表失败:', error)
@@ -557,51 +587,12 @@ const fetchMoreForms = async () => {
   }
 }
 
-let formsScrollWrap = null
-let formsScrollHandler = null
-
-function getFormsTableBodyScrollEl() {
-  const table = formsTableRef.value
-  const root = table?.$el
-  if (!root) return null
-  return (
-    root.querySelector('.el-scrollbar__wrap') ||
-    root.querySelector('.el-table__body-wrapper .el-scrollbar__wrap') ||
-    root.querySelector('.el-table__body-wrapper')
-  )
-}
-
-function onFormsTableScroll() {
-  if (formsLoading.value || formsLoadingMore.value) return
-  if (forms.value.length >= formTotal.value) return
-  const el = formsScrollWrap
-  if (!el) return
-  const { scrollTop, scrollHeight, clientHeight } = el
-  if (scrollHeight - scrollTop - clientHeight < 72) {
-    fetchMoreForms()
-  }
-}
-
-function attachFormsTableScroll() {
-  detachFormsTableScroll()
-  nextTick(() => {
-    const el = getFormsTableBodyScrollEl()
-    if (!el) return
-    formsScrollWrap = el
-    formsScrollHandler = () => onFormsTableScroll()
-    el.addEventListener('scroll', formsScrollHandler, { passive: true })
-  })
-}
-
-function detachFormsTableScroll() {
-  if (formsScrollWrap && formsScrollHandler) {
-    formsScrollWrap.removeEventListener('scroll', formsScrollHandler)
-  }
-  formsScrollWrap = null
-  formsScrollHandler = null
-}
-
 const fetchRows = async () => {
+  if (!SHOW_PARTY_SUMMARY_ROWS_PANEL) {
+    rows.value = []
+    rowTotal.value = 0
+    return
+  }
   if (!rowQuery.projectId) {
     rows.value = []
     rowTotal.value = 0
@@ -641,47 +632,19 @@ const handleRowSizeChange = (size) => {
 }
 
 const handleFormRowClick = (row) => {
-  activeFileRecordId.value = String(row?.fileRecordId || '')
+  const fid = String(row?.fileRecordId || '')
+  if (fid) activeFileRecordId.value = fid
+  if (!SHOW_PARTY_SUMMARY_ROWS_PANEL) {
+    rowQuery.fileRecordId = ''
+    return
+  }
   rowQuery.fileRecordId = activeFileRecordId.value
   rowQuery.pageNum = 1
   fetchRows()
 }
 
 const openAudit = (row) => {
-  partySummaryDialogVariant.value = PARTY_AUDIT_VARIANT_AUDIT
-  partySummaryMainFormDraft.value = null
-  currentAuditFileRecordId.value = String(row?.fileRecordId || '')
-  currentAuditFile.value = {
-    id: row?.fileRecordId,
-    fileRecordId: row?.fileRecordId,
-    originalName: `项目方实测汇总表-${row?.fileRecordId || '-'}`,
-    fileType: 'XLSX'
-  }
-  auditDialogVisible.value = true
-}
-
-const openFormEdit = (row) => {
-  partySummaryDialogVariant.value = PARTY_AUDIT_VARIANT_MAIN_FORM
-  partySummaryMainFormDraft.value = {
-    id: row?.id ?? null,
-    phase: row?.phase ?? null,
-    propertyCertificateNumber: row?.propertyCertificateNumber || '',
-    contractApprovalNumber: row?.contractApprovalNumber || '',
-    isParsed: row?.isParsed ?? null,
-    parseStatus: row?.parseStatus || '',
-    remark: row?.remark || '',
-    declaredTotals: {
-      contractAgreedTotalBuildingArea: row?.declaredTotals?.contractAgreedTotalBuildingArea ?? null,
-      buildableTotalBuildingArea: row?.declaredTotals?.buildableTotalBuildingArea ?? null,
-      differenceTotalBuildingArea: row?.declaredTotals?.differenceTotalBuildingArea ?? null,
-      contractAgreedCommercialArea: row?.declaredTotals?.contractAgreedCommercialArea ?? null,
-      buildableCommercialArea: row?.declaredTotals?.buildableCommercialArea ?? null,
-      differenceCommercialArea: row?.declaredTotals?.differenceCommercialArea ?? null,
-      contractAgreedResidentialArea: row?.declaredTotals?.contractAgreedResidentialArea ?? null,
-      buildableResidentialArea: row?.declaredTotals?.buildableResidentialArea ?? null,
-      differenceResidentialArea: row?.declaredTotals?.differenceResidentialArea ?? null
-    }
-  }
+  partySummaryMainFormDraft.value = buildMainFormDraftFromRow(row)
   currentAuditFileRecordId.value = String(row?.fileRecordId || '')
   currentAuditFile.value = {
     id: row?.fileRecordId,
@@ -715,7 +678,13 @@ watch(
       rowQuery.pageNum = 1
       rowQuery.fileRecordId = ''
       activeFileRecordId.value = ''
-      await Promise.all([fetchForms(), fetchRows()])
+      if (SHOW_PARTY_SUMMARY_ROWS_PANEL) {
+        await Promise.all([fetchForms(), fetchRows()])
+      } else {
+        rows.value = []
+        rowTotal.value = 0
+        await fetchForms()
+      }
     }
   },
   { immediate: true }
@@ -732,10 +701,191 @@ watch(
 }
 
 .forms-panel {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.party-form-dashboard {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.party-form-empty {
+  margin: 24px auto;
+}
+
+.party-form-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+}
+
+.party-form-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.party-form-picker__label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.party-form-picker__group {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.party-form-load-more {
+  flex-shrink: 0;
+}
+
+.party-form-focus {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.party-form-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.party-form-meta__tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.party-form-meta__fid {
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #64748b;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.party-declared-matrix-wrap {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.party-declared-matrix {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  border: none;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #334155;
+}
+
+.party-declared-matrix__caption {
+  caption-side: top;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+  padding: 10px 14px 6px;
+}
+
+.party-declared-matrix td {
+  border-right: 1px solid rgba(226, 232, 240, 0.95);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+  padding: 12px 10px;
+  text-align: center;
+  vertical-align: middle;
+  word-break: break-word;
+}
+
+.party-declared-matrix td:last-child {
+  border-right: none;
+}
+
+.party-declared-matrix tbody tr:first-child td {
+  border-top: 1px solid rgba(226, 232, 240, 0.95);
+}
+
+.party-declared-matrix tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.party-declared-matrix tbody tr:nth-child(odd) .party-declared-matrix__value {
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.party-declared-matrix tbody tr:nth-child(even) .party-declared-matrix__value {
+  background: rgba(248, 250, 252, 0.85);
+}
+
+.party-declared-matrix tbody tr .party-declared-matrix__label {
+  background: #f8fafc;
+}
+
+.party-declared-matrix__label {
+  font-weight: 700;
+  font-size: 13px;
+  color: #475569;
+  width: 18%;
+}
+
+.party-declared-matrix__value {
+  font-weight: 700;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+  width: 15%;
+}
+
+:deep(.party-form-picker__group .el-radio-button__inner) {
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+:deep(.party-form-picker__group .el-radio-button:first-child .el-radio-button__inner) {
+  border-radius: 8px 0 0 8px;
+}
+
+:deep(.party-form-picker__group .el-radio-button:last-child .el-radio-button__inner) {
+  border-radius: 0 8px 8px 0;
 }
 
 .rows-panel {
@@ -986,10 +1136,6 @@ watch(
   align-items: stretch;
 }
 
-.forms-panel .planning-table-wrap {
-  flex: 0 0 auto;
-}
-
 .rows-panel .planning-table-wrap {
   flex: 1 1 auto;
   min-height: 0;
@@ -1060,14 +1206,6 @@ watch(
 :deep(.planning-el-table .el-table__header th) {
   font-weight: 700;
   font-size: 12px;
-}
-
-.party-form-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: nowrap;
-  white-space: nowrap;
 }
 
 .w100 {

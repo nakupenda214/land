@@ -158,7 +158,14 @@
             </el-table-column>
             <el-table-column prop="source" label="source" width="100" />
             <el-table-column prop="issueCategory" label="issueCategory" width="130" show-overflow-tooltip />
-            <el-table-column label="操作" min-width="200" align="right" class-name="col-actions">
+            <el-table-column
+              label="操作"
+              width="196"
+              align="center"
+              header-align="center"
+              class-name="col-actions"
+              label-class-name="col-actions"
+            >
               <template #default="{ row }">
                 <div class="row-action-group row-action-group--bad">
                   <el-tooltip content="从该 bad case 启动一条自优化任务" placement="top" :show-after="400">
@@ -324,7 +331,14 @@
             </el-tooltip>
           </template>
         </el-table-column>
-        <el-table-column label="操作" min-width="268" align="right" class-name="col-actions">
+        <el-table-column
+          label="操作"
+          width="304"
+          align="center"
+          header-align="center"
+          class-name="col-actions"
+          label-class-name="col-actions"
+        >
           <template #default="{ row }">
             <div class="row-action-group row-action-group--task">
               <el-tooltip content="重新执行整条自优化流程" placement="top" :show-after="350">
@@ -480,7 +494,14 @@
             <el-table-column label="updateTime" width="170">
               <template #default="{ row }">{{ formatTime(row.updateTime) }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="240">
+            <el-table-column
+              label="操作"
+              width="188"
+              align="center"
+              header-align="center"
+              class-name="col-actions"
+              label-class-name="col-actions"
+            >
               <template #default="{ row }">
                 <el-button size="small" text type="primary" @click="openVersionDetailDialog(row)">详情</el-button>
                 <el-button
@@ -677,14 +698,19 @@
                   <div class="evidence-head">链路证据</div>
                 </template>
                 <el-descriptions :column="1" border>
-                  <el-descriptions-item label="sessionMemory">
-                    <div class="ellipsis-text">{{ shortText(selectedSnapshot?.sessionMemory) }}</div>
+                  <el-descriptions-item label="queryContextPreview">
+                    <div class="ellipsis-text">{{ shortText(snapshotQueryContextPreview(selectedSnapshot)) }}</div>
                     <el-button
-                      v-if="isLongText(selectedSnapshot?.sessionMemory)"
+                      v-if="isLongText(snapshotQueryContextPreview(selectedSnapshot))"
                       size="small"
                       text
                       type="primary"
-                      @click="openEvidenceViewer('sessionMemory', selectedSnapshot?.sessionMemory)"
+                      @click="
+                        openEvidenceViewer(
+                          'queryContextPreview',
+                          snapshotQueryContextPreview(selectedSnapshot)
+                        )
+                      "
                     >
                       查看全文
                     </el-button>
@@ -1669,6 +1695,11 @@ async function ensureTaskExecutionAllowed(taskIdValue) {
   return guard
 }
 
+/** 调试快照：查询上下文预览（兼容历史字段 sessionMemory） */
+function snapshotQueryContextPreview(snap) {
+  return snap?.queryContextPreview ?? snap?.sessionMemory ?? ''
+}
+
 function shortText(text, max = 200) {
   const raw = String(text || '').trim()
   if (!raw) return '—'
@@ -1911,11 +1942,11 @@ function openDecisionOptimizationContentViewer() {
 }
 
 function openEvidenceViewer(field, fallbackValue) {
-  if (field === 'sessionMemory') {
+  if (field === 'queryContextPreview' || field === 'sessionMemory') {
     const canonical = readStatePatchKeyPreview('canonical_query')
     const enhanced = readStatePatchKeyPreview('query_enhance_output')
     const full = canonical || enhanced ? `canonicalQuery: ${canonical}\n\nenhancedQuery: ${enhanced}` : fallbackValue
-    openTextViewer('sessionMemory', full)
+    openTextViewer('queryContextPreview', full)
     return
   }
   if (field === 'schemaSnippet') {
@@ -3339,9 +3370,10 @@ onBeforeUnmount(() => {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 2px 8px;
-  width: 100%;
+  width: auto;
+  max-width: 100%;
 }
 
 .row-action-group .el-button {
@@ -3358,8 +3390,8 @@ onBeforeUnmount(() => {
 }
 
 :deep(.col-actions .cell) {
-  padding-left: 10px;
-  padding-right: 8px;
+  padding-left: 4px;
+  padding-right: 4px;
 }
 
 .exec-hint-text {

@@ -5,7 +5,7 @@
         <h3>LLM 配置管理</h3>
         <el-button type="primary" @click="openCreate">新增配置</el-button>
       </div>
-      <el-table :data="profiles" border stripe v-loading="loadingProfiles">
+      <el-table :data="profiles" border stripe v-loading="loadingProfiles" class="profiles-table">
         <el-table-column prop="profileName" label="配置名" min-width="180">
           <template #default="{ row }">
             <span>{{ row.profileName }}</span>
@@ -25,50 +25,277 @@
             <el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column
+          label="操作"
+          width="116"
+          fixed="right"
+          align="center"
+          header-align="center"
+          class-name="col-actions"
+          label-class-name="col-actions"
+        >
           <template #default="{ row }">
             <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
             <el-button link type="danger" :disabled="row.systemDefault" @click="removeProfile(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
+      <el-pagination
+        v-model:current-page="profilePageNum"
+        v-model:page-size="profilePageSize"
+        class="table-pagination"
+        :total="profileTotal"
+        :page-sizes="[10, 20, 50]"
+        layout="total, sizes, prev, pager, next"
+        background
+        @current-change="loadProfiles"
+        @size-change="onProfilePageSizeChange"
+      />
     </div>
 
-    <div class="block">
+    <div class="block route-bind-block">
       <div class="block-head">
         <h3>节点路由绑定</h3>
+        <div class="block-head-actions">
+          <el-button size="small" type="primary" plain :loading="loadingRoutes" @click="refreshRoutesEffective">
+            刷新生效参数
+          </el-button>
+        </div>
       </div>
-      <el-table :data="nodeRoutesView" border stripe v-loading="loadingRoutes">
-        <el-table-column prop="nodeId" label="节点" min-width="180" />
-        <el-table-column prop="profileName" label="当前配置" min-width="160" />
-        <el-table-column label="回退原因" min-width="210">
+      <el-alert type="info" :closable="false" show-icon class="route-hint-alert">
+        <template #title>
+          <span class="route-hint-title">说明</span>
+        </template>
+        治理参数写入 Mongo 路由，覆盖 <code>nodeGovernance</code>（流式重试、召回墙钟等）。表格中「LLM 超时」为当前生效 Profile 的请求超时，与治理超时不是同一概念。已绑定路由时点击<strong>编辑</strong>将打开「治理覆盖」；未绑定时打开「生效参数」。
+      </el-alert>
+      <div class="route-table-shell">
+        <el-table
+          :data="displayedNodeRoutesView"
+          v-loading="loadingRoutes"
+          border
+          stripe
+          class="route-table knowledge-table"
+          table-layout="auto"
+        >
+        <el-table-column label="节点" min-width="160" fixed="left">
           <template #default="{ row }">
-            <el-tag v-if="row.sourceReason && row.sourceReason !== 'route_hit'" type="warning" size="small">
-              {{ sourceReasonLabel[row.sourceReason] || row.sourceReason }}
-            </el-tag>
-            <span v-else class="muted">-</span>
+            <div class="node-cell">
+              <span class="node-title">{{ row.nodeLabel }}</span>
+              <span class="node-id">{{ row.nodeId }}</span>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="90">
-          <template #default="{ row }">
-            <el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '启用' : '停用' }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="绑定配置" min-width="280">
+        <el-table-column label="绑定配置" min-width="200">
           <template #default="{ row }">
             <el-select
               v-model="row._bindProfileId"
               filterable
-              style="width: 100%"
+              placeholder="选择 LLM 配置"
+              class="route-bind-select"
               :loading="!!routeSaving[row.nodeId]"
               @change="(val) => onRouteBindChange(row, val)"
             >
-              <el-option v-for="p in profiles" :key="p.id" :label="p.profileName" :value="p.id" />
+              <el-option v-for="p in profileOptions" :key="p.id" :label="p.profileName" :value="p.id" />
             </el-select>
           </template>
         </el-table-column>
+        <el-table-column label="路由启用" width="96" align="center">
+          <template #default="{ row }">
+            <el-tooltip content="需先绑定配置后才能启用/停用该节点路由" :disabled="row.hasRoute" placement="top">
+              <el-switch
+                :model-value="row.routeEnabled"
+                :disabled="!row.hasRoute || !!routeSaving[row.nodeId]"
+                @change="(v) => onRouteEnabledChange(row, v)"
+              />
+            </el-tooltip>
+          </template>
+        </el-table-column>
+        <el-table-column label="治理覆盖" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span class="gov-pill-wrap">
+              <span v-if="row.routeGovRetry != null" class="gov-pill">重试 {{ row.routeGovRetry }}</span>
+              <span v-if="row.routeGovTimeoutSec != null" class="gov-pill gov-pill--time">超时 {{ row.routeGovTimeoutSec }}s</span>
+              <span v-if="row.routeGovRetry == null && row.routeGovTimeoutSec == null" class="muted">YAML 默认</span>
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="生效来源" width="108">
+          <template #default="{ row }">
+            <el-tag v-if="row.effectiveSource" size="small" :type="row.effectiveSource === 'route' ? 'success' : 'info'">
+              {{ effectiveSourceLabel[row.effectiveSource] || row.effectiveSource }}
+            </el-tag>
+            <span v-else class="muted">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="effectiveProfileName" label="生效配置名" min-width="140" show-overflow-tooltip />
+        <el-table-column label="provider" width="100">
+          <template #default="{ row }">
+            {{ row.effectiveProvider || '—' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="模型" min-width="160" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.effectiveModel || '—' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="LLM超时(秒)" width="108" align="right">
+          <template #default="{ row }">
+            {{ formatTimeoutSeconds(row.effectiveTimeoutMs) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="温度" width="72" align="right">
+          <template #default="{ row }">
+            {{ row.effectiveTemperature != null && row.effectiveTemperature !== '' ? row.effectiveTemperature : '—' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="maxTok" width="88" align="right">
+          <template #default="{ row }">
+            {{ row.effectiveMaxTokens != null ? row.effectiveMaxTokens : '—' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="回退原因" min-width="160">
+          <template #default="{ row }">
+            <el-tag v-if="row.sourceReason && row.sourceReason !== 'route_hit'" type="warning" size="small">
+              {{ sourceReasonLabel[row.sourceReason] || row.sourceReason }}
+            </el-tag>
+            <span v-else class="muted">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          label="操作"
+          width="142"
+          fixed="right"
+          align="center"
+          header-align="center"
+          class-name="col-actions"
+          label-class-name="col-actions"
+        >
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openRouteRowEdit(row)">编辑</el-button>
+            <el-button
+              link
+              type="danger"
+              :disabled="!row.hasRoute || !!routeSaving[row.nodeId]"
+              @click="clearRouteGovernance(row)"
+            >
+              恢复默认
+            </el-button>
+          </template>
+        </el-table-column>
       </el-table>
+      </div>
+      <el-pagination
+        v-model:current-page="routePageNum"
+        v-model:page-size="routePageSize"
+        class="table-pagination route-table-pagination"
+        :total="nodeRoutesView.length"
+        :page-sizes="[8, 12, 20, 50]"
+        layout="total, sizes, prev, pager, next"
+        background
+      />
     </div>
+
+    <el-drawer
+      v-model="routeDetailVisible"
+      :title="routeDetailDrawerTitle"
+      size="460px"
+      destroy-on-close
+      class="route-detail-drawer"
+    >
+      <template v-if="routeDetailRow">
+        <el-tabs v-model="routeDetailTab" class="route-detail-tabs">
+          <el-tab-pane label="生效参数" name="effective">
+            <el-descriptions :column="1" border size="small" class="route-detail-desc">
+              <el-descriptions-item label="节点">{{ routeDetailRow.nodeLabel }} ({{ routeDetailRow.nodeId }})</el-descriptions-item>
+              <el-descriptions-item label="生效来源">
+                {{ effectiveSourceLabel[routeDetailRow.effectiveSource] || routeDetailRow.effectiveSource || '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="解析原因码">{{ routeDetailRow.sourceReason || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="配置名">{{ routeDetailRow.effectiveProfileName || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="配置 ID">{{ routeDetailRow.effectiveProfileId || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="provider">{{ routeDetailRow.effectiveProvider || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="模型">{{ routeDetailRow.effectiveModel || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="LLM 超时">{{ formatTimeoutSeconds(routeDetailRow.effectiveTimeoutMs) }} 秒</el-descriptions-item>
+              <el-descriptions-item label="温度">{{ routeDetailRow.effectiveTemperature ?? '—' }}</el-descriptions-item>
+              <el-descriptions-item label="maxTokens">{{ routeDetailRow.effectiveMaxTokens ?? '—' }}</el-descriptions-item>
+              <el-descriptions-item label="reasoning_effort">{{ routeDetailRow.effectiveReasoningEffort || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="thinking.type">{{ routeDetailRow.effectiveThinkingType || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="response_format">{{ routeDetailRow.effectiveResponseFormat || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="路由治理覆盖（只读）">{{ routeGovSummaryLine(routeDetailRow) }}</el-descriptions-item>
+              <el-descriptions-item v-if="routeDetailJsonSchemaPreview" label="JSON Schema">
+                <pre class="route-json-preview">{{ routeDetailJsonSchemaPreview }}</pre>
+              </el-descriptions-item>
+            </el-descriptions>
+          </el-tab-pane>
+          <el-tab-pane label="治理覆盖" name="governance" :disabled="!routeDetailRow.hasRoute">
+            <template v-if="routeDetailRow.hasRoute">
+              <p class="drawer-gov-lead">
+                覆盖 <code>application.yml</code> 中的 <code>nodeGovernance</code>（含 LLM 流式重试、Evidence/Schema 等墙钟预算）。请至少填写<strong>治理重试</strong>或<strong>治理超时</strong>之一，再点击「保存治理」。
+              </p>
+              <el-form label-position="top" size="small" class="drawer-gov-form">
+                <el-form-item>
+                  <template #label>
+                    <span class="label-with-hint">
+                      治理重试（1–20）
+                      <el-tooltip content="含首轮在内的最大尝试次数。" placement="top">
+                        <el-icon class="hint-icon"><QuestionFilled /></el-icon>
+                      </el-tooltip>
+                    </span>
+                  </template>
+                  <el-input-number
+                    v-model="drawerGovForm.retry"
+                    :min="1"
+                    :max="20"
+                    :step="1"
+                    controls-position="right"
+                    class="drawer-gov-input"
+                  />
+                </el-form-item>
+                <el-form-item>
+                  <template #label>
+                    <span class="label-with-hint">
+                      治理超时（秒，1–3600）
+                      <el-tooltip content="节点墙钟预算（秒），保存时换算为毫秒且不少于 1000ms。" placement="top">
+                        <el-icon class="hint-icon"><QuestionFilled /></el-icon>
+                      </el-tooltip>
+                    </span>
+                  </template>
+                  <el-input-number
+                    v-model="drawerGovForm.timeoutSec"
+                    :min="1"
+                    :max="3600"
+                    :step="1"
+                    controls-position="right"
+                    class="drawer-gov-input"
+                  />
+                </el-form-item>
+              </el-form>
+              <div class="drawer-gov-actions">
+                <el-button
+                  type="primary"
+                  :loading="!!(routeDetailRow && routeSaving[routeDetailRow.nodeId])"
+                  @click="saveRouteGovernanceFromDrawer"
+                >
+                  保存治理
+                </el-button>
+                <el-button
+                  :loading="!!(routeDetailRow && routeSaving[routeDetailRow.nodeId])"
+                  @click="clearRouteGovernanceFromDrawer"
+                >
+                  恢复默认
+                </el-button>
+              </div>
+            </template>
+          </el-tab-pane>
+        </el-tabs>
+        <div class="route-detail-actions">
+          <el-button v-if="routeDetailEditProfile" type="primary" plain @click="openEditFromRouteDetail">
+            编辑 LLM 配置「{{ routeDetailEditProfile.profileName }}」
+          </el-button>
+          <span v-else class="muted">当前生效来自系统默认或 YAML，请到上方「LLM 配置管理」维护默认 Profile。</span>
+        </div>
+      </template>
+    </el-drawer>
 
     <el-dialog v-model="dialogVisible" :title="editingId ? '编辑 LLM 配置' : '新增 LLM 配置'" width="760px">
       <el-form label-position="top">
@@ -142,7 +369,10 @@
               <template #label>
                 <span class="label-with-hint">
                   timeout（秒）
-                  <el-tooltip content="请求最大超时（秒）。保存时会自动转换为毫秒传给后端。" placement="top">
+                  <el-tooltip
+                    content="LLM 请求层超时（秒），doubao / openai 等 provider 均按生效配置统一应用；与 application 中 nodeGovernance 的 timeout（用于召回等非 LLM 节点墙钟预算）不是同一概念。"
+                    placement="top"
+                  >
                     <el-icon class="hint-icon"><QuestionFilled /></el-icon>
                   </el-tooltip>
                 </span>
@@ -242,15 +472,7 @@
         <section class="cfg-card">
           <header class="cfg-card-head">
             <h4>连通测试</h4>
-            <span class="cfg-card-sub">验证当前配置是否可调用</span>
           </header>
-          <el-alert
-            type="info"
-            :closable="false"
-            show-icon
-            class="test-guide"
-            description="测试场景用于模拟调用能力：基础对话（text）、JSON对象输出（json_object）、JSON结构校验（json_schema）。response_format 会随场景自动选择。"
-          />
           <div class="grid-3">
             <el-form-item>
               <template #label>
@@ -341,12 +563,13 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { QuestionFilled } from '@element-plus/icons-vue'
 import {
   listLlmNodes,
   listLlmProfiles,
+  listLlmProfileOptions,
   createLlmProfile,
   updateLlmProfile,
   deleteLlmProfile,
@@ -354,16 +577,61 @@ import {
   listLlmNodeRoutes,
   upsertLlmNodeRoute,
   deleteLlmNodeRoute,
-  getLlmEffectiveConfig
+  getLlmEffectiveConfigs
 } from '@/services/agent-management.service'
+
+/** 与后端 agent 节点 ID 对齐，用于表格展示 */
+const NODE_ROUTE_LABELS = {
+  intent_classify: '意图识别',
+  common_chat: '通用对话',
+  knowledge_qa_answer: '知识问答（答复）',
+  evidence_recall: '证据召回',
+  query_enhance: '查询增强',
+  schema_recall: 'Schema 召回',
+  mix_selector: '集合/混合选择',
+  feasibility_assessment: '可行性评估',
+  feasibility_answer: '可行性答复',
+  planner: '计划生成',
+  plan_executor: '计划执行',
+  mql_generate: 'MQL 生成',
+  semantic_mql: '语义一致性',
+  mongo_execute: 'Mongo 执行',
+  answer_wrap: '答案包装',
+  python_generate: 'Python 生成',
+  python_execute: 'Python 执行',
+  python_analyze: 'Python 分析'
+}
+
+const effectiveSourceLabel = {
+  route: '节点路由',
+  default: '系统默认'
+}
 
 const loadingProfiles = ref(false)
 const loadingRoutes = ref(false)
 /** 各节点路由下拉正在提交（支持多行并行） */
 const routeSaving = reactive({})
+/** 节点路由治理编辑草稿：retry / timeoutSec，与 routes 同步 */
+const routeGovDraft = reactive({})
+const routeDetailVisible = ref(false)
+const routeDetailRow = ref(null)
+/** 抽屉 Tab：effective=生效参数，governance=治理编辑 */
+const routeDetailTab = ref('effective')
+/** 抽屉内治理表单（与表格解耦，避免在列表行上直接编辑） */
+const drawerGovForm = reactive({
+  retry: undefined,
+  timeoutSec: undefined
+})
 const savingProfile = ref(false)
 const testingConnectivity = ref(false)
+const profilePageNum = ref(1)
+const profilePageSize = ref(10)
+const profileTotal = ref(0)
+/** 下拉绑定用：全量配置（请求一次，体量和节点数相比通常更小） */
+const profileOptions = ref([])
 const profiles = ref([])
+const routePageNum = ref(1)
+const routePageSize = ref(12)
 const routes = ref([])
 const nodeIds = ref([])
 const effectiveMap = ref({})
@@ -418,17 +686,83 @@ const nodeRoutesView = computed(() => {
   const map = new Map((routes.value || []).map((r) => [r.nodeId, r]))
   return (nodeIds.value || []).map((nodeId) => {
     const r = map.get(nodeId)
-    const effective = effectiveMap.value[nodeId] || {}
+    const eff = effectiveMap.value[nodeId] || {}
+    const hasRoute = !!(r && r.profileId)
+    const routeEnabled = hasRoute ? r.enabled !== false : false
     return {
       nodeId,
+      nodeLabel: NODE_ROUTE_LABELS[nodeId] || nodeId,
+      hasRoute,
+      routeEnabled,
       profileId: r?.profileId || '',
-      profileName: effective.profileName || '—',
-      enabled: r?.enabled !== false,
-      sourceReason: effective.sourceReason || '',
-      _bindProfileId: r?.profileId || ''
+      _bindProfileId: r?.profileId || '',
+      routeGovRetry: r?.governanceRetryMaxAttempts,
+      routeGovTimeoutSec:
+        r?.governanceTimeoutMs != null ? Math.round(Number(r.governanceTimeoutMs) / 1000) : undefined,
+      sourceReason: eff.sourceReason || '',
+      effectiveSource: eff.source || '',
+      effectiveProfileId: eff.profileId || '',
+      effectiveProfileName: eff.profileName || '—',
+      effectiveProvider: eff.provider || '',
+      effectiveModel: eff.model || '',
+      effectiveTimeoutMs: eff.timeoutMs,
+      effectiveTemperature: eff.temperature,
+      effectiveMaxTokens: eff.maxTokens,
+      effectiveReasoningEffort: eff.reasoningEffort || '',
+      effectiveThinkingType: eff.thinkingType || '',
+      effectiveResponseFormat: eff.responseFormatType || '',
+      effectiveResponseJsonSchema: eff.responseJsonSchema
     }
   })
 })
+
+const displayedNodeRoutesView = computed(() => {
+  const all = nodeRoutesView.value || []
+  const start = (routePageNum.value - 1) * routePageSize.value
+  return all.slice(start, start + routePageSize.value)
+})
+
+watch(
+  () => nodeRoutesView.value.length,
+  (len) => {
+    const ps = routePageSize.value || 1
+    const maxPage = Math.max(1, Math.ceil(len / ps) || 1)
+    if (routePageNum.value > maxPage) {
+      routePageNum.value = maxPage
+    }
+  }
+)
+
+const routeDetailJsonSchemaPreview = computed(() => {
+  const s = routeDetailRow.value?.effectiveResponseJsonSchema
+  if (!s || typeof s !== 'object') return ''
+  try {
+    return JSON.stringify(s, null, 2)
+  } catch {
+    return ''
+  }
+})
+
+const routeDetailEditProfile = computed(() => {
+  const id = routeDetailRow.value?.effectiveProfileId
+  if (!id) return null
+  return profileOptions.value.find((p) => p.id === id) || profiles.value.find((p) => p.id === id) || null
+})
+
+const routeDetailDrawerTitle = computed(() => {
+  const r = routeDetailRow.value
+  if (!r) return '节点路由'
+  return `${r.nodeLabel} · ${r.nodeId}`
+})
+
+function routeGovSummaryLine(row) {
+  if (!row) return '—'
+  if (row.routeGovRetry == null && row.routeGovTimeoutSec == null) return '未覆盖（YAML 默认）'
+  const parts = []
+  if (row.routeGovRetry != null) parts.push(`重试 ${row.routeGovRetry}`)
+  if (row.routeGovTimeoutSec != null) parts.push(`超时 ${row.routeGovTimeoutSec}s`)
+  return parts.join('；')
+}
 
 const sourceReasonLabel = {
   route_hit: '已命中节点路由',
@@ -536,10 +870,26 @@ function testErrorText(data) {
   return `${code}${data?.error || data?.message || '未知错误'}`
 }
 
+function onProfilePageSizeChange() {
+  profilePageNum.value = 1
+  loadProfiles()
+}
+
 async function loadProfiles() {
   loadingProfiles.value = true
   try {
-    profiles.value = await listLlmProfiles()
+    const page = await listLlmProfiles({
+      pageNum: profilePageNum.value,
+      pageSize: profilePageSize.value
+    })
+    profiles.value = Array.isArray(page?.data) ? page.data : []
+    profileTotal.value = Number(page?.total ?? 0)
+    const lastPage = Math.max(1, Math.ceil(profileTotal.value / profilePageSize.value) || 1)
+    if (profiles.value.length === 0 && profileTotal.value > 0 && profilePageNum.value > lastPage) {
+      profilePageNum.value = lastPage
+      await loadProfiles()
+      return
+    }
   } catch (e) {
     ElMessage.error(e.message || '加载 LLM 配置失败')
   } finally {
@@ -547,19 +897,181 @@ async function loadProfiles() {
   }
 }
 
+async function loadProfileOptions() {
+  try {
+    const raw = await listLlmProfileOptions()
+    profileOptions.value = Array.isArray(raw) ? raw : []
+  } catch (e) {
+    ElMessage.error(e.message || '加载 LLM 配置选项失败')
+    profileOptions.value = []
+  }
+}
+
 async function loadNodes() {
   try {
-    nodeIds.value = await listLlmNodes()
+    const raw = await listLlmNodes()
+    nodeIds.value = Array.isArray(raw) ? raw : []
+    // 必须在 loadRoutes 之前初始化：路由表在 loadProfiles 期间就会渲染，v-model 依赖 routeGovDraft[nodeId]
+    syncRouteGovDraftFromRoutes()
   } catch (e) {
     ElMessage.error(e.message || '加载节点列表失败')
     nodeIds.value = []
   }
 }
 
+function syncRouteGovDraftFromRoutes() {
+  const ids = nodeIds.value || []
+  for (const nid of ids) {
+    if (!routeGovDraft[nid]) {
+      routeGovDraft[nid] = { retry: undefined, timeoutSec: undefined }
+    }
+    const r = (routes.value || []).find((x) => x.nodeId === nid)
+    if (r?.governanceRetryMaxAttempts != null) {
+      routeGovDraft[nid].retry = Number(r.governanceRetryMaxAttempts)
+    } else {
+      routeGovDraft[nid].retry = undefined
+    }
+    if (r?.governanceTimeoutMs != null) {
+      routeGovDraft[nid].timeoutSec = Math.round(Number(r.governanceTimeoutMs) / 1000)
+    } else {
+      routeGovDraft[nid].timeoutSec = undefined
+    }
+  }
+}
+
+function applyGovernanceFields(base, d) {
+  if (!d) return
+  if (d.retry !== undefined && d.retry !== null && Number.isFinite(Number(d.retry))) {
+    const n = Math.round(Number(d.retry))
+    if (n >= 1 && n <= 20) {
+      base.governanceRetryMaxAttempts = n
+    }
+  }
+  if (d.timeoutSec !== undefined && d.timeoutSec !== null && Number.isFinite(Number(d.timeoutSec))) {
+    const sec = Number(d.timeoutSec)
+    if (sec >= 1) {
+      base.governanceTimeoutMs = Math.min(3_600_000, Math.max(1_000, Math.round(sec * 1000)))
+    }
+  }
+}
+
+/**
+ * @param govSnapshot 传入时用该对象上的 retry/timeoutSec 生成治理字段；不传则用 routeGovDraft（绑定路由时保留已保存覆盖）
+ */
+function buildRouteUpsertPayload(nodeId, { profileId, enabled }, govSnapshot = undefined) {
+  const base = { profileId, enabled: enabled !== false }
+  const d = govSnapshot !== undefined ? govSnapshot : routeGovDraft[nodeId]
+  applyGovernanceFields(base, d)
+  return base
+}
+
+function snapshotDrawerGov() {
+  return {
+    retry: drawerGovForm.retry,
+    timeoutSec: drawerGovForm.timeoutSec
+  }
+}
+
+function fillDrawerGovFormFromRow(row) {
+  if (!row) return
+  drawerGovForm.retry = row.routeGovRetry != null ? Number(row.routeGovRetry) : undefined
+  drawerGovForm.timeoutSec = row.routeGovTimeoutSec != null ? Number(row.routeGovTimeoutSec) : undefined
+}
+
+function refreshRouteDetailRowAfterReload(nodeId) {
+  if (!routeDetailVisible.value || !nodeId || routeDetailRow.value?.nodeId !== nodeId) return
+  const next = nodeRoutesView.value.find((r) => r.nodeId === nodeId)
+  if (next) {
+    routeDetailRow.value = next
+    fillDrawerGovFormFromRow(next)
+  }
+}
+
+async function saveRouteGovernance(row, govSnapshot = undefined) {
+  const route = (routes.value || []).find((r) => r.nodeId === row.nodeId)
+  if (!route?.profileId) {
+    ElMessage.warning('请先绑定 LLM 配置')
+    return
+  }
+  const payload = buildRouteUpsertPayload(
+    row.nodeId,
+    {
+      profileId: route.profileId,
+      enabled: route.enabled !== false
+    },
+    govSnapshot
+  )
+  if (!payload.governanceRetryMaxAttempts && !payload.governanceTimeoutMs) {
+    ElMessage.warning('请至少填写一项：治理重试（1–20）或治理超时（秒，1–3600）')
+    return
+  }
+  routeSaving[row.nodeId] = true
+  try {
+    await upsertLlmNodeRoute(row.nodeId, payload)
+    ElMessage.success('治理参数已保存')
+    await loadRoutes()
+    await loadEffective()
+    refreshRouteDetailRowAfterReload(row.nodeId)
+    syncRouteGovDraftFromRoutes()
+  } catch (e) {
+    ElMessage.error(e.message || '保存失败')
+    await loadRoutes()
+    await loadEffective()
+    refreshRouteDetailRowAfterReload(row.nodeId)
+  } finally {
+    delete routeSaving[row.nodeId]
+  }
+}
+
+async function saveRouteGovernanceFromDrawer() {
+  const row = routeDetailRow.value
+  if (!row?.nodeId || !row.hasRoute) {
+    ElMessage.warning('请先绑定 LLM 配置')
+    return
+  }
+  await saveRouteGovernance(row, snapshotDrawerGov())
+}
+
+async function clearRouteGovernanceFromDrawer() {
+  const row = routeDetailRow.value
+  if (!row?.nodeId || !row.hasRoute) return
+  await clearRouteGovernance(row)
+}
+
+async function clearRouteGovernance(row) {
+  const route = (routes.value || []).find((r) => r.nodeId === row.nodeId)
+  if (!route?.profileId) {
+    return
+  }
+  routeSaving[row.nodeId] = true
+  try {
+    await upsertLlmNodeRoute(row.nodeId, {
+      profileId: route.profileId,
+      enabled: route.enabled !== false,
+      governanceRetryMaxAttempts: 0,
+      governanceTimeoutMs: 0
+    })
+    ElMessage.success('已清除治理覆盖，恢复为 YAML/代码默认')
+    await loadRoutes()
+    await loadEffective()
+    refreshRouteDetailRowAfterReload(row.nodeId)
+    syncRouteGovDraftFromRoutes()
+  } catch (e) {
+    ElMessage.error(e.message || '操作失败')
+    await loadRoutes()
+    await loadEffective()
+    refreshRouteDetailRowAfterReload(row.nodeId)
+  } finally {
+    delete routeSaving[row.nodeId]
+  }
+}
+
 async function loadRoutes() {
   loadingRoutes.value = true
   try {
-    routes.value = await listLlmNodeRoutes()
+    const raw = await listLlmNodeRoutes()
+    routes.value = Array.isArray(raw) ? raw : []
+    syncRouteGovDraftFromRoutes()
   } catch (e) {
     ElMessage.error(e.message || '加载节点路由失败')
   } finally {
@@ -569,17 +1081,25 @@ async function loadRoutes() {
 
 async function loadEffective() {
   const ids = nodeIds.value || []
-  const pairs = await Promise.all(
-    ids.map(async (nodeId) => {
-      try {
-        const effective = await getLlmEffectiveConfig(nodeId)
-        return [nodeId, effective]
-      } catch (_e) {
-        return [nodeId, { sourceReason: '' }]
+  if (!ids.length) {
+    effectiveMap.value = {}
+    return
+  }
+  try {
+    const list = await getLlmEffectiveConfigs(ids)
+    const arr = Array.isArray(list) ? list : []
+    const map = {}
+    for (let i = 0; i < arr.length; i++) {
+      const eff = arr[i] || {}
+      const nid = eff.nodeId || ids[i]
+      if (nid) {
+        map[nid] = eff
       }
-    })
-  )
-  effectiveMap.value = Object.fromEntries(pairs)
+    }
+    effectiveMap.value = map
+  } catch (e) {
+    ElMessage.error(e.message || '加载生效配置失败')
+  }
 }
 
 function formatTimeoutSeconds(ms) {
@@ -627,6 +1147,7 @@ async function saveProfile() {
       ElMessage.success('配置已创建')
     }
     dialogVisible.value = false
+    await loadProfileOptions()
     await loadProfiles()
     await loadRoutes()
     await loadEffective()
@@ -646,11 +1167,65 @@ async function removeProfile(row) {
     await ElMessageBox.confirm(`确认删除配置「${row.profileName}」？`, '删除确认', { type: 'warning' })
     await deleteLlmProfile(row.id)
     ElMessage.success('配置已删除')
+    await loadProfileOptions()
     await loadProfiles()
     await loadRoutes()
     await loadEffective()
   } catch (e) {
     if (e !== 'cancel') ElMessage.error(e.message || '删除失败')
+  }
+}
+
+function openRouteDetail(row, tab = 'effective') {
+  routeDetailRow.value = row
+  routeDetailTab.value = tab === 'governance' && !row.hasRoute ? 'effective' : tab
+  fillDrawerGovFormFromRow(row)
+  routeDetailVisible.value = true
+}
+
+/** 与业务知识等表格一致：单入口「编辑」；已绑定路由时优先打开治理 Tab */
+function openRouteRowEdit(row) {
+  openRouteDetail(row, row.hasRoute ? 'governance' : 'effective')
+}
+
+function openEditFromRouteDetail() {
+  const p = routeDetailEditProfile.value
+  if (!p) return
+  routeDetailVisible.value = false
+  openEdit(p)
+}
+
+async function refreshRoutesEffective() {
+  try {
+    await loadRoutes()
+    await loadEffective()
+    ElMessage.success('路由与生效参数已刷新')
+  } catch (e) {
+    ElMessage.error(e.message || '刷新失败')
+  }
+}
+
+async function onRouteEnabledChange(row, enabled) {
+  const route = (routes.value || []).find((r) => r.nodeId === row.nodeId)
+  if (!route?.profileId) {
+    ElMessage.warning('请先绑定 LLM 配置')
+    return
+  }
+  routeSaving[row.nodeId] = true
+  try {
+    await upsertLlmNodeRoute(
+      row.nodeId,
+      buildRouteUpsertPayload(row.nodeId, { profileId: route.profileId, enabled: !!enabled })
+    )
+    ElMessage.success(enabled ? '路由已启用' : '路由已停用（将回退默认生效）')
+    await loadRoutes()
+    await loadEffective()
+  } catch (e) {
+    ElMessage.error(e.message || '更新路由状态失败')
+    await loadRoutes()
+    await loadEffective()
+  } finally {
+    delete routeSaving[row.nodeId]
   }
 }
 
@@ -667,7 +1242,10 @@ async function onRouteBindChange(row, newVal) {
       await deleteLlmNodeRoute(row.nodeId)
       ElMessage.success('已恢复为缺省配置')
     } else {
-      await upsertLlmNodeRoute(row.nodeId, { profileId: next, enabled: true })
+      await upsertLlmNodeRoute(
+        row.nodeId,
+        buildRouteUpsertPayload(row.nodeId, { profileId: next, enabled: true })
+      )
       ElMessage.success('路由已更新')
     }
     await loadRoutes()
@@ -683,7 +1261,7 @@ async function onRouteBindChange(row, newVal) {
 
 onMounted(async () => {
   await loadNodes()
-  await loadProfiles()
+  await Promise.all([loadProfileOptions(), loadProfiles()])
   await loadRoutes()
   await loadEffective()
 })
@@ -704,6 +1282,140 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
+}
+.block-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.route-bind-block .block-head h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #243d32;
+  letter-spacing: 0.02em;
+}
+.route-hint-alert {
+  margin-bottom: 12px;
+  border-radius: 10px;
+  border: 1px solid #c9e2d4;
+  background: linear-gradient(105deg, #f8fcfa 0%, #eef7f1 100%);
+}
+.route-hint-alert :deep(.el-alert__content) {
+  font-size: 12px;
+  line-height: 1.55;
+  color: #4a5e56;
+}
+.route-hint-title {
+  font-weight: 600;
+  color: #2a4036;
+}
+.route-table-shell {
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 2px 14px rgba(18, 48, 32, 0.06);
+}
+.table-pagination {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+.route-table-pagination {
+  padding: 0 2px;
+}
+/* 与 BusinessKnowledgePanel / FewShotPanel 的 knowledge-table 对齐 */
+.route-bind-block .route-table.knowledge-table {
+  width: 100%;
+}
+.route-bind-block .route-table.knowledge-table :deep(.el-table__header-wrapper th) {
+  background: #f2f7ff;
+  color: #2a4770;
+  font-weight: 700;
+}
+.route-bind-block .route-table.knowledge-table :deep(.el-table__row td) {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+.route-bind-select {
+  width: 100%;
+}
+.gov-pill-wrap {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.gov-pill {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  background: #e4f3eb;
+  color: #1a5c38;
+  border: 1px solid #b8dcc8;
+}
+.gov-pill--time {
+  background: #e8eefc;
+  color: #2a4a8f;
+  border-color: #c5d4f0;
+}
+.route-detail-tabs {
+  margin-top: -6px;
+}
+.route-detail-tabs :deep(.el-tabs__header) {
+  margin-bottom: 12px;
+}
+.drawer-gov-lead {
+  font-size: 13px;
+  line-height: 1.55;
+  color: #5c6f68;
+  margin: 0 0 14px;
+}
+.drawer-gov-form {
+  max-width: 100%;
+}
+.drawer-gov-input {
+  width: 200px;
+}
+.drawer-gov-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid #e8efe9;
+}
+.node-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.25;
+}
+.node-title {
+  font-weight: 600;
+  color: #303533;
+}
+.node-id {
+  font-size: 11px;
+  color: #909399;
+  font-family: ui-monospace, monospace;
+}
+.route-detail-desc {
+  margin-bottom: 16px;
+}
+.route-json-preview {
+  margin: 0;
+  max-height: 200px;
+  overflow: auto;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.route-detail-actions {
+  margin-top: 12px;
 }
 .row {
   display: flex;

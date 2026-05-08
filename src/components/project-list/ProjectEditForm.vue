@@ -41,34 +41,8 @@
           </div>
         </div>
 
-        <div class="form-block">
-          <div class="block-title">空间信息</div>
-          <div class="form-grid single-row">
-            <el-form-item label="项目位置" prop="location">
-              <el-input v-model.trim="form.location" placeholder="请输入行政区及详细地址" clearable />
-            </el-form-item>
-          </div>
-        </div>
-
-        <div class="form-block">
-          <div class="block-title">补充信息</div>
-          <div class="form-grid">
-            <el-form-item label="备注" prop="remark" class="remark-item">
-              <el-input
-                v-model.trim="form.remark"
-                type="textarea"
-                :rows="4"
-                placeholder="请输入备注信息"
-                maxlength="300"
-                show-word-limit
-              />
-            </el-form-item>
-          </div>
-        </div>
-
         <div class="form-actions">
           <el-button class="save-btn" type="primary" :loading="loading" @click="emit('submit')">保存修改</el-button>
-          <el-button class="reset-btn" @click="emit('reset')">重置</el-button>
         </div>
       </el-form>
     </div>
@@ -95,7 +69,7 @@ defineProps({
   }
 })
 
-const emit = defineEmits(['submit', 'reset'])
+const emit = defineEmits(['submit'])
 </script>
 
 <style scoped>
@@ -163,15 +137,6 @@ const emit = defineEmits(['submit', 'reset'])
   align-items: start;
 }
 
-.single-row {
-  grid-template-columns: 1fr;
-}
-
-/* 备注占满一行，避免与数字框并排导致输入区过窄 */
-.remark-item {
-  grid-column: 1 / -1;
-}
-
 .form-actions {
   margin-top: 8px;
   padding-top: 16px;
@@ -182,8 +147,7 @@ const emit = defineEmits(['submit', 'reset'])
   gap: 10px;
 }
 
-:deep(.save-btn.el-button),
-:deep(.reset-btn.el-button) {
+:deep(.save-btn.el-button) {
   min-width: 104px;
   height: 36px;
   border-radius: 8px;
@@ -216,16 +180,11 @@ const emit = defineEmits(['submit', 'reset'])
     grid-template-columns: 1fr;
   }
 
-  .remark-item {
-    grid-column: auto;
-  }
-
   .form-actions {
     justify-content: stretch;
   }
 
-  :deep(.save-btn.el-button),
-  :deep(.reset-btn.el-button) {
+  :deep(.save-btn.el-button) {
     flex: 1;
     min-width: 0;
   }

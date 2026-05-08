@@ -133,11 +133,24 @@
                     <div v-if="item.role === 'assistant' && item.streaming" class="msg-text msg-text-plain msg-answer">
                       {{ item.content }}
                     </div>
-                    <div
-                      v-else-if="item.role === 'assistant'"
-                      class="msg-text agent-md msg-answer"
-                      v-html="renderAssistantHtml(item.content)"
-                    />
+                    <template v-else-if="item.role === 'assistant'">
+                      <div class="msg-text agent-md msg-answer" v-html="renderAssistantHtml(item.content)" />
+                      <div
+                        v-if="item.rasterChartDataUrl"
+                        class="agent-raster-chart-card"
+                        role="img"
+                        aria-label="Python 输出图表"
+                      >
+                        <img class="agent-raster-chart-img" :src="item.rasterChartDataUrl" alt="" />
+                      </div>
+                      <div
+                        v-if="shouldShowAssistantChartSlot(item)"
+                        :id="`agent-chart-${item.id}`"
+                        class="agent-chart-card"
+                        role="img"
+                        :aria-label="item.chartViewSpec?.title || '查询结果图表'"
+                      />
+                    </template>
                     <div v-else class="msg-text msg-text-plain">{{ item.content }}</div>
                   </div>
                 </div>
@@ -262,6 +275,13 @@ import { ArrowRight, ChatDotRound, Close, User } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import AgentAssistantGlyph from '@/components/layout/AgentAssistantGlyph.vue'
 import { chatAgentStream, formatAgentNodeLine } from '@/services/agent.service'
+import {
+  buildRasterChartDataUrl,
+  coerceChartSpecForRender,
+  disposeAgentAssistantChart,
+  mountAgentAssistantChart,
+  shouldShowAssistantChartSlot
+} from '@/utils/agent-assistant-chart.js'
 import { renderAgentMarkdownHtml } from '@/utils/agent-markdown.js'
 import { parsePlanPreviewModel } from '@/utils/agent-plan-preview.js'
 
@@ -374,7 +394,11 @@ const makeMessage = (role, content = '') => ({
   traceStream: role === 'assistant' ? '' : undefined,
   streaming: false,
   reasoningLogs: role === 'assistant' ? [] : undefined,
-  reasoningOpen: role === 'assistant'
+  reasoningOpen: role === 'assistant',
+  chartViewSpec: null,
+  chartPreviewRows: null,
+  chartDispose: null,
+  rasterChartDataUrl: null
 })
 
 function mergePythonIntoAssistantTraceStream(assistantMsg, section, chunk) {
@@ -432,6 +456,72 @@ function renderAssistantHtml(raw) {
   return renderAgentMarkdownHtml(s)
 }
 
+function attachChartFromComplete(assistantMsg, info) {
+  // eslint-disable-next-line no-console
+  console.info('[LandAgent][chart-debug]', 'attachChartFromComplete 入口', {
+    msgId: assistantMsg?.id,
+    role: assistantMsg?.role,
+    infoKeys: info && typeof info === 'object' ? Object.keys(info) : [],
+    hasChartViewSpec: !!(info && info.chartViewSpec),
+    hasChartDataPreview: !!(info && info.chartDataPreview),
+    hasRaster: !!(info && info.rasterChartBase64 && info.rasterChartMime)
+  })
+  if (!assistantMsg || assistantMsg.role !== 'assistant') return
+  disposeAgentAssistantChart(assistantMsg)
+  assistantMsg.chartViewSpec = null
+  assistantMsg.chartPreviewRows = null
+  assistantMsg.rasterChartDataUrl = null
+  if (info?.rasterChartBase64 != null && info?.rasterChartMime != null) {
+    assistantMsg.rasterChartDataUrl = buildRasterChartDataUrl(info.rasterChartMime, info.rasterChartBase64)
+    // eslint-disable-next-line no-console
+    console.info('[LandAgent][chart-debug]', 'rasterChartDataUrl', {
+      ok: !!assistantMsg.rasterChartDataUrl,
+      mime: info?.rasterChartMime
+    })
+  }
+  if (info?.chartViewSpec) {
+    try {
+      assistantMsg.chartViewSpec = JSON.parse(String(info.chartViewSpec))
+    } catch (e) {
+      assistantMsg.chartViewSpec = null
+      // eslint-disable-next-line no-console
+      console.warn('[LandAgent][chart-debug]', 'chartViewSpec JSON.parse 失败', e?.message)
+    }
+  }
+  if (info?.chartDataPreview) {
+    try {
+      const rows = JSON.parse(String(info.chartDataPreview))
+      assistantMsg.chartPreviewRows = Array.isArray(rows) ? rows : null
+    } catch (e) {
+      assistantMsg.chartPreviewRows = null
+      // eslint-disable-next-line no-console
+      console.warn('[LandAgent][chart-debug]', 'chartDataPreview JSON.parse 失败', e?.message)
+    }
+  }
+  if (assistantMsg.chartViewSpec) {
+    const coerced =
+      coerceChartSpecForRender(assistantMsg.chartViewSpec, assistantMsg.chartPreviewRows || []) ||
+      assistantMsg.chartViewSpec
+    assistantMsg.chartViewSpec = coerced
+  }
+  // eslint-disable-next-line no-console
+  console.info('[LandAgent][chart-debug]', 'attachChartFromComplete 解析后', {
+    msgId: assistantMsg.id,
+    chartType: assistantMsg.chartViewSpec?.type,
+    previewRowCount: Array.isArray(assistantMsg.chartPreviewRows) ? assistantMsg.chartPreviewRows.length : 0,
+    showEchartsSlot: (() => {
+      const t = String(assistantMsg.chartViewSpec?.type || '').toLowerCase()
+      return !!t && t !== 'table'
+    })(),
+    hasRasterUrl: !!assistantMsg.rasterChartDataUrl
+  })
+  nextTick(() => {
+    nextTick(() => {
+      mountAgentAssistantChart(assistantMsg)
+    })
+  })
+}
+
 const stopStreaming = () => {
   if (streamAbortController) {
     streamAbortController.abort()
@@ -441,6 +531,7 @@ const stopStreaming = () => {
 }
 
 const clearMessages = () => {
+  messages.value.forEach((m) => disposeAgentAssistantChart(m))
   messages.value = []
   awaitingHumanReview.value = false
   hitlNote.value = ''
@@ -554,6 +645,7 @@ async function submitHumanReviewFeedback(approved) {
           clearGlobalHitlRestore()
         }
         assistantMsg.streaming = false
+        attachChartFromComplete(assistantMsg, info)
       }
     })
   } catch (e) {
@@ -708,6 +800,7 @@ const handleSend = async () => {
           clearGlobalHitlRestore()
         }
         assistantMsg.streaming = false
+        attachChartFromComplete(assistantMsg, info)
       }
     })
 
@@ -1328,6 +1421,34 @@ const handleSend = async () => {
 
 .msg-bubble > .msg-answer:first-child {
   margin-top: 0;
+}
+
+.agent-raster-chart-card {
+  margin-top: 12px;
+  width: 100%;
+  max-width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--agent-border);
+  background: #fff;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.agent-raster-chart-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.agent-chart-card {
+  margin-top: 12px;
+  height: 260px;
+  width: 100%;
+  min-height: 200px;
+  border-radius: 10px;
+  border: 1px solid var(--agent-border);
+  background: #fff;
 }
 
 .reasoning-item {

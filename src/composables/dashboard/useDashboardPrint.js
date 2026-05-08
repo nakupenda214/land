@@ -1,6 +1,5 @@
 const PRINT_FIELDS = [
   { label: '项目名称', key: 'projectName' },
-  { label: '项目位置', key: 'location' },
   { label: '项目时间', key: 'projectTime' },
   { label: '实测报告数', key: 'surveyReportFileCount' },
   { label: '合同文件数', key: 'contractFileCount' },

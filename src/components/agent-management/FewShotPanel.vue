@@ -42,7 +42,15 @@
         </template>
       </el-table-column>
       <el-table-column prop="updatedTime" label="更新时间" width="170" />
-      <el-table-column label="操作" width="260" fixed="right">
+      <el-table-column
+        label="操作"
+        width="162"
+        fixed="right"
+        align="center"
+        header-align="center"
+        class-name="col-actions"
+        label-class-name="col-actions"
+      >
         <template #default="{ row }">
           <el-button link type="primary" @click="openEditDialog(row)">编辑</el-button>
           <el-button link @click="toggleEnabled(row)">

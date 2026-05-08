@@ -45,171 +45,196 @@
       />
 
       <section class="right-panel audit-split-layout__right">
-        <template v-if="isMainFormEdit">
-          <div class="main-form-edit-header">
-            <div class="query-left">
-              <span class="row-count">对照左侧原表核对后，可修改主表字段与底部三行声明汇总</span>
-              <el-tag v-if="formEdit.id" size="small" type="info" effect="plain">主表 id: {{ formEdit.id }}</el-tag>
+        <div v-if="SHOW_PARTY_SUMMARY_ROWS_AUDIT" class="right-workspace-toolbar">
+          <el-radio-group v-model="rightWorkspace" size="small" class="right-workspace-tabs">
+            <el-radio-button :label="RIGHT_TAB_MAIN">主表编辑</el-radio-button>
+            <el-radio-button :label="RIGHT_TAB_ROWS">明细审核</el-radio-button>
+          </el-radio-group>
+        </div>
+
+        <div class="right-workspace-panes">
+          <div
+            v-show="!SHOW_PARTY_SUMMARY_ROWS_AUDIT || rightWorkspace === RIGHT_TAB_MAIN"
+            class="right-pane right-pane--main"
+          >
+            <div class="main-form-edit-header">
+              <div class="query-left">
+                <span class="row-count">对照左侧原表核对后，可修改主表字段与底部三行声明汇总</span>
+                <el-tag v-if="formEdit.id" size="small" type="info" effect="plain">主表 id: {{ formEdit.id }}</el-tag>
+              </div>
+            </div>
+            <div class="main-form-edit-body">
+              <el-form label-position="top" class="main-form-edit-form">
+                <div class="edit-block">
+                  <div class="edit-block-title">项目方声明汇总 · 建筑面积（㎡）</div>
+                  <el-row :gutter="12">
+                    <el-col :span="8"><el-form-item label="合同约定建筑面积"><el-input-number v-model="formEdit.declaredTotals.contractAgreedTotalBuildingArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
+                    <el-col :span="8"><el-form-item label="计容建筑面积"><el-input-number v-model="formEdit.declaredTotals.buildableTotalBuildingArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
+                    <el-col :span="8"><el-form-item label="建筑面积差值"><el-input-number v-model="formEdit.declaredTotals.differenceTotalBuildingArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
+                  </el-row>
+                </div>
+
+                <div class="edit-block">
+                  <div class="edit-block-title">项目方声明汇总 · 商业面积（㎡）</div>
+                  <el-row :gutter="12">
+                    <el-col :span="8"><el-form-item label="合同约定商业面积"><el-input-number v-model="formEdit.declaredTotals.contractAgreedCommercialArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
+                    <el-col :span="8"><el-form-item label="计容商业面积"><el-input-number v-model="formEdit.declaredTotals.buildableCommercialArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
+                    <el-col :span="8"><el-form-item label="商业面积差值"><el-input-number v-model="formEdit.declaredTotals.differenceCommercialArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
+                  </el-row>
+                </div>
+
+                <div class="edit-block">
+                  <div class="edit-block-title">项目方声明汇总 · 住宅面积（㎡）</div>
+                  <el-row :gutter="12">
+                    <el-col :span="8"><el-form-item label="合同约定住宅面积"><el-input-number v-model="formEdit.declaredTotals.contractAgreedResidentialArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
+                    <el-col :span="8"><el-form-item label="计容住宅面积"><el-input-number v-model="formEdit.declaredTotals.buildableResidentialArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
+                    <el-col :span="8"><el-form-item label="住宅面积差值"><el-input-number v-model="formEdit.declaredTotals.differenceResidentialArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
+                  </el-row>
+                </div>
+
+                <el-row :gutter="12">
+                  <el-col :span="8">
+                    <el-form-item label="解析状态">
+                      <el-select v-model="formEdit.parseStatus" clearable class="w100">
+                        <el-option label="成功" value="SUCCESS" />
+                        <el-option label="失败" value="FAILED" />
+                      </el-select>
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="8">
+                    <el-form-item label="是否已解析">
+                      <el-select v-model="formEdit.isParsed" clearable class="w100">
+                        <el-option label="已解析" :value="1" />
+                        <el-option label="未解析" :value="0" />
+                      </el-select>
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+
+                <el-form-item label="备注">
+                  <el-input v-model.trim="formEdit.remark" type="textarea" :rows="2" maxlength="500" show-word-limit />
+                </el-form-item>
+              </el-form>
+            </div>
+            <div class="main-form-edit-footer">
+              <el-button @click="dialogVisible = false">关闭</el-button>
+              <el-button type="primary" :loading="mainFormSaveLoading" @click="submitMainFormEdit">保存主表</el-button>
             </div>
           </div>
-          <div class="main-form-edit-body">
-            <el-form label-position="top" class="main-form-edit-form">
-              <el-row :gutter="12">
-                <el-col :span="6"><el-form-item label="期数"><el-input-number v-model="formEdit.phase" :min="1" controls-position="right" class="w100" /></el-form-item></el-col>
-                <el-col :span="9"><el-form-item label="不动产权证编号"><el-input v-model.trim="formEdit.propertyCertificateNumber" clearable /></el-form-item></el-col>
-                <el-col :span="9"><el-form-item label="合同/批文编号"><el-input v-model.trim="formEdit.contractApprovalNumber" clearable /></el-form-item></el-col>
-              </el-row>
 
-              <div class="edit-block">
-                <div class="edit-block-title">项目方声明汇总 · 建筑面积（㎡）</div>
-                <el-row :gutter="12">
-                  <el-col :span="8"><el-form-item label="合同约定建筑面积"><el-input-number v-model="formEdit.declaredTotals.contractAgreedTotalBuildingArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
-                  <el-col :span="8"><el-form-item label="计容建筑面积"><el-input-number v-model="formEdit.declaredTotals.buildableTotalBuildingArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
-                  <el-col :span="8"><el-form-item label="建筑面积差值"><el-input-number v-model="formEdit.declaredTotals.differenceTotalBuildingArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
-                </el-row>
-              </div>
-
-              <div class="edit-block">
-                <div class="edit-block-title">项目方声明汇总 · 商业面积（㎡）</div>
-                <el-row :gutter="12">
-                  <el-col :span="8"><el-form-item label="合同约定商业面积"><el-input-number v-model="formEdit.declaredTotals.contractAgreedCommercialArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
-                  <el-col :span="8"><el-form-item label="计容商业面积"><el-input-number v-model="formEdit.declaredTotals.buildableCommercialArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
-                  <el-col :span="8"><el-form-item label="商业面积差值"><el-input-number v-model="formEdit.declaredTotals.differenceCommercialArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
-                </el-row>
-              </div>
-
-              <div class="edit-block">
-                <div class="edit-block-title">项目方声明汇总 · 住宅面积（㎡）</div>
-                <el-row :gutter="12">
-                  <el-col :span="8"><el-form-item label="合同约定住宅面积"><el-input-number v-model="formEdit.declaredTotals.contractAgreedResidentialArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
-                  <el-col :span="8"><el-form-item label="计容住宅面积"><el-input-number v-model="formEdit.declaredTotals.buildableResidentialArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
-                  <el-col :span="8"><el-form-item label="住宅面积差值"><el-input-number v-model="formEdit.declaredTotals.differenceResidentialArea" :precision="2" controls-position="right" class="w100" /></el-form-item></el-col>
-                </el-row>
-              </div>
-
-              <el-row :gutter="12">
-                <el-col :span="8">
-                  <el-form-item label="解析状态">
-                    <el-select v-model="formEdit.parseStatus" clearable class="w100">
-                      <el-option label="成功" value="SUCCESS" />
-                      <el-option label="失败" value="FAILED" />
-                    </el-select>
-                  </el-form-item>
-                </el-col>
-                <el-col :span="8">
-                  <el-form-item label="是否已解析">
-                    <el-select v-model="formEdit.isParsed" clearable class="w100">
-                      <el-option label="已解析" :value="1" />
-                      <el-option label="未解析" :value="0" />
-                    </el-select>
-                  </el-form-item>
-                </el-col>
-              </el-row>
-
-              <el-form-item label="备注">
-                <el-input v-model.trim="formEdit.remark" type="textarea" :rows="2" maxlength="500" show-word-limit />
-              </el-form-item>
-            </el-form>
-          </div>
-          <div class="main-form-edit-footer">
-            <el-button @click="dialogVisible = false">取消</el-button>
-            <el-button type="primary" :loading="mainFormSaveLoading" @click="submitMainFormEdit">保存主表</el-button>
-          </div>
-        </template>
-
-        <template v-else>
-        <div class="query-bar">
-          <div class="query-left">
-            <span class="row-count">共 {{ rowTotal }} 行</span>
-            <el-tag size="small" type="info" effect="plain">summaryFormId: {{ summaryFormId || '-' }}</el-tag>
-          </div>
-          <div class="query-actions">
-            <el-button size="small" type="primary" plain @click="openCreateDialog" :disabled="!canCreateRow">新增行</el-button>
-            <el-button size="small" :icon="Refresh" @click="fetchRows">刷新</el-button>
-          </div>
-        </div>
-
-        <div class="table-wrap" v-loading="rowsLoading">
-          <el-table
-            :data="rows"
-            class="summary-rows-table"
-            border
-            stripe
-            size="small"
-            height="100%"
-            row-key="id"
-            :header-cell-style="AUDIT_TABLE_HEADER_STYLE"
-            :cell-style="AUDIT_TABLE_CELL_STYLE"
+          <div
+            v-show="SHOW_PARTY_SUMMARY_ROWS_AUDIT && rightWorkspace === RIGHT_TAB_ROWS"
+            class="right-pane right-pane--rows"
           >
-            <el-table-column type="index" label="#" width="48" align="center" fixed="left" />
-            <el-table-column prop="engineeringProject" label="工程项目/楼栋" min-width="140" fixed="left" show-overflow-tooltip />
-            <el-table-column prop="propertyCertificateNumber" label="不动产权证编号" min-width="130" show-overflow-tooltip />
-            <el-table-column prop="contractApprovalNumber" label="合同/批文编号" min-width="120" show-overflow-tooltip />
-            <el-table-column prop="phase" label="期数" width="52" align="center" />
-            <el-table-column prop="actualTotalBuildingArea" label="实测总面积" width="96" align="right">
-              <template #default="{ row }">{{ formatNum(row.actualTotalBuildingArea) }}</template>
-            </el-table-column>
+            <div class="query-bar">
+              <div class="query-left">
+                <span class="row-count">共 {{ rowTotal }} 行</span>
+                <el-tag size="small" type="info" effect="plain">summaryFormId: {{ summaryFormId || '-' }}</el-tag>
+              </div>
+              <div class="query-actions">
+                <el-button size="small" type="primary" plain @click="openCreateDialog" :disabled="!canCreateRow">新增行</el-button>
+                <el-button size="small" :icon="Refresh" @click="fetchRows">刷新</el-button>
+              </div>
+            </div>
 
-            <el-table-column label="计容建筑面积" align="center">
-              <el-table-column prop="actualCommercialArea" label="商业" width="78" align="right">
-                <template #default="{ row }">{{ formatNum(row.actualCommercialArea) }}</template>
-              </el-table-column>
-              <el-table-column prop="actualResidentialArea" label="住宅" width="78" align="right">
-                <template #default="{ row }">{{ formatNum(row.actualResidentialArea) }}</template>
-              </el-table-column>
-              <el-table-column prop="actualManagementRoomArea" label="物管" width="78" align="right">
-                <template #default="{ row }">{{ formatNum(row.actualManagementRoomArea) }}</template>
-              </el-table-column>
-              <el-table-column prop="actualOtherBuildableArea" label="其他" width="78" align="right">
-                <template #default="{ row }">{{ formatNum(row.actualOtherBuildableArea) }}</template>
-              </el-table-column>
-            </el-table-column>
+            <div class="table-wrap" v-loading="rowsLoading">
+              <el-table
+                :data="rows"
+                class="summary-rows-table"
+                border
+                stripe
+                size="small"
+                height="100%"
+                row-key="id"
+                :header-cell-style="AUDIT_TABLE_HEADER_STYLE"
+                :cell-style="AUDIT_TABLE_CELL_STYLE"
+              >
+                <el-table-column type="index" label="#" width="48" align="center" fixed="left" />
+                <el-table-column prop="engineeringProject" label="工程项目/楼栋" min-width="140" fixed="left" show-overflow-tooltip />
+                <el-table-column prop="propertyCertificateNumber" label="不动产权证编号" min-width="130" show-overflow-tooltip />
+                <el-table-column prop="contractApprovalNumber" label="合同/批文编号" min-width="120" show-overflow-tooltip />
+                <el-table-column prop="phase" label="期数" width="52" align="center" />
+                <el-table-column prop="actualTotalBuildingArea" label="实测总面积" width="96" align="right">
+                  <template #default="{ row }">{{ formatNum(row.actualTotalBuildingArea) }}</template>
+                </el-table-column>
 
-            <el-table-column label="不计容建筑面积" align="center">
-              <el-table-column prop="actualCommunityArea" label="社区" width="78" align="right">
-                <template #default="{ row }">{{ formatNum(row.actualCommunityArea) }}</template>
-              </el-table-column>
-              <el-table-column prop="actualOtherPublicArea" label="公用" width="78" align="right">
-                <template #default="{ row }">{{ formatNum(row.actualOtherPublicArea) }}</template>
-              </el-table-column>
-            </el-table-column>
+                <el-table-column label="计容建筑面积" align="center">
+                  <el-table-column prop="actualCommercialArea" label="商业" width="78" align="right">
+                    <template #default="{ row }">{{ formatNum(row.actualCommercialArea) }}</template>
+                  </el-table-column>
+                  <el-table-column prop="actualResidentialArea" label="住宅" width="78" align="right">
+                    <template #default="{ row }">{{ formatNum(row.actualResidentialArea) }}</template>
+                  </el-table-column>
+                  <el-table-column prop="actualManagementRoomArea" label="物管" width="78" align="right">
+                    <template #default="{ row }">{{ formatNum(row.actualManagementRoomArea) }}</template>
+                  </el-table-column>
+                  <el-table-column prop="actualOtherBuildableArea" label="其他" width="78" align="right">
+                    <template #default="{ row }">{{ formatNum(row.actualOtherBuildableArea) }}</template>
+                  </el-table-column>
+                </el-table-column>
 
-            <el-table-column prop="totalBuildableArea" label="计容合计" width="88" align="right">
-              <template #default="{ row }">{{ formatNum(row.totalBuildableArea) }}</template>
-            </el-table-column>
-            <el-table-column prop="totalNonBuildableArea" label="不计容合计" width="96" align="right">
-              <template #default="{ row }">{{ formatNum(row.totalNonBuildableArea) }}</template>
-            </el-table-column>
+                <el-table-column label="不计容建筑面积" align="center">
+                  <el-table-column prop="actualCommunityArea" label="社区" width="78" align="right">
+                    <template #default="{ row }">{{ formatNum(row.actualCommunityArea) }}</template>
+                  </el-table-column>
+                  <el-table-column prop="actualOtherPublicArea" label="公用" width="78" align="right">
+                    <template #default="{ row }">{{ formatNum(row.actualOtherPublicArea) }}</template>
+                  </el-table-column>
+                </el-table-column>
 
-            <el-table-column prop="remark" label="备注" min-width="100" show-overflow-tooltip />
-            <el-table-column label="操作" width="132" align="center" fixed="right">
-              <template #default="{ row }">
-                <span class="party-audit-row-actions">
-                  <el-button class="op-btn audit-btn" size="small" type="primary" plain @click="openEditDialog(row)">编辑</el-button>
-                  <el-popconfirm title="确认删除该行？" width="220" @confirm="handleDeleteRow(row)">
-                    <template #reference>
-                      <el-button class="op-btn delete-btn" size="small" type="danger" plain>删除</el-button>
-                    </template>
-                  </el-popconfirm>
-                </span>
-              </template>
-            </el-table-column>
-          </el-table>
+                <el-table-column prop="totalBuildableArea" label="计容合计" width="88" align="right">
+                  <template #default="{ row }">{{ formatNum(row.totalBuildableArea) }}</template>
+                </el-table-column>
+                <el-table-column prop="totalNonBuildableArea" label="不计容合计" width="96" align="right">
+                  <template #default="{ row }">{{ formatNum(row.totalNonBuildableArea) }}</template>
+                </el-table-column>
+
+                <el-table-column prop="remark" label="备注" min-width="100" show-overflow-tooltip />
+                <el-table-column
+                  label="操作"
+                  width="128"
+                  align="center"
+                  fixed="right"
+                  class-name="party-summary-audit-op-col"
+                >
+                  <template #default="{ row }">
+                    <div class="party-audit-row-actions">
+                      <el-button
+                        class="party-audit-op-btn op-btn audit-btn"
+                        size="small"
+                        type="primary"
+                        plain
+                        @click="openEditDialog(row)"
+                      >
+                        编辑
+                      </el-button>
+                      <el-popconfirm title="确认删除该行？" width="220" @confirm="handleDeleteRow(row)">
+                        <template #reference>
+                          <el-button class="party-audit-op-btn op-btn delete-btn" size="small" type="danger" plain>
+                            删除
+                          </el-button>
+                        </template>
+                      </el-popconfirm>
+                    </div>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+
+            <div class="pager-row">
+              <el-pagination
+                background
+                layout="total, sizes, prev, pager, next"
+                :total="rowTotal"
+                :page-size="query.pageSize"
+                :current-page="query.pageNum"
+                :page-sizes="[10, 20, 50, 100]"
+                @size-change="handleSizeChange"
+                @current-change="handlePageChange"
+              />
+            </div>
+          </div>
         </div>
-
-        <div class="pager-row">
-          <el-pagination
-            background
-            layout="total, sizes, prev, pager, next"
-            :total="rowTotal"
-            :page-size="query.pageSize"
-            :current-page="query.pageNum"
-            :page-sizes="[10, 20, 50, 100]"
-            @size-change="handleSizeChange"
-            @current-change="handlePageChange"
-          />
-        </div>
-        </template>
       </section>
     </div>
 
@@ -360,32 +385,34 @@ import { useRecognitionMarkdown } from '@/composables/file-upload/useRecognition
 import { useAuditSplitPanel } from '@/composables/audit/useAuditSplitPanel'
 import { AUDIT_TABLE_HEADER_STYLE, AUDIT_TABLE_CELL_STYLE } from '@/constants/auditTableStyles'
 
-const VARIANT_AUDIT = 'audit'
-const VARIANT_MAIN_FORM_EDIT = 'mainFormEdit'
-
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   projectId: { type: [String, Number], default: '' },
   fileRecordId: { type: [String, Number], default: '' },
   initialFile: { type: Object, default: null },
-  /** audit：行明细审核；mainFormEdit：对照原文件编辑主表（含底部三行声明汇总） */
-  variant: { type: String, default: VARIANT_AUDIT },
-  /** variant 为 mainFormEdit 时传入的初始主表数据（打开时拷贝到内部表单） */
+  /** 打开时右侧默认面板：mainForm 主表编辑；rows 明细审核（仅当 SHOW_PARTY_SUMMARY_ROWS_AUDIT 为 true 时有效） */
+  initialRightTab: { type: String, default: 'mainForm' },
+  /** 主表表单初始数据（来自主表列表行）；缺省时打开后按 fileRecordId 从接口拉取 */
   mainFormDraft: { type: Object, default: null }
 })
 
 const emit = defineEmits(['update:modelValue', 'main-form-saved'])
 
-const isMainFormEdit = computed(() => props.variant === VARIANT_MAIN_FORM_EDIT)
+/** 为 false 时隐藏「明细审核」切换与表格，且不请求行列表；改 true 可恢复 */
+const SHOW_PARTY_SUMMARY_ROWS_AUDIT = false
 
-const dialogTitle = computed(() =>
-  isMainFormEdit.value ? '对照原文件编辑项目方实测汇总主表' : '项目方实测汇总表审核'
-)
+const RIGHT_TAB_MAIN = 'mainForm'
+const RIGHT_TAB_ROWS = 'rows'
+
+const dialogTitle = computed(() => '项目方实测汇总表')
 
 const dialogVisible = computed({
   get: () => props.modelValue,
   set: (v) => emit('update:modelValue', v)
 })
+
+/** 右侧面板：主表编辑 / 明细审核（同一弹窗内切换） */
+const rightWorkspace = ref(RIGHT_TAB_MAIN)
 
 const leftView = ref('excel')
 const metaLoading = ref(false)
@@ -483,9 +510,6 @@ const emptyDeclaredTotals = () => ({
 
 const formEdit = reactive({
   id: null,
-  phase: null,
-  propertyCertificateNumber: '',
-  contractApprovalNumber: '',
   isParsed: null,
   parseStatus: '',
   remark: '',
@@ -495,9 +519,6 @@ const formEdit = reactive({
 const resetMainFormEdit = () => {
   Object.assign(formEdit, {
     id: null,
-    phase: null,
-    propertyCertificateNumber: '',
-    contractApprovalNumber: '',
     isParsed: null,
     parseStatus: '',
     remark: '',
@@ -513,9 +534,6 @@ const assignMainFormFromDraft = (draft) => {
   const dt = draft.declaredTotals && typeof draft.declaredTotals === 'object' ? draft.declaredTotals : {}
   Object.assign(formEdit, {
     id: draft.id ?? null,
-    phase: draft.phase ?? null,
-    propertyCertificateNumber: draft.propertyCertificateNumber || '',
-    contractApprovalNumber: draft.contractApprovalNumber || '',
     isParsed: draft.isParsed ?? null,
     parseStatus: draft.parseStatus || '',
     remark: draft.remark || '',
@@ -600,9 +618,10 @@ const onExcelError = (e) => {
   ElMessage.error('Excel 预览失败，可尝试下载原文件查看')
 }
 
-const fetchSummaryFormId = async () => {
+/** 按 fileRecordId 拉取主表一行，并写入 summaryFormId；供无 mainFormDraft 时填充右侧主表表单 */
+const fetchSummaryFormRow = async () => {
   summaryFormId.value = ''
-  if (!props.fileRecordId || !props.projectId) return
+  if (!props.fileRecordId || !props.projectId) return null
   try {
     const res = await axios.post('/api/project/project-party-summary-forms/query', {
       pageNum: 1,
@@ -612,11 +631,13 @@ const fetchSummaryFormId = async () => {
       projectId: Number(props.projectId),
       fileRecordId: Number(props.fileRecordId)
     })
-    if (res.data?.code !== 200) return
+    if (res.data?.code !== 200) return null
     const form = Array.isArray(res.data?.data?.records) ? res.data.data.records[0] : null
     if (form?.id) summaryFormId.value = String(form.id)
+    return form || null
   } catch (error) {
     console.error('查询项目方实测汇总主表失败:', error)
+    return null
   }
 }
 
@@ -698,6 +719,11 @@ const fetchMarkdown = async () => {
 }
 
 const fetchRows = async () => {
+  if (!SHOW_PARTY_SUMMARY_ROWS_AUDIT) {
+    rows.value = []
+    rowTotal.value = 0
+    return
+  }
   if (!props.fileRecordId) {
     rows.value = []
     rowTotal.value = 0
@@ -882,6 +908,7 @@ const handleSizeChange = (size) => {
 
 const handleClosed = () => {
   leftView.value = 'excel'
+  rightWorkspace.value = SHOW_PARTY_SUMMARY_ROWS_AUDIT ? RIGHT_TAB_ROWS : RIGHT_TAB_MAIN
   rows.value = []
   rowTotal.value = 0
   summaryFormId.value = ''
@@ -903,9 +930,6 @@ const submitMainFormEdit = async () => {
   try {
     const payload = {
       id: Number(formEdit.id),
-      phase: toNullableNumber(formEdit.phase),
-      propertyCertificateNumber: formEdit.propertyCertificateNumber || null,
-      contractApprovalNumber: formEdit.contractApprovalNumber || null,
       isParsed: toNullableNumber(formEdit.isParsed),
       parseStatus: formEdit.parseStatus || null,
       remark: formEdit.remark || null,
@@ -928,7 +952,6 @@ const submitMainFormEdit = async () => {
     }
     ElMessage.success(res.data?.msg || '更新成功')
     emit('main-form-saved')
-    dialogVisible.value = false
   } catch (error) {
     console.error('更新项目方汇总主表失败:', error)
     ElMessage.error('更新失败，请稍后重试')
@@ -938,16 +961,28 @@ const submitMainFormEdit = async () => {
 }
 
 watch(
-  () => [dialogVisible.value, props.fileRecordId, props.variant, props.mainFormDraft],
+  () => [dialogVisible.value, props.fileRecordId, props.initialRightTab, props.mainFormDraft],
   async ([visible, fileRecordId]) => {
     if (!visible || !fileRecordId) return
-    if (isMainFormEdit.value && props.mainFormDraft) {
-      assignMainFormFromDraft(props.mainFormDraft)
-    }
+    rightWorkspace.value =
+      !SHOW_PARTY_SUMMARY_ROWS_AUDIT || props.initialRightTab === RIGHT_TAB_MAIN
+        ? RIGHT_TAB_MAIN
+        : RIGHT_TAB_ROWS
     query.pageNum = 1
+    if (props.mainFormDraft) {
+      assignMainFormFromDraft(props.mainFormDraft)
+      if (props.mainFormDraft.id != null && props.mainFormDraft.id !== '') {
+        summaryFormId.value = String(props.mainFormDraft.id)
+      }
+    } else {
+      const formRow = await fetchSummaryFormRow()
+      if (formRow) assignMainFormFromDraft(formRow)
+      else resetMainFormEdit()
+    }
     await fetchFileMeta()
-    const rowFetch = isMainFormEdit.value ? Promise.resolve() : fetchRows()
-    await Promise.all([fetchSummaryFormId(), fetchMarkdown(), rowFetch, fetchExcelPreview()])
+    const parallel = [fetchMarkdown(), fetchExcelPreview()]
+    if (SHOW_PARTY_SUMMARY_ROWS_AUDIT) parallel.push(fetchRows())
+    await Promise.all(parallel)
   }
 )
 
@@ -984,11 +1019,22 @@ watch(leftView, (v) => {
 }
 
 .party-audit-row-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  justify-content: center;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.party-audit-op-btn {
+  width: 100%;
+  margin: 0 !important;
+}
+
+.party-audit-row-actions > :deep(.el-popconfirm) {
+  display: block;
+  width: 100%;
 }
 
 .left-panel,
@@ -1070,21 +1116,32 @@ watch(leftView, (v) => {
 
 .main-form-edit-header {
   flex-shrink: 0;
-  margin-bottom: 10px;
-  padding: 8px 10px;
-  border: 1px solid #e4ebf4;
-  border-radius: 8px;
-  background: #f8fbff;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: linear-gradient(135deg, #f0f9ff 0%, #f8fafc 55%, #ffffff 100%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+}
+
+.main-form-edit-header .row-count {
+  line-height: 1.5;
+  font-weight: 500;
+  color: #334155;
 }
 
 .main-form-edit-body {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  border: 1px solid #e3eaf3;
-  border-radius: 8px;
-  padding: 12px 14px;
-  background: #fff;
+  border-radius: 12px;
+  padding: 18px 20px 20px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: linear-gradient(180deg, #f1f5f9 0%, #f8fafc 12%, #ffffff 42%);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.75) inset,
+    0 8px 24px -18px rgba(15, 23, 42, 0.12);
+  scrollbar-gutter: stable;
 }
 
 .main-form-edit-footer {
@@ -1098,26 +1155,77 @@ watch(leftView, (v) => {
 }
 
 .main-form-edit-form .edit-block {
-  margin-bottom: 14px;
-  padding: 12px 14px 4px;
-  border-radius: 10px;
-  background: #fafbfd;
-  border: 1px solid #e9eef4;
+  margin-bottom: 16px;
+  padding: 16px 16px 8px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 0 2px 8px -4px rgba(15, 23, 42, 0.08);
+}
+
+.main-form-edit-form .edit-block:last-of-type {
+  margin-bottom: 8px;
 }
 
 .main-form-edit-form .edit-block-title {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #475569;
-  margin: 0 0 10px;
-  padding-left: 10px;
-  border-left: 3px solid #3b82f6;
-  line-height: 1.2;
+  letter-spacing: 0.02em;
+  color: #0f172a;
+  margin: 0 0 14px;
+  padding: 0 0 10px 12px;
+  border-left: 4px solid #3b82f6;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  line-height: 1.35;
 }
 
 .main-form-edit-form :deep(.el-form-item) {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+}
+
+.main-form-edit-form :deep(.el-form-item__label) {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  line-height: 1.35;
+}
+
+.main-form-edit-form :deep(.el-input__wrapper),
+.main-form-edit-form :deep(.el-input-number) {
+  border-radius: 8px;
+}
+
+.right-workspace-toolbar {
+  flex-shrink: 0;
+  margin-bottom: 10px;
+}
+
+.right-workspace-tabs {
+  width: 100%;
+  display: flex;
+}
+
+.right-workspace-tabs :deep(.el-radio-button) {
+  flex: 1;
+}
+
+.right-workspace-tabs :deep(.el-radio-button__inner) {
+  width: 100%;
+}
+
+.right-workspace-panes {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.right-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .query-bar {
@@ -1160,6 +1268,15 @@ watch(leftView, (v) => {
 
 .summary-rows-table :deep(.el-table__fixed-right-patch) {
   background: #f1f5f9;
+}
+
+.summary-rows-table :deep(.party-summary-audit-op-col) {
+  vertical-align: middle;
+}
+
+.summary-rows-table :deep(.party-summary-audit-op-col .cell) {
+  padding: 10px 10px;
+  overflow: visible;
 }
 
 .pager-row {

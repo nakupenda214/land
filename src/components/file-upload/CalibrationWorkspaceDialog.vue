@@ -338,7 +338,7 @@
                       :visible="usageEditorVisibleRowId === String(row.id)"
                     >
                       <div class="usage-editor-pop">
-                        <div class="usage-editor-title">选择用途类别与用途</div>
+                        <div class="usage-editor-title">选择用途</div>
                         <el-form label-position="top" class="usage-editor-form">
                           <el-form-item label="用途">
                             <el-select
@@ -351,16 +351,10 @@
                               <el-option
                                 v-for="item in usageEditorOptions"
                                 :key="item.id || `${item.usageCategory}-${item.usagePattern}`"
-                                :label="`${item.usagePattern}（${item.usageCategoryText}）`"
+                                :label="`${item.usagePattern}（${item.usageCategoryText} / ${item.floorAreaTypeText}）`"
                                 :value="item.usagePattern"
                               />
                             </el-select>
-                          </el-form-item>
-                          <el-form-item label="自动匹配类别">
-                            <el-tag v-if="usageEditorMatchedOption" type="info" effect="plain">
-                              {{ usageEditorMatchedOption.usageCategoryText }} / {{ usageEditorMatchedOption.floorAreaTypeText }}
-                            </el-tag>
-                            <span v-else class="usage-auto-tip">选择用途后将自动匹配用途类别与面积类型</span>
                           </el-form-item>
                         </el-form>
                         <div class="usage-editor-actions">
@@ -898,12 +892,6 @@ const usageEditorDraft = reactive({
 })
 
 const usageEditorOptions = computed(() => usagePickerOptions.value)
-
-const usageEditorMatchedOption = computed(() => {
-  const usage = String(usageEditorDraft.roomUsage || '').trim()
-  if (!usage) return null
-  return usagePickerOptions.value.find((item) => String(item.usagePattern || '').trim() === usage) || null
-})
 
 const openUsageEditor = async (row) => {
   usagePickerTargetRow.value = row
@@ -1588,11 +1576,6 @@ const handleSubmitCreateUsage = async () => {
   align-items: center;
   gap: 8px;
   margin-top: 2px;
-}
-
-.usage-auto-tip {
-  color: #64748b;
-  font-size: 12px;
 }
 
 :deep(.table-toolbar .el-button--primary),

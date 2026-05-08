@@ -34,7 +34,14 @@
       <el-table-column label="更新时间" width="170">
         <template #default="{ row }">{{ formatTime(row.updateTime) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="220">
+      <el-table-column
+        label="操作"
+        width="172"
+        align="center"
+        header-align="center"
+        class-name="col-actions"
+        label-class-name="col-actions"
+      >
         <template #default="{ row }">
           <el-button size="small" text type="primary" @click="quickVerify(row.versionId)">验证</el-button>
           <el-button size="small" text type="warning" @click="quickRollback(row.versionId)">回滚</el-button>

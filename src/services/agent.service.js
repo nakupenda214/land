@@ -18,6 +18,16 @@ export const AGENT_NODE_LABELS = {
   snapshot: '状态检查点'
 }
 
+/** 排查图表/SSE complete 用；复制控制台中带此前缀的对象发回即可 */
+const CHART_DEBUG_PREFIX = '[LandAgent][chart-debug]'
+
+function dbgChartTrunc(val, max = 280) {
+  if (val == null) return null
+  const s = typeof val === 'string' ? val : JSON.stringify(val)
+  if (s.length <= max) return s
+  return `${s.slice(0, max)}…(共${s.length}字符)`
+}
+
 function labelForNode(node) {
   if (!node) return '流程'
   return AGENT_NODE_LABELS[node] || node.replace(/Node$/, '')
@@ -204,12 +214,49 @@ export const chatAgentStream = async ({
       case 'NODE': {
         onNode?.(data)
         if (status === 'complete' && pl && pl.ok === true) {
+          // eslint-disable-next-line no-console
+          console.info(CHART_DEBUG_PREFIX, 'SSE NODE complete 原始 payload 键', {
+            keys: pl && typeof pl === 'object' ? Object.keys(pl) : [],
+            awaitingHumanReview: !!(pl && pl.awaitingHumanReview),
+            node: data?.node,
+            status: data?.status
+          })
+          // eslint-disable-next-line no-console
+          console.info(CHART_DEBUG_PREFIX, '图表相关字段摘要', {
+            chartViewSpecLen: pl.chartViewSpec != null ? String(pl.chartViewSpec).length : 0,
+            chartViewSpecHead: dbgChartTrunc(pl.chartViewSpec),
+            chartDataPreviewLen: pl.chartDataPreview != null ? String(pl.chartDataPreview).length : 0,
+            chartDataPreviewHead: dbgChartTrunc(pl.chartDataPreview),
+            rasterChartMime: pl.rasterChartMime != null ? String(pl.rasterChartMime) : null,
+            rasterChartBase64Len:
+              pl.rasterChartBase64 != null ? String(pl.rasterChartBase64).length : 0
+          })
           const pp = pl.planPreview != null && String(pl.planPreview).trim() !== '' ? String(pl.planPreview) : undefined
+          const cvs =
+            pl.chartViewSpec != null && String(pl.chartViewSpec).trim() !== ''
+              ? String(pl.chartViewSpec).trim()
+              : undefined
+          const cdp =
+            pl.chartDataPreview != null && String(pl.chartDataPreview).trim() !== ''
+              ? String(pl.chartDataPreview).trim()
+              : undefined
+          const rb64 =
+            pl.rasterChartBase64 != null && String(pl.rasterChartBase64).trim() !== ''
+              ? String(pl.rasterChartBase64).trim()
+              : undefined
+          const rmime =
+            pl.rasterChartMime != null && String(pl.rasterChartMime).trim() !== ''
+              ? String(pl.rasterChartMime).trim()
+              : undefined
           onComplete?.({
             threadId: threadIdFromHeader || undefined,
             ok: true,
             awaitingHumanReview: !!pl.awaitingHumanReview,
-            ...(pp !== undefined ? { planPreview: pp } : {})
+            ...(pp !== undefined ? { planPreview: pp } : {}),
+            ...(cvs !== undefined ? { chartViewSpec: cvs } : {}),
+            ...(cdp !== undefined ? { chartDataPreview: cdp } : {}),
+            ...(rb64 !== undefined ? { rasterChartBase64: rb64 } : {}),
+            ...(rmime !== undefined ? { rasterChartMime: rmime } : {})
           })
           onFinal?.({
             threadId: threadIdFromHeader,
@@ -217,7 +264,11 @@ export const chatAgentStream = async ({
             payload: {
               ok: true,
               awaitingHumanReview: !!pl.awaitingHumanReview,
-              ...(pp !== undefined ? { planPreview: pp } : {})
+              ...(pp !== undefined ? { planPreview: pp } : {}),
+              ...(cvs !== undefined ? { chartViewSpec: cvs } : {}),
+              ...(cdp !== undefined ? { chartDataPreview: cdp } : {}),
+              ...(rb64 !== undefined ? { rasterChartBase64: rb64 } : {}),
+              ...(rmime !== undefined ? { rasterChartMime: rmime } : {})
             }
           })
         }
