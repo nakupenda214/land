@@ -194,7 +194,6 @@
                 >
                   人工复核计划
                 </el-checkbox>
-                <span class="composer-hint">Enter 发送 · Shift+Enter 换行</span>
                 <el-button
                   type="primary"
                   round

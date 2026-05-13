@@ -52,8 +52,7 @@
               @refresh-survey="handleRefreshSurveyData"
               @refresh-parsed="handleRefreshParsedOnly"
               @view-detail="viewDetail"
-              @print="handlePrint"
-              @export="handleExportExcel"
+              @configure-print-export="openSummaryPrintExportSettings"
             />
 
             <SummaryComparisonCard
@@ -144,11 +143,22 @@
 
     <PrintSummaryBlock
       :is-printing="isPrinting"
+      :resolved-main-columns="resolvedSummaryMainColumns"
       :current-project-info="currentProjectInfo"
       :current-print-date="currentPrintDate"
       :display-table-data="displayTableData"
       :area-comparison="areaComparison"
       :selected-comparison-groups="selectedComparisonGroups"
+    />
+
+    <SummaryPrintExportDialog
+      v-model="summaryLayoutDialogVisible"
+      v-model:layout-rows="summaryLayoutRows"
+      v-model:comparison-groups="selectedComparisonGroups"
+      :preview-table-data="displayTableData"
+      :area-comparison="areaComparison"
+      @after-print-request="handleSummaryAfterPrintRequest"
+      @after-export-request="handleSummaryAfterExportRequest"
     />
 
     <ProjectDetailDialog
@@ -251,6 +261,8 @@ import { useSurveyRefresh } from '@/composables/project-list/useSurveyRefresh'
 import { useUnknownUsagePolicy } from '@/composables/project-list/useUnknownUsagePolicy'
 import { useProjectFileCollections } from '@/composables/project-list/useProjectFileCollections'
 import { useProjectExport } from '@/composables/project-list/useProjectExport'
+import { resolveVisibleColumnDefs } from '@/composables/project-list/summaryExportColumnSchema.js'
+import { loadSummaryLayoutFromStorage } from '@/composables/project-list/summaryExportLayoutStorage.js'
 import { useProjectDetailDialog } from '@/composables/project-list/useProjectDetailDialog'
 
 /** 默认 Tab 保持同步导入；其余 Tab / 弹窗异步分包，减轻首次进入「项目信息」的解析与下载耗时 */
@@ -262,6 +274,9 @@ const SummaryComparisonCard = defineAsyncComponent(() =>
   import('@/components/project-list/SummaryComparisonCard.vue')
 )
 const PrintSummaryBlock = defineAsyncComponent(() => import('@/components/project-list/PrintSummaryBlock.vue'))
+const SummaryPrintExportDialog = defineAsyncComponent(() =>
+  import('@/components/project-list/SummaryPrintExportDialog.vue')
+)
 const ProjectDetailDialog = defineAsyncComponent(() => import('@/components/project-list/ProjectDetailDialog.vue'))
 const ContractEditDialog = defineAsyncComponent(() => import('@/components/project-list/ContractEditDialog.vue'))
 const ContractWorkspaceDialog = defineAsyncComponent(() =>
@@ -278,14 +293,24 @@ const ProjectPartySummaryTab = defineAsyncComponent(() =>
   import('@/components/project-list/ProjectPartySummaryTab.vue')
 )
 
-// const handlePrint = () => window.print()
 const { isPrinting, triggerPrint } = usePrint()
-const handlePrint = () => {
-  if (!selectedComparisonGroups.value.length) {
-    ElMessage.warning('请至少选择一组面积核算对比数据后再打印')
-    return
-  }
-  triggerPrint() // 调用 Teleport 打印逻辑
+
+/** 房产实测汇总：打印 / 导出共用列布局（本地持久化） */
+const summaryLayoutRows = ref(loadSummaryLayoutFromStorage())
+const summaryLayoutDialogVisible = ref(false)
+const resolvedSummaryMainColumns = computed(() => resolveVisibleColumnDefs(summaryLayoutRows.value))
+
+const openSummaryPrintExportSettings = () => {
+  summaryLayoutDialogVisible.value = true
+}
+
+const handleSummaryAfterPrintRequest = async () => {
+  await nextTick()
+  triggerPrint()
+}
+
+const handleSummaryAfterExportRequest = () => {
+  runExportExcel()
 }
 
 
@@ -556,13 +581,12 @@ const handleRefreshParsedOnly = async () => {
     parsedRefreshLoading.value = false
   }
 }
-const {
-  handleExportExcel
-} = useProjectExport({
+const { runExportExcel } = useProjectExport({
   displayTableData,
   currentProjectInfo,
   areaComparison,
-  selectedComparisonGroups
+  selectedComparisonGroups,
+  summaryLayoutRows
 })
 // ===== 合同表单相关（补充注释）=====
 const {

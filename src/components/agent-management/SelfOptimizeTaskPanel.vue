@@ -577,81 +577,6 @@
                 <el-descriptions-item label="optimizationStatus">{{ selectedSnapshot?.optimizationStatus || '—' }}</el-descriptions-item>
                 <el-descriptions-item label="userQuery" :span="2">{{ selectedSnapshot?.userQuery || '—' }}</el-descriptions-item>
                 <el-descriptions-item label="rootCause" :span="2">{{ selectedSnapshot?.rootCause || '—' }}</el-descriptions-item>
-                <el-descriptions-item
-                  v-if="selectedSnapshot?.skillRootCauseDiagnosisJson || selectedSnapshot?.skillRootCauseReactLog || selectedSnapshot?.skillRootCauseSessionTraceId"
-                  label="SKILL 根因对比"
-                  :span="2"
-                >
-                  <el-table
-                    v-if="skillDiagnosisCompareRows.length"
-                    :data="skillDiagnosisCompareRows"
-                    size="small"
-                    border
-                    class="skill-compare-table"
-                  >
-                    <el-table-column prop="field" label="维度" width="160" />
-                    <el-table-column prop="classic" label="经典诊断（快照）" min-width="200" show-overflow-tooltip />
-                    <el-table-column prop="skill" label="SKILL 旁路" min-width="220" show-overflow-tooltip />
-                  </el-table>
-                  <div v-else class="muted-text">暂无 SKILL 结构化结果</div>
-                  <div v-if="selectedSnapshot?.skillRootCauseSessionTraceId" class="snapshot-meta-inline">
-                    SKILL 审计 trace：{{ selectedSnapshot.skillRootCauseSessionTraceId }}
-                  </div>
-                  <el-button
-                    v-if="selectedSnapshot?.skillRootCauseReactLog"
-                    size="small"
-                    text
-                    type="primary"
-                    @click="openTextViewer('SKILL ReAct 日志', selectedSnapshot.skillRootCauseReactLog)"
-                  >
-                    查看 ReAct 日志
-                  </el-button>
-                </el-descriptions-item>
-                <el-descriptions-item
-                  v-if="silentErrorSkillBlockVisible"
-                  label="SKILL 静默错答"
-                  :span="2"
-                >
-                  <div class="snapshot-extra-actions" style="margin-bottom: 8px">
-                    <el-button
-                      size="small"
-                      type="primary"
-                      plain
-                      :loading="silentErrorAnalyzeLoading"
-                      :disabled="!silentErrorAnalyzeEligible"
-                      @click="runSilentErrorSkillAnalyze"
-                    >
-                      触发静默错答分析
-                    </el-button>
-                    <span v-if="!silentErrorAnalyzeEligible && selectedSnapshot?.qualityIssue" class="muted-text">
-                      需快照带有效 qualityIssue，且主链路 trace 为 SUCCESS（由后端校验）
-                    </span>
-                  </div>
-                  <el-table
-                    v-if="skillSilentErrorCompareRows.length"
-                    :data="skillSilentErrorCompareRows"
-                    size="small"
-                    border
-                    class="skill-compare-table"
-                  >
-                    <el-table-column prop="field" label="维度" width="160" />
-                    <el-table-column prop="classic" label="标注 / 快照" min-width="200" show-overflow-tooltip />
-                    <el-table-column prop="skill" label="SKILL 静默分析" min-width="220" show-overflow-tooltip />
-                  </el-table>
-                  <div v-else class="muted-text">暂无 SKILL 静默结构化结果（可先点击上方触发）</div>
-                  <div v-if="selectedSnapshot?.skillSilentErrorSessionTraceId" class="snapshot-meta-inline">
-                    SKILL 静默审计 trace：{{ selectedSnapshot.skillSilentErrorSessionTraceId }}
-                  </div>
-                  <el-button
-                    v-if="selectedSnapshot?.skillSilentErrorReactLog"
-                    size="small"
-                    text
-                    type="primary"
-                    @click="openTextViewer('SKILL 静默 ReAct 日志', selectedSnapshot.skillSilentErrorReactLog)"
-                  >
-                    查看静默 ReAct 日志
-                  </el-button>
-                </el-descriptions-item>
               </el-descriptions>
 
               <el-collapse v-model="snapshotExtraCollapse" class="snapshot-extra-collapse">
@@ -1244,7 +1169,6 @@ import {
   resolveCanonicalEndId
 } from './agent-trace-topology-layout.js'
 import {
-  analyzeSilentErrorSkill,
   appendSnapshotHumanFeedback,
   buildDebugSnapshot,
   deleteAgentBadCase,
@@ -1328,7 +1252,6 @@ const textViewerVisible = ref(false)
 const textViewerTitle = ref('')
 const textViewerContent = ref('')
 const rollbackLoading = ref(false)
-const silentErrorAnalyzeLoading = ref(false)
 
 const versionDetail = ref(null)
 const versionDetailLoading = ref(false)
@@ -1705,168 +1628,6 @@ function shortText(text, max = 200) {
   if (!raw) return '—'
   if (raw.length <= max) return raw
   return `${raw.slice(0, max)}...`
-}
-
-const parsedSkillRootCause = computed(() => {
-  const raw = selectedSnapshot.value?.skillRootCauseDiagnosisJson
-  if (!raw || typeof raw !== 'string') return null
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return null
-  }
-})
-
-const skillDiagnosisCompareRows = computed(() => {
-  const snap = selectedSnapshot.value
-  const sk = parsedSkillRootCause.value
-  if (!snap) return []
-  if (!sk || typeof sk !== 'object') return []
-  if (sk.error) {
-    return [
-      {
-        field: 'SKILL 状态',
-        classic: '—',
-        skill: String(sk.error) + (sk.message ? `: ${sk.message}` : '')
-      }
-    ]
-  }
-  return [
-    { field: 'fault_node', classic: String(snap.triggerNode || '—'), skill: String(sk.faultNode ?? sk.fault_node ?? '—') },
-    {
-      field: 'category + detail',
-      classic: String(snap.rootCause || '—'),
-      skill:
-        [sk.rootCauseCategory || sk.root_cause_category, sk.rootCauseDetail || sk.root_cause_detail]
-          .filter(Boolean)
-          .join(' — ') || '—'
-    },
-    {
-      field: 'confidence',
-      classic: snap.confidence != null && snap.confidence !== '' ? String(snap.confidence) : '—',
-      skill: sk.confidence != null && sk.confidence !== '' ? String(sk.confidence) : '—'
-    },
-    {
-      field: 'optimization_direction',
-      classic: String(snap.optimizationDirection || '—'),
-      skill: String(sk.optimizationDirection ?? sk.optimization_direction ?? '—')
-    },
-    {
-      field: 'evidence（预览）',
-      classic: '—',
-      skill: shortText(String(sk.evidence ?? '—'), 240)
-    }
-  ]
-})
-
-const silentErrorSkillBlockVisible = computed(() => {
-  const snap = selectedSnapshot.value
-  if (!snap) return false
-  if (
-    snap.skillSilentErrorDiagnosisJson ||
-    snap.skillSilentErrorReactLog ||
-    snap.skillSilentErrorSessionTraceId
-  ) {
-    return true
-  }
-  return Boolean(snap.qualityIssue && snapshotHasQualityIssue(snap.qualityIssue))
-})
-
-const silentErrorAnalyzeEligible = computed(() => {
-  const tid = String(selectedTaskId.value || '').trim()
-  const sid = String(selectedTask.value?.snapshotId || '').trim()
-  const snap = selectedSnapshot.value
-  if (!tid || !sid || !snap) return false
-  return snapshotHasQualityIssue(snap.qualityIssue)
-})
-
-const parsedSkillSilentError = computed(() => {
-  const raw = selectedSnapshot.value?.skillSilentErrorDiagnosisJson
-  if (!raw || typeof raw !== 'string') return null
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return null
-  }
-})
-
-const skillSilentErrorCompareRows = computed(() => {
-  const snap = selectedSnapshot.value
-  const sk = parsedSkillSilentError.value
-  if (!snap) return []
-  if (!sk || typeof sk !== 'object') return []
-  if (sk.error) {
-    return [
-      {
-        field: 'SKILL 状态',
-        classic: '—',
-        skill: String(sk.error) + (sk.message ? `: ${sk.message}` : '')
-      }
-    ]
-  }
-  const qi = snap.qualityIssue && typeof snap.qualityIssue === 'object' ? snap.qualityIssue : {}
-  const qiBrief = [qi.issueType, qi.expectedCount != null ? `期望行数 ${qi.expectedCount}` : '']
-    .filter(Boolean)
-    .join(' · ') || '—'
-  const pass = sk.fact_consistency_pass ?? sk.factConsistencyPass
-  const note = sk.fact_consistency_note ?? sk.factConsistencyNote ?? ''
-  const passStr =
-    pass === true ? '通过' : pass === false ? '未通过' : pass == null || pass === '' ? '—' : String(pass)
-  return [
-    {
-      field: 'issue 上下文',
-      classic: qiBrief,
-      skill: shortText(String(sk.issue_type_context ?? sk.issueTypeContext ?? '—'), 240)
-    },
-    {
-      field: '根因（大类 + 细节）',
-      classic: String(snap.rootCause || '—'),
-      skill:
-        [sk.root_cause_category ?? sk.rootCauseCategory, sk.root_cause_detail ?? sk.rootCauseDetail]
-          .filter(Boolean)
-          .join(' — ') || '—'
-    },
-    {
-      field: '事实一致性',
-      classic: qiBrief,
-      skill: [passStr, note].filter(Boolean).join(' — ') || '—'
-    },
-    {
-      field: 'optimization_direction',
-      classic: String(snap.optimizationDirection || '—'),
-      skill: String(sk.optimization_direction ?? sk.optimizationDirection ?? '—')
-    },
-    {
-      field: 'confidence',
-      classic: snap.confidence != null && snap.confidence !== '' ? String(snap.confidence) : '—',
-      skill: sk.confidence != null && sk.confidence !== '' ? String(sk.confidence) : '—'
-    },
-    {
-      field: 'evidence（预览）',
-      classic: '—',
-      skill: shortText(String(sk.evidence ?? '—'), 240)
-    }
-  ]
-})
-
-async function runSilentErrorSkillAnalyze() {
-  const tid = String(selectedTaskId.value || '').trim()
-  const sid = String(selectedTask.value?.snapshotId || '').trim()
-  const trace = String(selectedTask.value?.traceId || selectedSnapshot.value?.traceId || '').trim()
-  if (!tid || !sid) {
-    ElMessage.warning('缺少 taskId 或 snapshotId')
-    return
-  }
-  silentErrorAnalyzeLoading.value = true
-  try {
-    await analyzeSilentErrorSkill({ taskId: tid, snapshotId: sid, traceId: trace || undefined })
-    ElMessage.success('静默错答分析已完成，已写入快照')
-    await loadTaskDetail(tid)
-  } catch (e) {
-    ElMessage.error(e?.message || '静默错答分析失败')
-  } finally {
-    silentErrorAnalyzeLoading.value = false
-  }
 }
 
 function isLongText(text, max = 200) {
@@ -3271,11 +3032,6 @@ onBeforeUnmount(() => {
   font-size: 12px;
   color: var(--selfopt-muted);
   margin-top: 6px;
-}
-
-.skill-compare-table {
-  margin-top: 6px;
-  width: 100%;
 }
 
 .running-badge {

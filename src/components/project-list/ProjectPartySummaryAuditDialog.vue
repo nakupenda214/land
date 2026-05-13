@@ -92,25 +92,6 @@
                   </el-row>
                 </div>
 
-                <el-row :gutter="12">
-                  <el-col :span="8">
-                    <el-form-item label="解析状态">
-                      <el-select v-model="formEdit.parseStatus" clearable class="w100">
-                        <el-option label="成功" value="SUCCESS" />
-                        <el-option label="失败" value="FAILED" />
-                      </el-select>
-                    </el-form-item>
-                  </el-col>
-                  <el-col :span="8">
-                    <el-form-item label="是否已解析">
-                      <el-select v-model="formEdit.isParsed" clearable class="w100">
-                        <el-option label="已解析" :value="1" />
-                        <el-option label="未解析" :value="0" />
-                      </el-select>
-                    </el-form-item>
-                  </el-col>
-                </el-row>
-
                 <el-form-item label="备注">
                   <el-input v-model.trim="formEdit.remark" type="textarea" :rows="2" maxlength="500" show-word-limit />
                 </el-form-item>
@@ -510,8 +491,6 @@ const emptyDeclaredTotals = () => ({
 
 const formEdit = reactive({
   id: null,
-  isParsed: null,
-  parseStatus: '',
   remark: '',
   declaredTotals: emptyDeclaredTotals()
 })
@@ -519,8 +498,6 @@ const formEdit = reactive({
 const resetMainFormEdit = () => {
   Object.assign(formEdit, {
     id: null,
-    isParsed: null,
-    parseStatus: '',
     remark: '',
     declaredTotals: emptyDeclaredTotals()
   })
@@ -534,8 +511,6 @@ const assignMainFormFromDraft = (draft) => {
   const dt = draft.declaredTotals && typeof draft.declaredTotals === 'object' ? draft.declaredTotals : {}
   Object.assign(formEdit, {
     id: draft.id ?? null,
-    isParsed: draft.isParsed ?? null,
-    parseStatus: draft.parseStatus || '',
     remark: draft.remark || '',
     declaredTotals: { ...emptyDeclaredTotals(), ...dt }
   })
@@ -930,8 +905,6 @@ const submitMainFormEdit = async () => {
   try {
     const payload = {
       id: Number(formEdit.id),
-      isParsed: toNullableNumber(formEdit.isParsed),
-      parseStatus: formEdit.parseStatus || null,
       remark: formEdit.remark || null,
       declaredTotals: {
         contractAgreedTotalBuildingArea: toNullableNumber(formEdit.declaredTotals.contractAgreedTotalBuildingArea),

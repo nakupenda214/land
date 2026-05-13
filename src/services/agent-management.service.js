@@ -569,13 +569,3 @@ export function addBenchmarkCase(payload) {
     .post(`${API_PREFIX}/agent-traces/self-opt/benchmark/add`, payload)
     .then((res) => unwrapAgentApi(res, '新增基准用例失败'))
 }
-
-/**
- * 静默错答 SKILL（主 trace SUCCESS + 快照 qualityIssue）；GET，需后端开启 skill-analysis 与 silent-error。
- * @param {{ taskId: string, traceId?: string, snapshotId?: string }} params
- */
-export function analyzeSilentErrorSkill(params) {
-  return axios
-    .get(`${API_PREFIX}/agent-skill/v1/silent-error/analyze`, { params })
-    .then((res) => unwrapAgentApi(res, '静默错答 SKILL 分析失败'))
-}

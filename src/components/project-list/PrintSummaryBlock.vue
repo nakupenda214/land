@@ -11,40 +11,18 @@
     <table class="native-print-table data-table">
       <thead>
         <tr>
-          <th rowspan="2">序号</th>
-          <th rowspan="2">工程名称</th>
-          <th rowspan="2">不动产权证编号</th>
-          <th rowspan="2">合同/批文编号</th>
-          <th rowspan="2">期数</th>
-          <th rowspan="2">实测总面积</th>
-          <th colspan="4">计容建筑面积</th>
-          <th colspan="2">不计容建筑面积</th>
-          <th rowspan="2">报告书编号</th>
+          <template v-for="(cell, ti) in headerModel.topCells" :key="'pt-' + ti">
+            <th v-if="cell.rowspan > 1" :rowspan="cell.rowspan" :colspan="cell.colspan">{{ cell.text }}</th>
+            <th v-else :colspan="cell.colspan">{{ cell.text }}</th>
+          </template>
         </tr>
-        <tr>
-          <th>商业</th>
-          <th>住宅</th>
-          <th>物管</th>
-          <th>其他</th>
-          <th>社区</th>
-          <th>公用</th>
+        <tr v-if="headerModel.bottomCells.length">
+          <th v-for="(cell, bi) in headerModel.bottomCells" :key="'pb-' + bi">{{ cell.text }}</th>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="(row, index) in displayTableData" :key="row.id">
-          <td>{{ index + 1 }}</td>
-          <td>{{ row.projectName }}</td>
-          <td>{{ row.certNo }}</td>
-          <td>{{ row.contractNo }}</td>
-          <td>{{ row.phase }}</td>
-          <td>{{ row.totalArea }}</td>
-          <td>{{ row.calcCommercial }}</td>
-          <td>{{ row.calcResidential }}</td>
-          <td>{{ row.calcPropMgmt }}</td>
-          <td>{{ row.calcOther }}</td>
-          <td>{{ row.nonCalcCommunity }}</td>
-          <td>{{ row.nonCalcOther }}</td>
-          <td>{{ row.reportNo }}</td>
+        <tr v-for="(row, index) in displayTableData" :key="row.id ?? `r-${index}`">
+          <td v-for="col in resolvedMainColumns" :key="col.id">{{ cellText(col, row, index) }}</td>
         </tr>
       </tbody>
     </table>
@@ -83,11 +61,18 @@
 
 <script setup>
 import { computed } from 'vue'
+import { buildTwoRowHeaderModel, formatSummaryCellValue } from '@/composables/project-list/summaryExportColumnSchema.js'
+import { buildSelectedComparisonGroups } from '@/composables/project-list/summaryAreaComparisonTables.js'
 
 const props = defineProps({
   isPrinting: {
     type: Boolean,
     default: false
+  },
+  /** 打印主表列（与导出一致，由「打印与导出设置」生成） */
+  resolvedMainColumns: {
+    type: Array,
+    default: () => []
   },
   currentProjectInfo: {
     type: Object,
@@ -115,46 +100,11 @@ const props = defineProps({
   }
 })
 
-const groupMeta = [
-  { key: 'systemCalculated', title: '实测报告对比结果' },
-  { key: 'projectPartyDeclared', title: '项目方统计比对结果' },
-  { key: 'planningCalculated', title: '规划复核对比结果' }
-]
+const headerModel = computed(() => buildTwoRowHeaderModel(props.resolvedMainColumns || []))
 
-const formatArea = (value) => {
-  const num = Number(value)
-  if (!Number.isFinite(num)) return '-'
-  return num.toFixed(2)
-}
-
-const buildRows = (tripleLine) => [
-  {
-    label: '建筑面积',
-    contractAgreedArea: formatArea(tripleLine?.totalBuilding?.contractAgreedArea),
-    buildableArea: formatArea(tripleLine?.totalBuilding?.buildableArea),
-    difference: formatArea(tripleLine?.totalBuilding?.difference)
-  },
-  {
-    label: '商业面积',
-    contractAgreedArea: formatArea(tripleLine?.commercial?.contractAgreedArea),
-    buildableArea: formatArea(tripleLine?.commercial?.buildableArea),
-    difference: formatArea(tripleLine?.commercial?.difference)
-  },
-  {
-    label: '住宅面积',
-    contractAgreedArea: formatArea(tripleLine?.residential?.contractAgreedArea),
-    buildableArea: formatArea(tripleLine?.residential?.buildableArea),
-    difference: formatArea(tripleLine?.residential?.difference)
-  }
-]
+const cellText = (col, row, index) => formatSummaryCellValue(col, row, index)
 
 const selectedPrintGroups = computed(() =>
-  groupMeta
-    .filter((meta) => props.selectedComparisonGroups.includes(meta.key))
-    .map((meta) => ({
-      key: meta.key,
-      title: meta.title,
-      rows: buildRows(props.areaComparison?.[meta.key])
-    }))
+  buildSelectedComparisonGroups(props.areaComparison, props.selectedComparisonGroups)
 )
 </script>

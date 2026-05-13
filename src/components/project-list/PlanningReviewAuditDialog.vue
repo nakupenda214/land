@@ -82,6 +82,7 @@
           <el-table
             class="rows-table planning-audit-table"
             :data="rows"
+            :fit="false"
             border
             stripe
             size="small"
@@ -128,7 +129,7 @@
               </template>
             </el-table-column>
 
-            <el-table-column label="层数" align="center">
+            <el-table-column label="层数" align="center" min-width="160">
               <el-table-column prop="aboveGroundFloors" label="地上" width="80" align="center">
                 <template #default="{ row }">
                   <template v-if="isEditingRow(row.id)">
@@ -147,7 +148,7 @@
               </el-table-column>
             </el-table-column>
 
-            <el-table-column label="面积（㎡）" align="center">
+            <el-table-column label="面积（㎡）" align="center" min-width="288">
               <el-table-column prop="totalArea" label="总面积" width="96" align="right">
                 <template #default="{ row }">
                   <template v-if="isEditingRow(row.id)">
@@ -806,8 +807,8 @@ onBeforeUnmount(() => {
 .rows-table-wrap {
   flex: 1;
   min-height: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
+  /* 勿在此外层设 overflow-x:auto，否则横向滚动与表头不同步（应由表格 body-wrapper 滚动） */
+  overflow: hidden;
 }
 
 .pager-row {
@@ -848,11 +849,6 @@ onBeforeUnmount(() => {
   background: #d7e7f8;
   border-color: #b8d3ec;
   color: #163a5a;
-}
-
-:deep(.planning-audit-table .el-table__header),
-:deep(.planning-audit-table .el-table__body) {
-  min-width: 1280px;
 }
 
 :deep(.el-pagination) {

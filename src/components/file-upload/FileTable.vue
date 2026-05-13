@@ -33,7 +33,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column prop="name" label="文件名/编号" min-width="200">
+      <el-table-column prop="name" label="文件名" min-width="200">
         <template #default="{ row }">
           <div class="file-name-cell">
             <span style="font-weight: 600; font-size: 15px; color: #303133;">{{ row.name }}</span>

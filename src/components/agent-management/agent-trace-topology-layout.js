@@ -82,7 +82,7 @@ export function layoutGraphLr(nodes, edges) {
     else labelById.set(id, id)
   }
 
-  // 针对当前 LandAgent 图的关键环路做“水平 + 上下”混合排布，避免 plan/mql/semantic/mongo 重叠在一条直线上。
+  // 针对当前 LandAgent 图的关键环路做“水平 + 上下”混合排布，避免 plan/mql/mongo 重叠在一条直线上。
   const rowHint = new Map([
     ['__START__', 0],
     ['intent_classify', 0],
@@ -92,8 +92,6 @@ export function layoutGraphLr(nodes, edges) {
     ['query_enhance', 0],
     ['schema_recall', 0],
     ['mix_selector', 0],
-    ['feasibility_assessment', 0],
-    ['feasibility_answer', 1],
     ['planner', 1],
     ['plan_executor', 2],
     ['human_feedback', 3],
@@ -102,7 +100,6 @@ export function layoutGraphLr(nodes, edges) {
     ['python_analyze', 2],
     ['mql_generate', 3],
     ['mql_validate', 2],
-    ['semantic_mql', 1],
     ['mongo_execute', 3],
     ['answer_wrap', 1]
   ])
@@ -242,8 +239,6 @@ export const AGENT_RUNTIME_LLM_STREAM_ORDER = Object.freeze([
   'evidence_recall',
   'schema_recall',
   'mix_selector',
-  'feasibility_assessment',
-  'feasibility_answer',
   'planner',
   'plan_executor',
   'python_generate',
@@ -251,7 +246,6 @@ export const AGENT_RUNTIME_LLM_STREAM_ORDER = Object.freeze([
   'python_analyze',
   'mql_generate',
   'mql_validate',
-  'semantic_mql',
   'mongo_execute',
   'answer_wrap'
 ])

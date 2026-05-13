@@ -52,10 +52,6 @@
         </aside>
 
         <section class="obs-run-card" aria-label="观测发题">
-          <div class="obs-run-cap">
-            <span class="obs-run-cap-kicker">观测</span>
-            <span class="obs-run-cap-muted">Enter 发送 · Shift+Enter 换行</span>
-          </div>
           <div class="obs-run-inner">
             <el-input
               v-model="obsQuery"
@@ -275,7 +271,6 @@
             <span class="filter-label">TRACE_BAG 分区</span>
             <el-radio-group v-model="traceBagLaneFilter" size="small" class="lane-group">
               <el-radio-button value="all">全部</el-radio-button>
-              <el-radio-button value="governance">治理</el-radio-button>
               <el-radio-button value="business">业务</el-radio-button>
             </el-radio-group>
             <span v-if="typeFilterList.length" class="filter-hint">已选 {{ typeFilterList.length }} 类；清空则显示全部</span>
@@ -647,7 +642,7 @@ const selectedId = ref('')
 const detail = ref(null)
 /** 选中的类型；空数组表示不过滤（显示全部） */
 const typeFilterList = ref([])
-/** TRACE_BAG 车道过滤：all/governance/business */
+/** TRACE_BAG 车道过滤：all=不过滤；business=隐藏历史 node_governance 分区 */
 const traceBagLaneFilter = ref('all')
 /** 拓扑节点点击 → 时间轴仅看相关事件 */
 const topologySelectedId = ref('')
@@ -772,12 +767,11 @@ const filteredEvents = computed(() => {
     const set = new Set(typeFilterList.value)
     list = list.filter((ev) => set.has(ev?.type))
   }
-  if (traceBagLaneFilter.value !== 'all') {
+  if (traceBagLaneFilter.value === 'business') {
     list = list.filter((ev) => {
       if (ev?.type !== 'TRACE_BAG') return true
       const facet = String(ev?.payload?.facet || '')
-      const isGovernance = facet === 'node_governance'
-      return traceBagLaneFilter.value === 'governance' ? isGovernance : !isGovernance
+      return facet !== 'node_governance'
     })
   }
   if (topologySelectedId.value) {
@@ -954,7 +948,6 @@ function planTodoIcon(status) {
 const FINAL_ANSWER_LLM_SOURCES = new Set([
   'answer_wrap',
   'knowledge_qa_answer',
-  'feasibility_answer',
   'common_chat'
 ])
 

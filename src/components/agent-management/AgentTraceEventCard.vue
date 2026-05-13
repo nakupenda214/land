@@ -202,14 +202,15 @@ function showMongoResultButton(ev) {
 
 function traceBagLaneLabel(ev) {
   const facet = String(ev?.payload?.facet || '')
-  if (facet === 'node_governance') return '治理分区'
+  if (facet === 'node_governance') return '治理分区（历史）'
+  if (facet === 'trace_annotation') return '标注分区'
   if (facet === 'llm_reasoning') return '思考分区'
   return '业务分区'
 }
 
 function traceBagErrorCodeLabel(ev) {
   const facet = String(ev?.payload?.facet || '')
-  if (facet !== 'node_governance') return ''
+  if (facet !== 'node_governance' && facet !== 'trace_annotation') return ''
   const code = String(ev?.payload?.kv?.errorCode || '').trim().toUpperCase()
   if (!code) return ''
   if (code.includes('TIMEOUT')) return `超时：${code}`

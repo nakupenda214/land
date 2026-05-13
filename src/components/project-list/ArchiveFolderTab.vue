@@ -2,59 +2,65 @@
   <div class="archive-tab">
     <div class="tab-content">
       <div class="archive-toolbar">
-        <div class="toolbar-left">
-          <el-tag type="info" effect="plain">项目：{{ projectNameText }}</el-tag>
-          <div class="toolbar-actions">
-            <el-button class="toolbar-btn primary" size="small" type="primary" :icon="FolderAdd" @click="openCreateDialog" :disabled="!projectId">
-              新建文件夹
-            </el-button>
-            <el-button class="toolbar-btn upload-btn" size="small" type="primary" :icon="FolderAdd"  :disabled="!projectId || !selectedArchiveId" @click="openUploadDialog">
-              文件上传
-            </el-button>
-          </div>
-        </div>
-        <div class="toolbar-right">
-          <span class="socket-status" :class="`is-${socketStatus}`">
-            {{ socketStatusText }}
-          </span>
-        </div>
+        <span
+          class="socket-status"
+          :class="`is-${socketStatus}`"
+          role="status"
+          :title="socketStatusText"
+          :aria-label="socketStatusText"
+        />
       </div>
 
       <div ref="splitContainerRef" class="explorer-split">
         <section class="tree-panel" :style="{ flexBasis: `${treePanelWidth}px` }" v-loading="archiveLoading">
-          <el-empty v-if="!projectId" description="请先选择项目后查看归档目录" />
-          <el-tree
-            v-else-if="treeData.length"
-            class="archive-tree"
-            :data="treeData"
-            node-key="id"
-            :props="treeProps"
-            :expand-on-click-node="false"
-            default-expand-all
-            @node-click="handleNodeClick"
-          >
-            <template #default="{ data }">
-              <div class="tree-node-row" :class="{ selected: data.archiveId && data.archiveId === selectedArchiveId }">
-                <el-icon class="folder-icon">
-                  <FolderOpened v-if="data.nodeType === 'project'" />
-                  <Folder v-else />
-                </el-icon>
-                <span class="node-name">{{ data.name }}</span>
-                <span class="node-actions">
-                  <el-popconfirm
-                    v-if="data.nodeType === 'archive'"
-                    title="确认删除该归档夹？"
-                    @confirm="handleDeleteArchive(data)"
-                  >
-                    <template #reference>
-                      <el-button size="small" type="danger" text :icon="Delete" @click.stop title="删除归档夹" />
-                    </template>
-                  </el-popconfirm>
-                </span>
-              </div>
-            </template>
-          </el-tree>
-          <el-empty v-else description="暂无归档夹" />
+          <div class="tree-panel-actions">
+            <el-button
+              class="tree-action-btn tree-action-btn--create"
+              size="small"
+              type="primary"
+              :icon="FolderAdd"
+              :disabled="!projectId"
+              @click="openCreateDialog"
+            >
+              新建文件夹
+            </el-button>
+            <el-button
+              class="tree-action-btn tree-action-btn--delete"
+              size="small"
+              type="danger"
+              plain
+              :icon="Delete"
+              :disabled="!canDeleteSelectedArchive"
+              title="删除左侧树中当前选中的归档夹"
+              @click="confirmDeleteSelectedArchive"
+            >
+              删除文件夹
+            </el-button>
+          </div>
+          <div class="tree-panel-scroll">
+            <el-empty v-if="!projectId" description="请先选择项目后查看归档目录" />
+            <el-tree
+              v-else-if="treeData.length"
+              class="archive-tree"
+              :data="treeData"
+              node-key="id"
+              :props="treeProps"
+              :expand-on-click-node="false"
+              default-expand-all
+              @node-click="handleNodeClick"
+            >
+              <template #default="{ data }">
+                <div class="tree-node-row" :class="{ selected: data.archiveId && data.archiveId === selectedArchiveId }">
+                  <el-icon class="folder-icon">
+                    <FolderOpened v-if="data.nodeType === 'project'" />
+                    <Folder v-else />
+                  </el-icon>
+                  <span class="node-name">{{ data.name }}</span>
+                </div>
+              </template>
+            </el-tree>
+            <el-empty v-else description="暂无归档夹" />
+          </div>
         </section>
 
         <div
@@ -125,6 +131,17 @@
                 >
                   批量解析
                 </el-button>
+                <el-button
+                  class="upload-btn"
+                  size="small"
+                  type="primary"
+                  plain
+                  :icon="UploadFilled"
+                  :disabled="!projectId || !selectedArchiveId"
+                  @click="openUploadDialog"
+                >
+                  文件上传
+                </el-button>
               </div>
             </div>
           </div>
@@ -162,7 +179,7 @@
                     </div>
                   </template>
                 </el-table-column>
-                <el-table-column prop="originalName" label="文件名/编号" min-width="280" show-overflow-tooltip />
+                <el-table-column prop="originalName" label="文件名" min-width="280" show-overflow-tooltip />
                 <el-table-column label="上传时间" width="180" align="center">
                   <template #default="{ row }">{{ formatDateTime(row.uploadTime) }}</template>
                 </el-table-column>
@@ -313,17 +330,7 @@
               <el-input-number v-model="uploadForm.phase" :min="1" :max="99" controls-position="right" class="upload-phase" />
             </el-form-item>
             <el-form-item label="目标归档夹">
-              <el-select v-model="uploadForm.archiveId" class="upload-select" placeholder="请选择要上传到的归档夹">
-                <el-option
-                  v-for="item in archiveList"
-                  :key="item.id"
-                  :label="item.name"
-                  :value="item.id"
-                />
-              </el-select>
-              <div class="upload-tip">
-                当前接口规则：仅当文件归类为“其他文件”时，后端使用 archiveId 进行归档落位。
-              </div>
+              <div class="upload-current-archive">{{ selectedArchiveName || '—' }}</div>
             </el-form-item>
           </el-col>
 
@@ -347,7 +354,6 @@
                     </span>
                   </template>
                 </div>
-                <p v-else class="upload-toolbar-placeholder">添加文件后在此查看数量、合计大小与后缀分布</p>
                 <el-button
                   class="upload-clear-btn"
                   size="small"
@@ -378,7 +384,6 @@
                   </div>
                   <div class="upload-drop-title">拖拽文件到这里</div>
                   <div class="upload-drop-sub">或点击选择文件上传</div>
-                  <div class="upload-drop-hint">支持多选；上传后会自动进入解析流程</div>
                 </div>
                 <div v-else class="upload-drop-compact">
                   <el-icon class="upload-drop-compact-icon"><UploadFilled /></el-icon>
@@ -1003,6 +1008,8 @@ const parseSceneToState = {
 
 const projectNameText = computed(() => props.projectName || '未选择项目')
 const selectedArchive = computed(() => archiveList.value.find((item) => item.id === selectedArchiveId.value))
+/** 树中已选中具体归档夹（非仅项目根节点）时可删除 */
+const canDeleteSelectedArchive = computed(() => Boolean(props.projectId && selectedArchiveId.value))
 const showThumbnailColumn = computed(
   () => String(selectedArchive.value?.kind || '').toUpperCase() !== 'PROJECT_PARTY_SURVEY_SUMMARY'
 )
@@ -1504,6 +1511,26 @@ const submitCreateArchive = async () => {
   }
 }
 
+const confirmDeleteSelectedArchive = async () => {
+  if (!props.projectId || !selectedArchiveId.value) return
+  const name = selectedArchiveName.value || '该归档夹'
+  try {
+    await ElMessageBox.confirm(
+      `确定删除归档夹「${name}」吗？删除后不可恢复。`,
+      '删除归档夹',
+      {
+        type: 'warning',
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        confirmButtonClass: 'el-button--danger'
+      }
+    )
+  } catch {
+    return
+  }
+  await handleDeleteArchive({ archiveId: selectedArchiveId.value })
+}
+
 const handleDeleteArchive = async (nodeData) => {
   if (!props.projectId || !nodeData?.archiveId) return
 
@@ -1998,8 +2025,8 @@ const handleBatchUpload = async () => {
     ElMessage.warning('请先选择文件')
     return
   }
-  if (uploadForm.fileContextType === 'OTHER' && !uploadForm.archiveId) {
-    ElMessage.warning('请选择目标归档夹')
+  if (uploadForm.fileContextType === 'OTHER' && !selectedArchiveId.value) {
+    ElMessage.warning('请先选择归档夹')
     return
   }
 
@@ -2027,7 +2054,7 @@ const handleBatchUpload = async () => {
       params.phase = uploadForm.phase
     }
     if (params.fileContextType === 'OTHER') {
-      params.archiveId = Number(uploadForm.archiveId || selectedArchiveId.value)
+      params.archiveId = Number(selectedArchiveId.value)
     }
 
     const res = await batchUploadFiles(formData, {
@@ -2246,87 +2273,50 @@ onBeforeUnmount(() => {
 .archive-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  justify-content: flex-end;
   margin-bottom: 12px;
-  padding: 12px 14px;
+  padding: 10px 14px;
   border: 1px solid var(--home-soft-border);
   border-radius: var(--home-card-radius);
   background: linear-gradient(180deg, var(--home-header-grad-start) 0%, #f2f7fc 100%);
-  font-size: 14px;
 }
 
-.toolbar-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
-.toolbar-actions {
-  display: flex;
-  gap: 8px;
-  margin-left: 4px;
-}
-
-.toolbar-right {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-
+/* 实时连接：无文案，仅色点；悬停 title / aria-label 仍为完整说明 */
 .socket-status {
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid #dbe4ef;
-  background: #ffffff;
-  color: #6b7c93;
-  white-space: nowrap;
+  display: inline-block;
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.45);
+  background: #94a3b8;
 }
 
 .socket-status.is-connected {
-  border-color: #b7efc5;
-  background: #e9fbf0;
-  color: #2f855a;
+  background: #22c55e;
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.35);
 }
 
 .socket-status.is-connecting,
 .socket-status.is-reconnecting {
-  border-color: #f9d8a8;
-  background: #fff7e8;
-  color: #b7791f;
+  background: #f59e0b;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.4);
 }
 
 .socket-status.is-error,
 .socket-status.is-stopped {
-  border-color: #f5c2c7;
-  background: #fff1f2;
-  color: #c53030;
+  background: #ef4444;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.35);
 }
 
-:deep(.toolbar-btn.el-button) {
-  border-radius: 6px;
-  min-width: 126px;
-  height: 34px;
-  padding-left: 14px;
-  padding-right: 14px;
-  font-weight: 600;
-  font-size: 14px;
+.socket-status.is-idle {
+  background: #cbd5e1;
 }
 
-:deep(.toolbar-btn.primary.el-button) {
-  border-color: #c8ddf1;
-  background: #e8f2fc;
-  color: #1f4e79;
-}
-
-:deep(.toolbar-btn.upload-btn.el-button) {
-  border-color: #c8ddf1;
-  background: #e8f2fc;
-  color: #1f4e79;
+.socket-status.is-disconnected {
+  background: #64748b;
 }
 
 .explorer-split {
@@ -2353,8 +2343,67 @@ onBeforeUnmount(() => {
 .tree-panel {
   flex: 0 0 380px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.tree-panel-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(219, 228, 239, 0.95);
+}
+
+.tree-panel-scroll {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+.tree-action-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 32px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+:deep(.tree-panel-actions .tree-action-btn.el-button) {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+:deep(.tree-action-btn--create.el-button--primary) {
+  border-color: #c8ddf1;
+  background: #e8f2fc;
+  color: #1f4e79;
+}
+
+:deep(.tree-action-btn--create.el-button--primary:hover) {
+  border-color: #a8c6e8;
+  background: #dceaf8;
+  color: #163a5c;
+}
+
+:deep(.tree-action-btn--delete.is-plain) {
+  border-color: #f7c4bf;
+  background: #fff3f2;
+  color: #b42318;
+}
+
+:deep(.tree-action-btn--delete.is-plain:hover:not(.is-disabled)) {
+  border-color: #ef9a94;
+  background: #ffe8e6;
+  color: #991b1b;
 }
 
 .splitter-handle {
@@ -2457,23 +2506,6 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.node-actions {
-  margin-left: auto;
-  width: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
-}
-
-.tree-node-row:hover .node-actions,
-.tree-node-row.selected .node-actions {
-  opacity: 1;
-  pointer-events: auto;
 }
 
 .table-panel {
@@ -2798,27 +2830,23 @@ onBeforeUnmount(() => {
   color: #475569;
 }
 
-.upload-drop-hint {
-  margin-top: 2px;
-  font-size: 12px;
-  color: #64748b;
-}
-
 .upload-icon {
   font-size: 30px;
   color: rgba(37, 99, 235, 0.92);
   margin-bottom: 0;
 }
 
-.upload-tip {
-  margin-top: 8px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  border: 1px dashed rgba(148, 163, 184, 0.35);
-  background: rgba(248, 250, 252, 0.7);
-  font-size: 12px;
-  color: #64748b;
-  line-height: 1.45;
+.upload-current-archive {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(203, 213, 225, 0.95);
+  background: rgba(248, 250, 252, 0.95);
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.4;
 }
 
 .upload-footer {
@@ -2911,16 +2939,6 @@ onBeforeUnmount(() => {
 
 .upload-panel-toolbar.is-empty {
   align-items: center;
-}
-
-.upload-toolbar-placeholder {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 600;
-  color: #94a3b8;
-  line-height: 1.45;
-  flex: 1;
-  min-width: 0;
 }
 
 .upload-toolbar-main {

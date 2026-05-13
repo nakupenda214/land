@@ -66,12 +66,12 @@
             <div class="stat-value">{{ percentText(snap?.chainSummary?.finalAnswerByRoute?.knowledge_qa?.correctRate) }}</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">语义一致性一次性通过率</div>
-            <div class="stat-value">{{ percentText(snap?.chainSummary?.semanticFirstPassRate) }}</div>
+            <div class="stat-label">MQL 校验一次性通过率</div>
+            <div class="stat-value">{{ percentText(snap?.chainSummary?.mqlValidateFirstPassRate) }}</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">语义一致性最终通过率</div>
-            <div class="stat-value">{{ percentText(snap?.chainSummary?.semanticFinalPassRate) }}</div>
+            <div class="stat-label">MQL 校验最终通过率</div>
+            <div class="stat-value">{{ percentText(snap?.chainSummary?.mqlValidateFinalPassRate) }}</div>
           </div>
           <div class="stat-card">
             <div class="stat-label">MQL 生成成功率</div>

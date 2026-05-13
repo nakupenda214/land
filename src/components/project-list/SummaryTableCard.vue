@@ -58,13 +58,9 @@
 
       <div class="summary-hero__actions" aria-label="汇总表操作">
         <div class="summary-hero__actions-row">
-          <el-button class="hero-btn hero-btn--ghost" size="small" @click="$emit('print')">
+          <el-button class="hero-btn hero-btn--ghost" size="small" @click="$emit('configure-print-export')">
             <el-icon><Printer /></el-icon>
-            打印
-          </el-button>
-          <el-button class="hero-btn hero-btn--ghost" size="small" @click="$emit('export')">
-            <el-icon><Download /></el-icon>
-            导出
+            打印与导出
           </el-button>
           <el-button
             class="hero-btn hero-btn--primary"
@@ -107,11 +103,10 @@
             </el-tooltip>
           </template>
         </el-table-column>
-        <el-table-column label="文件原始名" prop="fileOriginalName" :width="colW.fileOriginalName" show-overflow-tooltip />
         <el-table-column label="不动产权证编号" prop="certNo" :width="colW.certNo" show-overflow-tooltip />
         <el-table-column label="合同/批文编号" prop="contractNo" :width="colW.contractNo" show-overflow-tooltip />
         <el-table-column label="期数" prop="phase" :width="colW.phase" align="center" />
-        <el-table-column label="实测总面积" prop="totalArea" :width="colW.totalArea" align="right" />
+        <el-table-column label="实测报告总建筑面积" prop="totalArea" :width="colW.totalArea" align="right" />
 
         <el-table-column label="计容建筑面积" align="center" header-align="center">
           <el-table-column prop="calcCommercial" label="商业" :width="colW.calcCommercial" align="right" header-align="center">
@@ -139,6 +134,7 @@
 
         <el-table-column label="报告书编号" prop="reportNo" :width="colW.reportNo" show-overflow-tooltip />
         <el-table-column label="备注" prop="remarks" v-bind="remarksColProps" show-overflow-tooltip />
+        <el-table-column label="文件原始名" prop="fileOriginalName" :width="colW.fileOriginalName" show-overflow-tooltip />
         <el-table-column label="待确认面积" prop="pendingConfirmArea" :width="colW.pendingConfirmArea" align="center" />
         <el-table-column prop="hasUnknownUsage" label="是否有未知用途" :width="colW.hasUnknownUsage" align="center" header-align="center">
           <template #default="{ row }">
@@ -213,7 +209,6 @@ import {
   Medal,
   Warning,
   Printer,
-  Download,
   DArrowLeft,
   DArrowRight
 } from '@element-plus/icons-vue'
@@ -253,7 +248,7 @@ const props = defineProps({
   }
 })
 
-defineEmits(['refresh-survey', 'refresh-parsed', 'view-detail', 'print', 'export'])
+defineEmits(['refresh-survey', 'refresh-parsed', 'view-detail', 'configure-print-export'])
 
 /** 单元格视为空：null/undefined/空白串（数值 0 与「否」等有效值不算空） */
 function isEmptyCell(v) {
@@ -284,7 +279,7 @@ const colW = computed(() => {
     certNo: colWidth(rows, 'certNo', '不动产权证编号', 180),
     contractNo: colWidth(rows, 'contractNo', '合同/批文编号', 160),
     phase: colWidth(rows, 'phase', '期数', 88),
-    totalArea: colWidth(rows, 'totalArea', '实测总面积', 120),
+    totalArea: colWidth(rows, 'totalArea', '实测报告总建筑面积', 148),
     calcCommercial: colWidth(rows, 'calcCommercial', '商业', 110),
     calcResidential: colWidth(rows, 'calcResidential', '住宅', 110),
     calcPropMgmt: colWidth(rows, 'calcPropMgmt', '物管', 110),
