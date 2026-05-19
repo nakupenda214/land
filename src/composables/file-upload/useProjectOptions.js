@@ -28,7 +28,7 @@ export function useProjectOptions() {
 
   const handleCreateProject = () => {
     if (!newProjectForm.projectName) return ElMessage.warning('请输入项目名称')
-    if (!newProjectForm.projectTime) return ElMessage.warning('请输入项目时间（例：2025年11月）')
+    if (!newProjectForm.projectTime) return ElMessage.warning('请选择项目时间（ISO 自然日，如 2025-11-15）')
 
     const loadingInstance = ElMessage({
       message: '正在创建项目...',

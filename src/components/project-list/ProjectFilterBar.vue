@@ -41,7 +41,7 @@
                 class="project-select has-leading-icon"
                 size="large"
                 clearable
-                :debounce="0"
+                :debounce="300"
                 :fetch-suggestions="fetchProjectSuggestions"
                 :trigger-on-focus="true"
                 value-key="name"
@@ -60,7 +60,7 @@
                       <span class="opt-code">{{ item.code }}</span>
                     </div>
                     <div v-if="item.projectTime || item.updateTime" class="opt-meta">
-                      <span v-if="item.projectTime" class="opt-chip">{{ item.projectTime }}</span>
+                      <span v-if="item.projectTime" class="opt-chip">{{ formatProjectTimeForDisplay(item.projectTime) }}</span>
                       <span v-if="item.updateTime" class="opt-updated">更新 {{ formatShortTime(item.updateTime) }}</span>
                     </div>
                   </div>
@@ -98,6 +98,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { FolderOpened, Search, Plus, Promotion } from '@element-plus/icons-vue'
+import { formatProjectTimeForDisplay } from '@/utils/projectTimePresent'
 
 const props = defineProps({
   modelValue: {
@@ -116,6 +117,11 @@ const props = defineProps({
   optionsLoading: {
     type: Boolean,
     default: false
+  },
+  /** (keyword: string) => Promise<projectOption[]> */
+  searchProjects: {
+    type: Function,
+    default: null
   }
 })
 
@@ -169,25 +175,41 @@ function pushRecentProjectId(id) {
   setRecentProjectIds(current)
 }
 
-function fetchProjectSuggestions(queryString, cb) {
-  const keyword = String(queryString || '').trim().toLowerCase()
+async function fetchProjectSuggestions(queryString, cb) {
+  const keyword = String(queryString || '').trim()
   const list = Array.isArray(props.projectOptions) ? props.projectOptions : []
-
   const recentIds = getRecentProjectIds()
-  if (!keyword) {
+
+  const pickRecent = (source) => {
     const recent = recentIds
-      .map((id) => list.find((p) => String(p.id) === id))
+      .map((id) => source.find((p) => String(p.id) === id))
       .filter(Boolean)
-    const fallback = list.filter((p) => !recentIds.includes(String(p.id))).slice(0, 12)
-    cb([...recent, ...fallback].slice(0, 18))
+    const fallback = source.filter((p) => !recentIds.includes(String(p.id))).slice(0, 12)
+    return [...recent, ...fallback].slice(0, 18)
+  }
+
+  if (typeof props.searchProjects === 'function') {
+    try {
+      const remote = await props.searchProjects(keyword)
+      const source = Array.isArray(remote) && remote.length ? remote : list
+      cb(keyword ? source.slice(0, 30) : pickRecent(source))
+      return
+    } catch {
+      /* 回退本地缓存 */
+    }
+  }
+
+  if (!keyword) {
+    cb(pickRecent(list))
     return
   }
 
+  const lower = keyword.toLowerCase()
   const matched = list
     .filter((p) => {
       const name = String(p.name || '').toLowerCase()
       const code = String(p.code || '').toLowerCase()
-      return name.includes(keyword) || code.includes(keyword)
+      return name.includes(lower) || code.includes(lower)
     })
     .slice(0, 30)
   cb(matched)

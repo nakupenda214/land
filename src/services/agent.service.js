@@ -1,5 +1,4 @@
-﻿import axios from 'axios'
-import { withSaTokenHeaders } from '@/utils/auth-token'
+﻿import { withSaTokenHeaders } from '@/utils/auth-token'
 
 /** landcheck lc-agent：节点英文名 → 界面展示 */
 export const AGENT_NODE_LABELS = {
@@ -386,12 +385,3 @@ export const chatAgentStream = async ({
     traceId: traceIdFromHeader || null
   }
 }
-
-/**
- * 同步兜底（若后端未提供非流式接口会失败；保留以兼容旧代码）。
- */
-export const chatAgent = (payload) =>
-  axios.post('/api/agent/chat', {
-    query: payload?.message ?? payload?.query,
-    threadId: payload?.sessionId ?? payload?.threadId
-  })

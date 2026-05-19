@@ -116,6 +116,22 @@ export function useProjectStomp({
     }, disconnectGraceMs)
   }
 
+  const shouldDeliverPayload = (payload) => {
+    if (!payload || typeof payload !== 'object') return false
+    const pid = getLiveProjectId()
+    const msgProjectId = payload.projectId
+    if (msgProjectId == null || msgProjectId === '') return true
+    if (!pid) return false
+    return String(msgProjectId) === String(pid)
+  }
+
+  const wrapTopicHandler = (handler) => (message) => {
+    const payload = safeParseMessage(message.body)
+    if (!payload || typeof handler !== 'function') return
+    if (!shouldDeliverPayload(payload)) return
+    handler(payload)
+  }
+
   const subscribeProjectTopics = (projectId) => {
     if (!client || !projectId) return
     unsubscribeAll()
@@ -125,42 +141,14 @@ export function useProjectStomp({
     const globalFileTopic = '/topic/file-updates'
     const globalBatchTopic = '/topic/batch-upload-updates'
 
-    subscriptions.push(
-      client.subscribe(fileTopic, (message) => {
-        const payload = safeParseMessage(message.body)
-        if (payload && typeof onFileUpdate === 'function') {
-          onFileUpdate(payload)
-        }
-      })
-    )
+    subscriptions.push(client.subscribe(fileTopic, wrapTopicHandler(onFileUpdate)))
 
-    subscriptions.push(
-      client.subscribe(batchTopic, (message) => {
-        const payload = safeParseMessage(message.body)
-        if (payload && typeof onBatchUploadUpdate === 'function') {
-          onBatchUploadUpdate(payload)
-        }
-      })
-    )
+    subscriptions.push(client.subscribe(batchTopic, wrapTopicHandler(onBatchUploadUpdate)))
 
-    // 兜底订阅全局 topic：当后端广播缺失 projectId 时，避免前端完全收不到状态更新
-    subscriptions.push(
-      client.subscribe(globalFileTopic, (message) => {
-        const payload = safeParseMessage(message.body)
-        if (payload && typeof onFileUpdate === 'function') {
-          onFileUpdate(payload)
-        }
-      })
-    )
+    // 兜底订阅全局 topic：当后端广播缺失 projectId 时仍可收到；有 projectId 时按当前项目过滤
+    subscriptions.push(client.subscribe(globalFileTopic, wrapTopicHandler(onFileUpdate)))
 
-    subscriptions.push(
-      client.subscribe(globalBatchTopic, (message) => {
-        const payload = safeParseMessage(message.body)
-        if (payload && typeof onBatchUploadUpdate === 'function') {
-          onBatchUploadUpdate(payload)
-        }
-      })
-    )
+    subscriptions.push(client.subscribe(globalBatchTopic, wrapTopicHandler(onBatchUploadUpdate)))
   }
 
   const scheduleReconnect = () => {

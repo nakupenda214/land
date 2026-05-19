@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { downloadGridFsFile } from '@/services/file.service'
 
-export const ARCHIVE_PREVIEW_MODES = {
+const ARCHIVE_PREVIEW_MODES = {
   PDF: 'pdf',
   EXCEL: 'excel',
   IMAGE: 'image',
@@ -12,11 +12,11 @@ export const ARCHIVE_PREVIEW_MODES = {
 const IMAGE_TYPES = new Set(['PNG', 'JPEG', 'JPG', 'GIF'])
 const EXCEL_TYPES = new Set(['XLS', 'XLSX'])
 
-export function resolveSourceGridfsId(row) {
+function resolveSourceGridfsId(row) {
   return String(row?.gridfsId || row?.fileId || row?.sourceGridfsId || '').trim()
 }
 
-export function inferArchivePreviewMode(fileType, fileName = '') {
+function inferArchivePreviewMode(fileType, fileName = '') {
   const normalizedType = String(fileType || '').toUpperCase()
   if (normalizedType === 'PDF') return ARCHIVE_PREVIEW_MODES.PDF
   if (EXCEL_TYPES.has(normalizedType)) return ARCHIVE_PREVIEW_MODES.EXCEL

@@ -142,6 +142,7 @@ export function useFileUploadPage() {
     exitEditMode,
     handleSaveData,
     handleRefreshSurveyReport,
+    reportRefreshLoading,
     goRoomInfoPage,
     goRoomInfoPageSizeChange
   } = useRoomEditWorkflow({
@@ -242,6 +243,7 @@ export function useFileUploadPage() {
     exitEditMode,
     handleSaveData,
     handleRefreshSurveyReport,
+    reportRefreshLoading,
     calibrationLoading,
     currentViewType,
     isPreprocessAvailable,

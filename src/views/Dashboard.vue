@@ -13,30 +13,50 @@
             </div>
           </div>
         </div>
-        <div class="filter-row">
-          <el-input
-            v-model.trim="queryForm.projectName"
-            class="filter-item"
-            placeholder="项目名称"
-            clearable
-            @keyup.enter="handleSearch"
-          >
-            <template #prefix><el-icon><OfficeBuilding /></el-icon></template>
-          </el-input>
-          <el-date-picker
-            v-model="queryForm.projectTimeRange"
-            class="filter-item"
-            type="monthrange"
-            range-separator="至"
-            start-placeholder="开始月"
-            end-placeholder="结束月"
-            clearable
-            unlink-panels
-          />
+        <div class="filter-row-wrap">
+          <div class="filter-row">
+            <el-input
+              v-model.trim="queryForm.projectName"
+              class="filter-item"
+              placeholder="项目名称"
+              clearable
+              @keyup.enter="handleSearch"
+            >
+              <template #prefix><el-icon><OfficeBuilding /></el-icon></template>
+            </el-input>
+            <el-date-picker
+              v-model="queryForm.projectTimeRange"
+              class="filter-item"
+              type="daterange"
+              value-format="YYYY-MM-DD"
+              format="YYYY-MM-DD"
+              range-separator="至"
+              start-placeholder="开始日期"
+              end-placeholder="结束日期"
+              clearable
+              unlink-panels
+            />
+          </div>
+          <el-tooltip content="清除筛选条件" placement="top">
+            <button
+              type="button"
+              class="filter-clear-x"
+              :disabled="tableLoading"
+              aria-label="清除筛选条件"
+              @click="handleReset"
+            >
+              <el-icon><Close /></el-icon>
+            </button>
+          </el-tooltip>
         </div>
         <div class="filter-actions">
           <el-button class="biz-btn action-primary" :loading="tableLoading" @click="handleSearch">查询</el-button>
-          <el-button class="biz-btn action-ghost" :disabled="tableLoading" @click="handleReset">重置</el-button>
+          <el-tooltip content="创建新的征收/开发项目档案" placement="top">
+            <el-button class="create-btn ghost-cta" @click="handleCreateProject">
+              <el-icon class="btn-ico"><Plus /></el-icon>
+              新建项目
+            </el-button>
+          </el-tooltip>
         </div>
       </div>
     </el-card>
@@ -67,7 +87,11 @@
       >
         <el-table-column type="selection" width="48" align="center" />
         <el-table-column prop="projectName" label="项目名称" min-width="220" show-overflow-tooltip />
-        <el-table-column prop="projectTime" label="项目时间" min-width="120" align="center" />
+        <el-table-column prop="projectTime" label="项目时间" min-width="120" align="center">
+          <template #default="{ row }">
+            {{ formatProjectTimeForDisplay(row.projectTime) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="surveyReportFileCount" label="实测报告数" width="120" align="center" />
         <el-table-column prop="contractFileCount" label="合同文件数" width="120" align="center" />
         <el-table-column prop="transferor" label="出让方" min-width="160" show-overflow-tooltip />
@@ -110,11 +134,13 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { DataAnalysis, OfficeBuilding } from '@element-plus/icons-vue'
+import { Close, DataAnalysis, OfficeBuilding, Plus } from '@element-plus/icons-vue'
 import { deleteProjectById, queryProjectDetails } from '@/services/project.service'
+import { getApiErrorMessage } from '@/utils/apiErrorMessage'
 import { useDashboardPrint } from '@/composables/dashboard/useDashboardPrint'
 import { usePrint } from '@/hooks/usePrint.ts'
 import DashboardPrintBlock from '@/components/dashboard/DashboardPrintBlock.vue'
+import { formatProjectTimeForDisplay } from '@/utils/projectTimePresent'
 
 const router = useRouter()
 
@@ -130,43 +156,46 @@ const tableData = ref([])
 const total = ref(0)
 const selectedRows = ref([])
 
+let listAbortController = null
+
 const { buildPrintData } = useDashboardPrint()
 const { isPrinting, triggerPrint } = usePrint()
 const printRows = ref([])
 const printTitle = ref('项目详情打印报表')
 
-const formatMonth = (dateValue) => {
-  if (!dateValue) return ''
-  const d = new Date(dateValue)
-  if (Number.isNaN(d.getTime())) return ''
-  return `${d.getFullYear()}年${d.getMonth() + 1}月`
-}
-
 const buildPayload = () => {
   const [start, end] = queryForm.projectTimeRange || []
+  const startIso = typeof start === 'string' && start.trim() ? start.trim() : undefined
+  const endIso = typeof end === 'string' && end.trim() ? end.trim() : undefined
   return {
     pageNum: queryForm.pageNum,
     pageSize: queryForm.pageSize,
     sortField: 'updateTime',
     sortDirection: 'desc',
     projectName: queryForm.projectName || undefined,
-    projectTimeStart: start ? formatMonth(start) : undefined,
-    projectTimeEnd: end ? formatMonth(end) : undefined
+    projectTimeStart: startIso,
+    projectTimeEnd: endIso
   }
 }
 
 const fetchList = async () => {
+  listAbortController?.abort()
+  listAbortController = new AbortController()
+  const { signal } = listAbortController
   tableLoading.value = true
   try {
-    const res = await queryProjectDetails(buildPayload())
+    const res = await queryProjectDetails(buildPayload(), { signal })
     const data = res.data?.data || {}
     tableData.value = Array.isArray(data.records) ? data.records : []
     total.value = Number(data.total || 0)
   } catch (error) {
+    if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') return
     console.error('查询项目详情失败:', error)
-    ElMessage.error(error?.response?.data?.msg || '查询失败，请稍后重试')
+    ElMessage.error(getApiErrorMessage(error, '查询失败，请稍后重试'))
   } finally {
-    tableLoading.value = false
+    if (!signal.aborted) {
+      tableLoading.value = false
+    }
   }
 }
 
@@ -181,6 +210,10 @@ const handleReset = async () => {
   queryForm.pageNum = 1
   queryForm.pageSize = 20
   await fetchList()
+}
+
+const handleCreateProject = () => {
+  router.push({ name: 'ProjectList', query: { openCreate: '1' } })
 }
 
 const goProject = (row) => {
@@ -351,6 +384,14 @@ onMounted(() => {
   color: #607286;
 }
 
+.filter-row-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .filter-row {
   /* 仅「项目名称 + 月范围」两列；勿保留第三列空轨，否则与右侧按钮之间会出现大块留白 */
   flex: 1 1 auto;
@@ -359,6 +400,59 @@ onMounted(() => {
   grid-template-columns: minmax(160px, 1fr) minmax(260px, 320px);
   gap: 10px;
   align-items: center;
+}
+
+.filter-clear-x {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 8px;
+  color: #ef4444;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.filter-clear-x:hover:not(:disabled) {
+  color: #dc2626;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.filter-clear-x:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.filter-clear-x .el-icon {
+  font-size: 16px;
+}
+
+.btn-ico {
+  margin-right: 4px;
+  font-size: 16px;
+}
+
+.filter-actions :deep(.ghost-cta.el-button) {
+  min-height: 40px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-weight: 600;
+  color: var(--biz-btn-soft-text, #1f4e79);
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.filter-actions :deep(.ghost-cta.el-button:hover) {
+  background: #fff;
+  border-color: #94a3b8;
+  color: #0f172a;
 }
 
 .filter-item {
@@ -548,9 +642,19 @@ onMounted(() => {
     max-width: none;
   }
 
+  .filter-row-wrap {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
   .filter-row {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .filter-clear-x {
+    align-self: flex-end;
   }
 
   .filter-actions {
@@ -562,7 +666,7 @@ onMounted(() => {
 
 @media (max-width: 992px) {
   .filter-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 
   .table-toolbar {

@@ -63,57 +63,6 @@ export function edgeHintLines(ev) {
   return lines
 }
 
-export function traceBagKvEntries(ev) {
-  const kv = ev?.payload?.kv
-  if (!kv || typeof kv !== 'object') return []
-  const entries = Object.entries(kv).filter(([k]) => k && k !== '__proto__')
-  const facet = ev?.payload?.facet
-  if (facet === 'rag_recall') {
-    const first = [
-      'outcome',
-      'vectorDurationMs',
-      'retrievedCount',
-      'hits',
-      'businessTermCount',
-      'agentKnowledgeCount',
-      'topK',
-      'threshold',
-      'emptyHit'
-    ]
-    const rank = new Map(first.map((k, i) => [k, i]))
-    entries.sort((a, b) => (rank.get(a[0]) ?? 999) - (rank.get(b[0]) ?? 999))
-  }
-  return entries
-}
-
-export function formatTraceBagValue(v) {
-  if (v == null) return ''
-  if (Array.isArray(v)) {
-    if (
-      v.length > 0 &&
-      typeof v[0] === 'object' &&
-      v[0] !== null &&
-      !Array.isArray(v[0])
-    ) {
-      try {
-        return JSON.stringify(v, null, 2)
-      } catch {
-        return String(v)
-      }
-    }
-    return v.join(', ')
-  }
-  if (typeof v === 'object') {
-    try {
-      return JSON.stringify(v)
-    } catch {
-      return String(v)
-    }
-  }
-  const s = String(v)
-  return s.length > 4000 ? `${s.slice(0, 4000)}…` : s
-}
-
 export function dotClassForEventType(type) {
   switch (type) {
     case 'GRAPH_EDGE':

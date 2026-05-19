@@ -1,32 +1,43 @@
 <template>
-  <div class="archive-container" v-loading="projectWorkspaceBootstrapping" element-loading-text="正在加载项目列表…">
+  <div class="archive-container">
     <ProjectFilterBar
       v-model="filterProject"
       :project-options="projectOptions"
       :current-project-id="currentProjectInfo.id"
       :options-loading="projectOptionsLoading"
+      :search-projects="searchProjects"
       @search="handleGlobalSearch"
       @request-options="ensureProjectOptionsLoaded"
       @create-project="showCreateProjectDialog = true"
     />
 
     <div class="content-tabs-wrapper no-print">
-      <el-tabs v-model="activeTab" type="border-card" class="archive-tabs no-print">
+      <ProjectWorkspaceTabSkeleton v-if="projectWorkspaceBootstrapping" />
+      <el-tabs
+        v-else
+        v-model="activeTab"
+        type="border-card"
+        class="archive-tabs no-print"
+        v-loading="workspaceQueryLoading"
+        element-loading-text="正在加载业务数据…"
+      >
 
-        <el-tab-pane name="archives" class="no-print">
+        <el-tab-pane name="archives" class="no-print" lazy>
           <template #label>
             <span class="custom-tab-label">
               <el-icon><FolderOpened /></el-icon> 归档文件查询
             </span>
           </template>
           <ArchiveFolderTab
+            v-if="activeTab === 'archives'"
             ref="archiveTabRef"
             :project-id="currentProjectInfo.id"
             :project-name="currentProjectInfo.name"
             :initial-archive-id="initialArchiveId"
             :pending-audit-file-id="pendingAuditFileId"
-            :active="activeTab === 'archives'"
+            :active="pageRouteActive && activeTab === 'archives'"
             @audit-consumed="handlePendingAuditConsumed"
+            @contract-archive-audit="handleContractArchiveAudit"
           />
         </el-tab-pane>
 
@@ -38,12 +49,15 @@
             <UnknownUsagePolicyCard
               :unknown-usages="unknownUsages"
               :is-saving-policy="isSavingPolicy"
+              :project-id="currentProjectInfo.id"
               @save="savePolicy"
+              @open-source-audit="handleOpenAuditByFileRecordId"
             />
 
             <SummaryTableCard
               :current-project-info="currentProjectInfo"
               :survey-stats="surveyStats"
+              :data-loading="surveyLoading"
               :refresh-btn-loading="refreshBtnLoading"
               :parsed-refresh-loading="parsedRefreshLoading"
               :is-refresh-cd="isRefreshCd"
@@ -94,7 +108,7 @@
           </template>
           <PlanningReviewTab
             :project-id="currentProjectInfo.id"
-            :active="activeTab === 'planningReview'"
+            :active="pageRouteActive && activeTab === 'planningReview'"
           />
         </el-tab-pane>
 
@@ -106,7 +120,7 @@
           </template>
           <ProjectPartySummaryTab
             :project-id="currentProjectInfo.id"
-            :active="activeTab === 'projectPartySummary'"
+            :active="pageRouteActive && activeTab === 'projectPartySummary'"
           />
         </el-tab-pane>
 
@@ -118,7 +132,7 @@
           </template>
           <OperationAuditTab
             :project-id="currentProjectInfo.id"
-            :active="activeTab === 'operationAudit'"
+            :active="pageRouteActive && activeTab === 'operationAudit'"
           />
         </el-tab-pane>
 
@@ -224,9 +238,9 @@
           <el-form-item label="项目时间" required>
             <el-date-picker
               v-model="newProjectForm.projectTime"
-              type="month"
-              value-format="YYYY年MM月"
-              format="YYYY年M月"
+              type="date"
+              value-format="YYYY-MM-DD"
+              format="YYYY-MM-DD"
               placeholder="请选择项目时间"
               style="width: 100%;"
             />
@@ -244,7 +258,17 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch, onUnmounted, nextTick, defineAsyncComponent } from 'vue'
+import {
+  ref,
+  onMounted,
+  computed,
+  watch,
+  onUnmounted,
+  onActivated,
+  onDeactivated,
+  nextTick,
+  defineAsyncComponent
+} from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { DataAnalysis, DocumentChecked, DocumentCopy, FolderOpened, Location, List, EditPen } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -253,19 +277,20 @@ import { createProject } from '@/services/project.service'
 import { usePrint } from '@/hooks/usePrint.ts'
 import { useProjectSelector } from '@/composables/project-list/useProjectSelector'
 import ProjectFilterBar from '@/components/project-list/ProjectFilterBar.vue'
-import ArchiveFolderTab from '@/components/project-list/ArchiveFolderTab.vue'
+import ProjectWorkspaceTabSkeleton from '@/components/project-list/ProjectWorkspaceTabSkeleton.vue'
 import { useContractLandManagement } from '@/composables/project-list/useContractLandManagement'
 import { useProjectEditManagement } from '@/composables/project-list/useProjectEditManagement'
 import { useSurveySummary } from '@/composables/project-list/useSurveySummary'
 import { useSurveyRefresh } from '@/composables/project-list/useSurveyRefresh'
 import { useUnknownUsagePolicy } from '@/composables/project-list/useUnknownUsagePolicy'
-import { useProjectFileCollections } from '@/composables/project-list/useProjectFileCollections'
 import { useProjectExport } from '@/composables/project-list/useProjectExport'
 import { resolveVisibleColumnDefs } from '@/composables/project-list/summaryExportColumnSchema.js'
 import { loadSummaryLayoutFromStorage } from '@/composables/project-list/summaryExportLayoutStorage.js'
 import { useProjectDetailDialog } from '@/composables/project-list/useProjectDetailDialog'
+import { getArchiveFileRecordId } from '@/composables/project-list/archiveFolderQuery.js'
 
-/** 默认 Tab 保持同步导入；其余 Tab / 弹窗异步分包，减轻首次进入「项目信息」的解析与下载耗时 */
+/** 归档 Tab 与其余 Tab / 弹窗异步分包，减轻首次进入「项目信息」的解析与下载耗时 */
+const ArchiveFolderTab = defineAsyncComponent(() => import('@/components/project-list/ArchiveFolderTab.vue'))
 const UnknownUsagePolicyCard = defineAsyncComponent(() =>
   import('@/components/project-list/UnknownUsagePolicyCard.vue')
 )
@@ -325,9 +350,18 @@ const initialReturnTab = ref(
 const pendingAuditFileId = ref('')
 const archiveTabRef = ref(null)
 
+/** keep-alive 下离开路由时暂停 Tab 内轮询 / STOMP 等 */
+const pageRouteActive = ref(true)
+onActivated(() => {
+  pageRouteActive.value = true
+})
+onDeactivated(() => {
+  pageRouteActive.value = false
+})
+
 // 组件卸载时清理事件，避免内存泄漏
 onUnmounted(() => {
-  clearRefreshTimer();
+  clearRefreshTimer()
 })
 
 // 页面状态
@@ -340,9 +374,6 @@ const newProjectForm = ref({
 })
 
 
-// 列表数据
-const reportList = ref([])
-const contractList = ref([])
 const {
   rawTableData,
   unknownUsages,
@@ -351,9 +382,10 @@ const {
   areaComparison,
   selectedComparisonGroups,
   surveyStats,
+  surveyLoading,
   fetchSurveyReports,
   resetSummaryMetrics
-} = useSurveySummary({ reportList })
+} = useSurveySummary()
 
 
 
@@ -370,25 +402,20 @@ const currentPrintDate = computed(() => {
 });
 
 const {
-  createFetchProjectData
-} = useProjectFileCollections({ reportList, contractList })
-
-const fetchProjectData = createFetchProjectData({
-  getProjectOptions: () => projectOptions.value,
-  getCurrentProjectInfo: () => currentProjectInfo
-})
-const {
   filterProject,
   projectOptions,
   currentProjectInfo,
   fetchProjects: fetchProjectList,
-  fetchProjectDetail
-} = useProjectSelector({ fetchProjectData, fetchSurveyReports })
+  searchProjects,
+  ensureProjectOption,
+  applyProjectMeta
+} = useProjectSelector()
 
 const projectOptionsLoaded = ref(false)
 const projectOptionsLoading = ref(false)
 /** 首进页面：拉项目列表 + 恢复选中项期间的全局反馈，避免误以为卡死 */
 const projectWorkspaceBootstrapping = ref(false)
+const workspaceQueryLoading = ref(false)
 let projectOptionsLoadingPromise = null
 
 const ensureProjectOptionsLoaded = async () => {
@@ -407,17 +434,7 @@ const ensureProjectOptionsLoaded = async () => {
   return projectOptionsLoadingPromise
 }
 
-const applyCurrentProjectMeta = (projectId) => {
-  const pid = String(projectId || '')
-  if (!pid) return false
-  const projectItem = projectOptions.value.find((p) => String(p.id) === pid)
-  if (!projectItem) return false
-  currentProjectInfo.id = pid
-  currentProjectInfo.name = projectItem.name
-  currentProjectInfo.code = projectItem.code || `XM-${pid.padStart(3, '0')}`
-  currentProjectInfo.status = '已归档'
-  return true
-}
+const applyCurrentProjectMeta = (projectId) => applyProjectMeta(projectId)
 
 /** 与 projectFilterStatus 配套：在拉取项目列表前恢复 currentProjectInfo，使归档 Tab 可与列表请求并行 */
 const PROJECT_FILTER_DISPLAY_META = 'projectFilterDisplayMeta'
@@ -523,18 +540,28 @@ const resolveAuditFileRecordId = (row) => {
 
 const canJumpAuditFromDetail = computed(() => !!resolveAuditFileRecordId(currentDetailRow.value))
 
+const handleOpenAuditByFileRecordId = async (fileRecordId) => {
+  const fid = String(fileRecordId || '').trim()
+  if (!fid) {
+    ElMessage.warning('缺少文件信息，无法打开审核')
+    return
+  }
+  activeTab.value = 'archives'
+  await nextTick()
+  if (!archiveTabRef.value?.openAuditByFileRecordId) {
+    ElMessage.warning('审核组件尚未就绪，请稍后再试')
+    return
+  }
+  await archiveTabRef.value.openAuditByFileRecordId(fid, { force: true })
+}
+
 const handleJumpAuditFromDetail = async (row) => {
   const fileRecordId = resolveAuditFileRecordId(row)
   if (!fileRecordId) {
     ElMessage.warning('当前记录缺少 fileRecordId，无法直达审核')
     return
   }
-  await nextTick()
-  if (!archiveTabRef.value?.openAuditByFileRecordId) {
-    ElMessage.warning('审核组件尚未就绪，请稍后再试')
-    return
-  }
-  await archiveTabRef.value.openAuditByFileRecordId(fileRecordId, { force: true })
+  await handleOpenAuditByFileRecordId(fileRecordId)
 }
 const {
   savePolicy
@@ -647,6 +674,50 @@ const handleRefreshContracts = async () => {
     contractRefreshLoading.value = false
   }
 }
+
+/** 归档「合同」夹：审核 → 打开与「合同及地块信息」中「编辑」相同的全屏合同工作区 */
+const handleContractArchiveAudit = async (row) => {
+  const fileRecordId = String(getArchiveFileRecordId(row) || '').trim()
+  if (!fileRecordId) {
+    ElMessage.warning('缺少文件记录ID，无法打开合同工作区')
+    return
+  }
+  const pid = String(currentProjectInfo.id || filterProject.value || '').trim()
+  if (!pid) {
+    ElMessage.warning('请先选择项目')
+    return
+  }
+  await fetchContractListByProjectId(pid)
+  const match = contractLandList.value.find((c) => String(c.fileRecordId || '') === fileRecordId)
+  if (!match?.id) {
+    ElMessage.warning(
+      '未找到与该文件关联的合同记录。请确认合同已解析入库，或在「合同及地块信息」中刷新合同列表后重试。'
+    )
+    return
+  }
+  editContract(match)
+}
+
+/** 仅加载当前激活 Tab 所需数据，避免切项目时全量请求 */
+const loadActiveTabData = async (projectId) => {
+  const pid = String(projectId || '')
+  if (!pid) return
+  if (activeTab.value !== 'contractLandEdit' && activeTab.value !== 'summary') return
+
+  workspaceQueryLoading.value = true
+  try {
+    if (activeTab.value === 'contractLandEdit') {
+      await fetchContractListByProjectId(pid)
+      return
+    }
+    if (activeTab.value === 'summary') {
+      await fetchSurveyReports(pid)
+    }
+  } finally {
+    workspaceQueryLoading.value = false
+  }
+}
+
 const {
   projectEditLoading,
   projectUpdateForm,
@@ -658,7 +729,8 @@ const {
   filterProject,
   currentProjectInfo,
   fetchProjectList,
-  fetchProjectDetail
+  applyProjectMeta,
+  reloadActiveTabData: loadActiveTabData
 })
 
 const handleGlobalSearch = async () => {
@@ -668,17 +740,14 @@ const handleGlobalSearch = async () => {
     return
   }
   await ensureProjectOptionsLoaded()
+  await ensureProjectOption(projectId)
   const found = applyCurrentProjectMeta(projectId)
   if (!found) {
     ElMessage.warning('当前项目不存在或列表尚未同步，请稍后重试')
     return
   }
   persistProjectFilterDisplayMeta()
-  if (activeTab.value === 'contractLandEdit') {
-    await fetchContractListByProjectId(projectId)
-  } else if (activeTab.value === 'summary') {
-    await fetchSurveyReports(projectId)
-  }
+  await loadActiveTabData(projectId)
   restoreRefreshCdStatus(projectId)
 }
 
@@ -733,9 +802,7 @@ watch(filterProject, (newVal, oldVal) => {
     // 1. 清空本地缓存
     localStorage.removeItem('projectFilterStatus')
     localStorage.removeItem(PROJECT_FILTER_DISPLAY_META)
-    // 2. 清空所有项目相关数据
-    reportList.value = [];
-    resetSummaryMetrics();
+  resetSummaryMetrics();
  
     // 3. 重置项目基本信息（关键：清空ID让刷新按钮禁用）
     Object.assign(currentProjectInfo, {
@@ -784,14 +851,22 @@ watch(
   }
 )
 
-watch(activeTab, async (tab, _prevTab) => {
-  if (!currentProjectInfo.id) return
+watch(
+  () => route.query.openCreate,
+  async (openCreate) => {
+    if (String(openCreate || '') !== '1') return
+    showCreateProjectDialog.value = true
+    const q = { ...route.query }
+    delete q.openCreate
+    await router.replace({ query: q })
+  },
+  { immediate: true }
+)
 
-  if (tab === 'contractLandEdit') {
-    await fetchContractListByProjectId(currentProjectInfo.id)
-  } else if (tab === 'summary') {
-    // 汇总表数据仅在「查询」且当前 tab 为 summary 时拉取；从归档等 tab 切过来需补拉一次
-    await fetchSurveyReports(currentProjectInfo.id)
+watch(activeTab, async (tab) => {
+  if (!currentProjectInfo.id) return
+  if (tab === 'contractLandEdit' || tab === 'summary') {
+    await loadActiveTabData(currentProjectInfo.id)
   }
 })
 

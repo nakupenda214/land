@@ -10,7 +10,6 @@ import '@/styles/app-button-system.css'
 import '@/styles/audit-split-layout.css'
 import '@/styles/project-tab-tables.css'
 import '@/styles/project-home-modern.css'
-import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import { Buffer } from 'buffer'
 
 globalThis.Buffer = globalThis.Buffer || Buffer
@@ -19,9 +18,5 @@ const app = createApp(App)
 
 app.use(router)
 app.use(ElementPlus, { locale: zhCn })
-
-for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
-  app.component(key, component)
-}
 
 app.mount('#app')

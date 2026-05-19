@@ -61,6 +61,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import { setToken } from '@/utils/auth-token'
+import { setUserSession } from '@/utils/auth-session.js'
 import { fetchUnreadStationNotificationsAfterLogin } from '@/services/station-notification.service'
 import { User, Lock } from '@element-plus/icons-vue'
 
@@ -109,6 +110,7 @@ const handleLogin = async () => {
     if (user?.id != null) {
       sessionStorage.setItem('userId', String(user.id))
     }
+    setUserSession(user)
     try {
       await fetchUnreadStationNotificationsAfterLogin()
     } catch {

@@ -12,56 +12,18 @@
       </div>
 
       <div ref="splitContainerRef" class="explorer-split">
-        <section class="tree-panel" :style="{ flexBasis: `${treePanelWidth}px` }" v-loading="archiveLoading">
-          <div class="tree-panel-actions">
-            <el-button
-              class="tree-action-btn tree-action-btn--create"
-              size="small"
-              type="primary"
-              :icon="FolderAdd"
-              :disabled="!projectId"
-              @click="openCreateDialog"
-            >
-              新建文件夹
-            </el-button>
-            <el-button
-              class="tree-action-btn tree-action-btn--delete"
-              size="small"
-              type="danger"
-              plain
-              :icon="Delete"
-              :disabled="!canDeleteSelectedArchive"
-              title="删除左侧树中当前选中的归档夹"
-              @click="confirmDeleteSelectedArchive"
-            >
-              删除文件夹
-            </el-button>
-          </div>
-          <div class="tree-panel-scroll">
-            <el-empty v-if="!projectId" description="请先选择项目后查看归档目录" />
-            <el-tree
-              v-else-if="treeData.length"
-              class="archive-tree"
-              :data="treeData"
-              node-key="id"
-              :props="treeProps"
-              :expand-on-click-node="false"
-              default-expand-all
-              @node-click="handleNodeClick"
-            >
-              <template #default="{ data }">
-                <div class="tree-node-row" :class="{ selected: data.archiveId && data.archiveId === selectedArchiveId }">
-                  <el-icon class="folder-icon">
-                    <FolderOpened v-if="data.nodeType === 'project'" />
-                    <Folder v-else />
-                  </el-icon>
-                  <span class="node-name">{{ data.name }}</span>
-                </div>
-              </template>
-            </el-tree>
-            <el-empty v-else description="暂无归档夹" />
-          </div>
-        </section>
+        <ArchiveFolderTreePanel
+          :project-id="projectId"
+          :archive-loading="archiveLoading"
+          :tree-panel-width="treePanelWidth"
+          :tree-data="treeData"
+          :tree-props="treeProps"
+          :selected-archive-id="selectedArchiveId"
+          :can-delete-selected-archive="canDeleteSelectedArchive"
+          @create="openCreateDialog"
+          @delete-selected="confirmDeleteSelectedArchive"
+          @node-click="handleNodeClick"
+        />
 
         <div
           class="splitter-handle"
@@ -69,466 +31,87 @@
           @mousedown="handleSplitterMouseDown"
         />
 
-        <section class="table-panel">
-
-          <div class="query-bar">
-            <div class="query-top">
-              <div class="query-fields">
-                <el-input
-                  v-model.trim="queryForm.keyword"
-                  placeholder="请输入文件名关键词"
-                  clearable
-                  class="query-item keyword"
-                  @input="handleAutoQuery('keyword')"
-                  @clear="handleAutoQuery('keyword')"
-                  @keyup.enter="handleSearch"
-                />
-                <el-select
-                  v-model="queryForm.verifyStatus"
-                  placeholder="校验状态"
-                  clearable
-                  class="query-item"
-                  @change="handleAutoQuery('verifyStatus')"
-                  @clear="handleAutoQuery('verifyStatus')"
-                >
-                  <el-option v-for="item in verifyStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
-                </el-select>
-                <el-select
-                  v-model="queryForm.fileState"
-                  placeholder="文件状态"
-                  clearable
-                  class="query-item"
-                  @change="handleAutoQuery('fileState')"
-                  @clear="handleAutoQuery('fileState')"
-                >
-                  <el-option v-for="item in fileStateOptions" :key="item.value" :label="item.label" :value="item.value" />
-                </el-select>
-              </div>
-              <div class="query-actions">
-                <el-button size="small" @click="handleReset">重置</el-button>
-                <el-button size="small" :icon="Refresh" @click="refreshFiles">刷新</el-button>
-              </div>
-            </div>
-            <div class="query-bottom">
-              <div class="batch-actions">
-                <el-button
-                  size="small"
-                  type="danger"
-                  plain
-                  :disabled="selectedRows.length === 0"
-                  :loading="batchDeleteLoading"
-                  @click="handleBatchDelete"
-                >
-                  批量删除
-                </el-button>
-                <el-button
-                  size="small"
-                  type="primary"
-                  plain
-                  :disabled="!canBatchParse"
-                  :loading="batchParseLoading"
-                  @click="handleBatchParse"
-                >
-                  批量解析
-                </el-button>
-                <el-button
-                  class="upload-btn"
-                  size="small"
-                  type="primary"
-                  plain
-                  :icon="UploadFilled"
-                  :disabled="!projectId || !selectedArchiveId"
-                  @click="openUploadDialog"
-                >
-                  文件上传
-                </el-button>
-              </div>
-            </div>
-          </div>
-
-          <div ref="tableWrapRef" class="table-wrap" v-loading="fileLoading">
-            <el-empty v-if="!selectedArchiveId" description="选择归档夹后展示文件" />
-            <template v-else>
-              <el-table
-                :data="archiveFiles"
-                stripe
-                border
-                :height="tableBodyHeight"
-                row-key="id"
-                @selection-change="handleSelectionChange"
-              >
-                <el-table-column type="selection" width="48" align="center" />
-                <el-table-column v-if="showThumbnailColumn" label="缩略图" width="95" align="center">
-                  <template #default="{ row }">
-                    <el-image
-                      v-if="getThumbnailUrl(row)"
-                      class="thumb"
-                      :src="getThumbnailUrl(row)"
-                      fit="cover"
-                      :preview-src-list="getThumbnailPreviewList(row)"
-                      :preview-teleported="true"
-                    >
-                      <template #error>
-                        <div class="thumb-placeholder">
-                          <el-icon><Picture /></el-icon>
-                        </div>
-                      </template>
-                    </el-image>
-                    <div v-else class="thumb-placeholder">
-                      <el-icon><Picture /></el-icon>
-                    </div>
-                  </template>
-                </el-table-column>
-                <el-table-column label="文件名" min-width="280">
-                  <template #default="{ row }">
-                    <el-link
-                      v-if="showPreviewButton(row)"
-                      type="primary"
-                      :underline="false"
-                      class="archive-file-name-link"
-                      :title="`点击预览：${row.originalName || ''}`"
-                      @click="handlePreview(row)"
-                    >
-                      {{ row.originalName || '-' }}
-                    </el-link>
-                    <span v-else class="archive-file-name-text" :title="row.originalName || ''">
-                      {{ row.originalName || '-' }}
-                    </span>
-                  </template>
-                </el-table-column>
-                <el-table-column label="上传时间" width="180" align="center">
-                  <template #default="{ row }">{{ formatDateTime(row.uploadTime) }}</template>
-                </el-table-column>
-                <el-table-column label="文件类型" width="110" align="center">
-                  <template #default="{ row }">
-                    <el-tag size="small" effect="plain">{{ row.fileType || '-' }}</el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column label="状态" width="130" align="center">
-                  <template #default="{ row }">
-                    <el-tag
-                      v-if="row.parseJobId"
-                      :type="getStateTagType(row.fileState)"
-                      size="small"
-                      effect="light"
-                      class="state-tag-parse-flow"
-                      title="点击查看解析流程"
-                      @click.stop="openParseFlowDialog(row)"
-                    >
-                      {{ getStateLabel(row.fileState) }}
-                    </el-tag>
-                    <el-tag v-else :type="getStateTagType(row.fileState)" size="small" effect="light">
-                      {{ getStateLabel(row.fileState) }}
-                    </el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column v-if="selectedArchive?.kind === 'SURVEY_REPORT'" label="校验状态" width="130" align="center">
-                  <template #default="{ row }">
-                    <el-tooltip
-                      v-if="getVerifyStatus(row).type === 'danger' && row.verificationErrorReason"
-                      :content="row.verificationErrorReason"
-                      placement="top"
-                      effect="light"
-                    >
-                      <el-tag :type="getVerifyStatus(row).type" size="small" effect="light">
-                        {{ getVerifyStatus(row).label }}
-                      </el-tag>
-                    </el-tooltip>
-                    <el-tag v-else :type="getVerifyStatus(row).type" size="small" effect="light">
-                      {{ getVerifyStatus(row).label }}
-                    </el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column label="大小" width="100" align="center">
-                  <template #default="{ row }">{{ formatFileSize(row.fileSize) }}</template>
-                </el-table-column>
-                <el-table-column label="操作" width="220" align="center" fixed="right">
-                  <template #default="{ row }">
-                    <el-button
-                      v-if="showParseButton(row)"
-                      class="op-btn parse-btn"
-                      size="small"
-                      type="primary"
-                      @click="handleParse(row)"
-                    >
-                      {{ parseButtonText(row) }}
-                    </el-button>
-                    <el-button
-                      v-if="showCancelParseButton(row)"
-                      class="op-btn"
-                      link
-                      type="warning"
-                      @click="handleCancelParse(row)"
-                    >
-                      取消解析
-                    </el-button>
-                    <el-button
-                      v-if="showAuditButton(row)"
-                      class="op-btn audit-btn"
-                      size="small"
-                      type="primary"
-                      plain
-                      @click="handleAudit(row)"
-                    >
-                      {{ row.fileState === 'AUDIT_PASS' ? '查看' : '审核' }}
-                    </el-button>
-                    <el-popconfirm title="确定删除该文件吗？" @confirm="handleDeleteFile(row)">
-                      <template #reference>
-                        <el-button class="op-btn delete-btn" size="small" type="danger" plain>删除</el-button>
-                      </template>
-                    </el-popconfirm>
-                  </template>
-                </el-table-column>
-              </el-table>
-
-              <div class="pager-row">
-                <span class="file-count">共 {{ fileTotal }} 个文件，已选 {{ selectedRows.length }} 个</span>
-                <el-pagination
-                  background
-                  layout="sizes, prev, pager, next"
-                  :total="fileTotal"
-                  :page-size="queryForm.pageSize"
-                  :current-page="queryForm.pageNum"
-                  :page-sizes="[10, 20, 50, 100]"
-                  @size-change="handlePageSizeChange"
-                  @current-change="handlePageChange"
-                />
-              </div>
-            </template>
-          </div>
-        </section>
+        <ArchiveFolderFilePanel
+          ref="filePanelRef"
+          :project-id="projectId"
+          :selected-archive-id="selectedArchiveId"
+          :selected-archive-kind="String(selectedArchive?.kind || '')"
+          :query-form="queryForm"
+          :file-loading="fileLoading"
+          :archive-files="archiveFiles"
+          :file-total="fileTotal"
+          :selected-count="selectedRows.length"
+          :show-thumbnail-column="showThumbnailColumn"
+          :can-batch-parse="canBatchParse"
+          :batch-delete-loading="batchDeleteLoading"
+          :batch-parse-loading="batchParseLoading"
+          :can-preview="showPreviewButton"
+          @auto-query="handleAutoQuery"
+          @search="handleSearch"
+          @reset="handleReset"
+          @refresh="refreshFiles"
+          @batch-delete="handleBatchDelete"
+          @batch-parse="handleBatchParse"
+          @open-upload="openUploadDialog"
+          @selection-change="handleSelectionChange"
+          @preview="handlePreview"
+          @open-parse-flow="openParseFlowDialog"
+          @parse="handleParse"
+          @cancel-parse="handleCancelParse"
+          @audit="(row) => auditStackRef?.handleAudit(row)"
+          @delete-file="handleDeleteFile"
+          @page-change="handlePageChange"
+          @page-size-change="handlePageSizeChange"
+        />
       </div>
     </div>
 
-    <el-dialog v-model="createDialogVisible" title="新建文件夹" width="420px">
-      <el-form ref="createFormRef" :model="createForm" :rules="createRules" label-width="90px" @submit.prevent>
-        <el-form-item label="名称" prop="name">
-          <el-input
-            v-model.trim="createForm.name"
-            maxlength="30"
-            show-word-limit
-            placeholder="例如：现场图片"
-            clearable
-            @keydown.enter.prevent
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button native-type="button" @click="createDialogVisible = false">取消</el-button>
-        <el-button native-type="button" type="primary" :loading="createLoading" @click="submitCreateArchive">创建</el-button>
-      </template>
-    </el-dialog>
+    <ArchiveFolderCreateDialog
+      v-model="createDialogVisible"
+      :project-id="projectId"
+      @created="fetchArchives"
+    />
 
-    <el-dialog
+    <ArchiveFolderUploadDialog
       v-model="uploadDialogVisible"
-      title="文件上传"
-      width="640px"
-      class="upload-archive-dialog"
+      :upload-form="uploadForm"
+      :selected-archive-name="selectedArchiveName"
+      :upload-files="uploadFiles"
+      :upload-loading="uploadLoading"
+      :upload-progress="uploadProgress"
+      :upload-uploaded-bytes="uploadUploadedBytes"
+      :upload-total-bytes="uploadTotalBytes"
+      :selected-total-bytes="selectedTotalBytes"
+      :top-file-groups="topFileGroups"
+      :upload-speed-text="uploadSpeedText"
+      :upload-eta-text="uploadEtaText"
+      :is-upload-server-processing="isUploadServerProcessing"
+      :upload-phase-label="uploadPhaseLabel"
+      :upload-phase="uploadPhase"
       :before-close="handleUploadDialogBeforeClose"
-      :close-on-click-modal="!isUploadServerProcessing"
-      :close-on-press-escape="!isUploadServerProcessing"
-      :show-close="!isUploadServerProcessing"
       @closed="resetUploadForm"
-    >
-      <el-form label-position="top" class="upload-form">
-        <el-row :gutter="14" class="upload-grid">
-          <el-col :span="24" class="upload-meta-col">
-            <el-form-item label="文件归类">
-              <el-select v-model="uploadForm.fileContextType" class="upload-select">
-                <el-option label="合同文件" value="CONTRACT" />
-                <el-option label="实测报告" value="SURVEY_REPORT" />
-                <el-option label="项目方实测汇总表" value="PROJECT_PARTY_SURVEY_SUMMARY" />
-                <el-option label="规划复核文件" value="PLANNING_REVIEW" />
-                <el-option label="其他文件" value="OTHER" />
-              </el-select>
-            </el-form-item>
-            <el-form-item v-if="uploadForm.fileContextType === 'SURVEY_REPORT'" label="期数（实测报告必填）">
-              <el-input-number v-model="uploadForm.phase" :min="1" :max="99" controls-position="right" class="upload-phase" />
-            </el-form-item>
-            <el-form-item label="目标归档夹">
-              <div class="upload-current-archive">{{ selectedArchiveName || '—' }}</div>
-            </el-form-item>
-          </el-col>
-
-          <el-col :span="24" class="upload-drop-col">
-            <div class="upload-unified-panel">
-              <div class="upload-panel-toolbar" :class="{ 'is-empty': !uploadFiles.length }">
-                <div v-if="uploadFiles.length" class="upload-toolbar-main">
-                  <span class="upload-toolbar-stat">
-                    <strong>{{ uploadFiles.length }}</strong>
-                    <span class="muted">个文件</span>
-                  </span>
-                  <span class="upload-toolbar-dot" aria-hidden="true">·</span>
-                  <span class="upload-toolbar-stat">
-                    <span class="muted">合计</span>
-                    <strong>{{ formatFileSize(selectedTotalBytes) }}</strong>
-                  </span>
-                  <template v-if="topFileGroups.length">
-                    <span class="upload-toolbar-dot" aria-hidden="true">·</span>
-                    <span class="upload-toolbar-chips">
-                      <span v-for="g in topFileGroups" :key="g.key" class="group-chip">{{ g.label }} {{ g.count }}</span>
-                    </span>
-                  </template>
-                </div>
-                <el-button
-                  class="upload-clear-btn"
-                  size="small"
-                  text
-                  type="danger"
-                  :disabled="uploadLoading || !uploadFiles.length"
-                  @click="clearUploadFiles"
-                >
-                  清空
-                </el-button>
-              </div>
-
-              <el-upload
-                class="upload-dropzone"
-                :class="{ 'is-compact': uploadFiles.length > 0 }"
-                drag
-                action="#"
-                :auto-upload="false"
-                multiple
-                :show-file-list="false"
-                :file-list="uploadFiles"
-                :on-change="handleUploadFileChange"
-                :on-remove="handleUploadFileRemove"
-              >
-                <div v-if="!uploadFiles.length" class="upload-drop-inner">
-                  <div class="upload-icon-wrap" aria-hidden="true">
-                    <el-icon class="upload-icon"><UploadFilled /></el-icon>
-                  </div>
-                  <div class="upload-drop-title">拖拽文件到这里</div>
-                  <div class="upload-drop-sub">或点击选择文件上传</div>
-                </div>
-                <div v-else class="upload-drop-compact">
-                  <el-icon class="upload-drop-compact-icon"><UploadFilled /></el-icon>
-                  <div class="upload-drop-compact-text">
-                    <span class="upload-drop-compact-title">继续添加文件</span>
-                    <span class="upload-drop-compact-sub">拖拽到此处，或点击选择（支持多选）</span>
-                  </div>
-                </div>
-              </el-upload>
-
-              <div v-if="uploadFiles.length" class="upload-file-list-wrap">
-                <div class="upload-file-list-head">
-                  <span>待上传列表</span>
-                  <span class="upload-file-list-meta">共 {{ uploadFiles.length }} 项，可在下方滚动查看</span>
-                </div>
-                <div class="upload-file-scroll">
-                  <div v-for="(item, idx) in uploadFiles" :key="item.uid ?? idx" class="file-row">
-                    <span class="fn" :title="uploadFileDisplayName(item)">{{ uploadFileDisplayName(item) }}</span>
-                    <span class="fs">{{ formatFileSize(uploadFileSize(item)) }}</span>
-                    <el-button
-                      class="file-row-remove"
-                      type="danger"
-                      link
-                      size="small"
-                      :disabled="uploadLoading"
-                      :icon="Close"
-                      @click.stop="removeOneUploadFile(item)"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div v-if="uploadLoading" class="upload-phase-label">{{ uploadPhaseLabel }}</div>
-              <el-progress
-                v-if="uploadLoading"
-                :indeterminate="isUploadServerProcessing"
-                :percentage="uploadProgress"
-                :stroke-width="10"
-                :show-text="!isUploadServerProcessing"
-                class="upload-progress"
-              />
-              <div v-if="uploadLoading" class="upload-progress-bytes">
-                <template v-if="isUploadServerProcessing">
-                  已发送 {{ formatFileSize(uploadUploadedBytes) }}
-                  <span class="upload-progress-phase-hint">· 等待服务端处理（此阶段不可取消）</span>
-                </template>
-                <template v-else>
-                  已上传 {{ formatFileSize(uploadUploadedBytes) }} / {{ formatFileSize(uploadTotalBytes) }}
-                  <span v-if="uploadSpeedText" class="upload-speed">· {{ uploadSpeedText }}</span>
-                  <span v-if="uploadEtaText" class="upload-eta">· 剩余 {{ uploadEtaText }}</span>
-                </template>
-              </div>
-              <div v-if="uploadLoading" class="upload-progress-tip">
-                <template v-if="isUploadServerProcessing">
-                  服务端正在写入存储并提交后处理任务，请保持页面打开直至完成。
-                </template>
-                <template v-else>传输阶段可点击「取消上传」中断；进度条仅表示浏览器到服务器的传输进度。</template>
-              </div>
-            </div>
-          </el-col>
-        </el-row>
-      </el-form>
-      <template #footer>
-        <div class="upload-footer">
-          <span class="upload-footer-left">
-            已选择 <b>{{ uploadFiles.length }}</b> 个文件
-          </span>
-          <div>
-            <el-button :disabled="isUploadServerProcessing" @click="uploadDialogVisible = false">
-              {{ uploadLoading && uploadPhase === 'transferring' ? '取消上传' : '取消' }}
-            </el-button>
-            <el-button type="primary" :loading="uploadLoading" :disabled="uploadFiles.length === 0 || uploadLoading" @click="handleBatchUpload">
-              确认上传
-            </el-button>
-          </div>
-        </div>
-      </template>
-    </el-dialog>
-
-    <CalibrationWorkspaceDialog
-      v-model="showCalibration"
-      :project-id="projectId"
-      :current-file="currentFile"
-      :is-editing="isEditing"
-      :editing-row-id="editingRowId"
-      :start-row-edit="enterEditMode"
-      :exit-edit-mode="exitEditMode"
-      :handle-save-data="handleSaveData"
-      :handle-refresh-survey-report="handleRefreshSurveyReport"
-      :handle-create-room="handleCreateRoom"
-      :handle-delete-room="handleDeleteRoom"
-      :room-create-loading="roomCreateLoading"
-      :room-delete-loading="roomDeleteLoading"
-      :report-refresh-loading="reportRefreshLoading"
-      :handle-audit-pass="handleAuditPass"
-      :calibration-loading="calibrationLoading"
-      :current-view-type="currentViewType"
-      :is-preprocess-available="isPreprocessAvailable"
-      :switch-view="switchView"
-      :pdf-loading="pdfLoading"
-      :calibration-pdf-url="calibrationPdfUrl"
-      :pdf-loaded="pdfLoaded"
-      :pdf-load-error="pdfLoadError"
-      :recognition-md-loading="recognitionMdLoading"
-      :recognition-html="recognitionHtml"
-      :audit-summary-data="auditSummaryData"
-      :audit-summary-display="auditSummaryDisplay"
-      :room-info-data="roomInfoData"
-      :room-info-loading="roomInfoLoading"
-      :room-info-total="roomInfoTotal"
-      :room-info-page-num="roomInfoPageNum"
-      :room-info-page-size="roomInfoPageSize"
-      :go-room-info-page="goRoomInfoPage"
-      :go-room-info-page-size-change="goRoomInfoPageSizeChange"
-      @back="handleCalibrationBack"
-      @closed="handleCalibrationClosed"
+      @clear-files="clearUploadFiles"
+      @file-change="handleUploadFileChange"
+      @file-remove="handleUploadFileRemove"
+      @remove-one="removeOneUploadFile"
+      @confirm-upload="handleBatchUpload"
     />
 
-    <PlanningReviewAuditDialog
-      v-model="planningReviewAuditVisible"
+    <ArchiveFolderAuditStack
+      ref="auditStackRef"
       :project-id="projectId"
-      :form-data="planningReviewAuditForm"
-    />
-
-    <ProjectPartySummaryAuditDialog
-      v-model="partySummaryAuditVisible"
-      :project-id="projectId"
-      :file-record-id="partySummaryAuditFileRecordId"
-      :initial-file="partySummaryAuditInitialFile"
+      :active="active"
+      :selected-archive="selectedArchive"
+      :archive-list="archiveList"
+      :archive-files="archiveFiles"
+      :selected-archive-id="selectedArchiveId"
+      :selected-archive-name="selectedArchiveName"
+      :query-form="queryForm"
+      :fetch-archive-files="fetchArchiveFiles"
+      :fetch-archives="fetchArchives"
+      :select-archive-for-audit="selectArchiveForAudit"
+      :on-contract-archive-audit="(row) => emit('contract-archive-audit', row)"
+      @audit-consumed="emit('audit-consumed')"
     />
 
     <ArchiveFilePreviewDialog
@@ -545,57 +128,31 @@
       @excel-error="onExcelPreviewError"
     />
 
-    <el-dialog
+    <ArchiveFolderParseFlowDialog
       v-model="parseFlowDialogVisible"
-      title="任务阶段详情"
-      width="680px"
-      destroy-on-close
-      append-to-body
-      class="parse-flow-archive-dialog"
-    >
-      <TaskParseFlowDetailPanel
-        :detail="parseFlowDetail"
-        :loading="parseFlowLoading"
-        @refresh="refreshParseFlowDialog"
-      />
-    </el-dialog>
+      :detail="parseFlowDetail"
+      :loading="parseFlowLoading"
+      @refresh="refreshParseFlowDialog"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import axios from 'axios'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Close, Delete, Folder, FolderAdd, FolderOpened, Picture, Refresh, UploadFilled } from '@element-plus/icons-vue'
-import CalibrationWorkspaceDialog from '@/components/file-upload/CalibrationWorkspaceDialog.vue'
-import TaskParseFlowDetailPanel from '@/components/layout/TaskParseFlowDetailPanel.vue'
-import PlanningReviewAuditDialog from '@/components/project-list/PlanningReviewAuditDialog.vue'
-import ProjectPartySummaryAuditDialog from '@/components/project-list/ProjectPartySummaryAuditDialog.vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
+import ArchiveFolderTreePanel from '@/components/project-list/archive/ArchiveFolderTreePanel.vue'
+import ArchiveFolderFilePanel from '@/components/project-list/archive/ArchiveFolderFilePanel.vue'
+import ArchiveFolderUploadDialog from '@/components/project-list/archive/ArchiveFolderUploadDialog.vue'
+import ArchiveFolderAuditStack from '@/components/project-list/archive/ArchiveFolderAuditStack.vue'
+import ArchiveFolderParseFlowDialog from '@/components/project-list/archive/ArchiveFolderParseFlowDialog.vue'
+import ArchiveFolderCreateDialog from '@/components/project-list/archive/ArchiveFolderCreateDialog.vue'
 import ArchiveFilePreviewDialog from '@/components/project-list/ArchiveFilePreviewDialog.vue'
-import { useCalibrationState } from '@/composables/file-upload/useCalibrationState'
-import { useCalibrationViewer } from '@/composables/file-upload/useCalibrationViewer'
-import { useRoomEditWorkflow } from '@/composables/file-upload/useRoomEditWorkflow'
-import { useCalibrationActions } from '@/composables/file-upload/useCalibrationActions'
-import { useFileUploadConstants, useAuditSummaryDisplay } from '@/composables/file-upload/useFileUploadConstants'
-import { useRecognitionMarkdown } from '@/composables/file-upload/useRecognitionMarkdown'
-import { useProjectStomp } from '@/composables/project-list/useProjectStomp'
 import { canPreviewArchiveFile, useArchiveFilePreview } from '@/composables/project-list/useArchiveFilePreview'
-import { queryPlanningReviewForms } from '@/services/project.service'
-import {
-  batchUploadFiles,
-  cancelParseByFileId,
-  createProjectArchive,
-  deleteFileById,
-  deleteProjectArchive,
-  getParseJobFlow,
-  getProjectArchives,
-  parseFileById,
-  queryFiles
-} from '@/services/file.service'
-import {
-  fetchUnreadStationNotifications,
-  markStationNotificationsRead
-} from '@/services/station-notification.service'
+import { useArchiveParseFlow } from '@/composables/project-list/useArchiveParseFlow.js'
+import { useArchiveFolderExplorerData } from '@/composables/project-list/useArchiveFolderExplorerData.js'
+import { useArchiveFolderRealtime } from '@/composables/project-list/useArchiveFolderRealtime.js'
+import { useArchiveFolderSplitter } from '@/composables/project-list/useArchiveFolderSplitter.js'
+import { useArchiveFolderUpload } from '@/composables/project-list/useArchiveFolderUpload.js'
 
 const props = defineProps({
   projectId: {
@@ -619,692 +176,152 @@ const props = defineProps({
     default: ''
   }
 })
-const emit = defineEmits(['audit-consumed'])
+const emit = defineEmits(['audit-consumed', 'contract-archive-audit'])
 
-const verifyStatusOptions = [
-  { label: '已通过', value: 'PASSED' },
-  { label: '未通过', value: 'FAILED' },
-  { label: '未校验', value: 'UNVERIFIED' }
-]
-
-const fileStateOptions = [
-  { label: '上传中', value: 'WAITING_POST_PROCESS' },
-  { label: '上传中', value: 'UPLOADING' },
-  { label: '待解析', value: 'WAITING_PARSE' },
-  { label: '待处理', value: 'PENDING' },
-  { label: '解析中', value: 'PARSING' },
-  { label: '解析失败', value: 'PARSE_FAIL' },
-  { label: '解析完成', value: 'PARSE_COMPLETE' },
-  { label: '不可解析', value: 'UNPARSEABLE' },
-  { label: '审核中', value: 'AUDITING' },
-  { label: '审核通过', value: 'AUDIT_PASS' },
-  { label: '审核失败', value: 'AUDIT_FAIL' }
-]
-
-const archiveLoading = ref(false)
-const fileLoading = ref(false)
-const batchDeleteLoading = ref(false)
-const batchParseLoading = ref(false)
-const uploadLoading = ref(false)
-/** null | 'transferring' | 'server_processing' — 与服务端「字节发完后同步落库」阶段对齐 */
-const uploadPhase = ref(null)
-const uploadAbortController = ref(null)
-
-const isUploadServerProcessing = computed(
-  () => uploadLoading.value && uploadPhase.value === 'server_processing'
-)
-
-const uploadPhaseLabel = computed(() => {
-  if (!uploadLoading.value) return ''
-  if (uploadPhase.value === 'server_processing') return '处理阶段 · 服务端正在入库'
-  return '传输阶段 · 正在上传数据'
-})
-
-const isUploadAbortError = (error) =>
-  axios.isCancel(error) || error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError'
-
-const handleUploadDialogBeforeClose = (done) => {
-  if (!uploadLoading.value) {
-    done()
-    return
-  }
-  if (uploadPhase.value === 'server_processing') {
-    ElMessage.warning('文件已传至服务器，正在入库与提交后处理，请稍候。此阶段不可取消。')
-    return
-  }
-  uploadAbortController.value?.abort()
-  done()
-}
-
-const createLoading = ref(false)
 const createDialogVisible = ref(false)
-const uploadDialogVisible = ref(false)
-const planningReviewAuditVisible = ref(false)
-const planningReviewAuditForm = ref(null)
-const partySummaryAuditVisible = ref(false)
-const partySummaryAuditFileRecordId = ref('')
-const partySummaryAuditInitialFile = ref(null)
-const createFormRef = ref(null)
+const auditStackRef = ref(null)
+const filePanelRef = ref(null)
 
-const archiveList = ref([])
-const archiveFiles = ref([])
-const selectedRows = ref([])
-const fileTotal = ref(0)
-const selectedArchiveId = ref(null)
-const selectedArchiveName = ref('')
-const fileQuerySeq = ref(0)
-const archiveQueryCache = new Map()
-const ARCHIVE_CACHE_TTL = 12000
-let currentFileQueryController = null
+const updateTableBodyHeight = () => filePanelRef.value?.updateTableBodyHeight?.()
+const bindTableWrapResizeObserver = () => filePanelRef.value?.bindTableWrapResizeObserver?.()
 
-const parseFlowDialogVisible = ref(false)
-const parseFlowDetail = ref(null)
-const parseFlowLoading = ref(false)
-const parseFlowJobId = ref(null)
-let parseFlowAutoTimer = null
-let parseFlowRefreshing = false
-
-const isParseFlowTerminal = (detail) => {
-  const s = String(detail?.status || '').toUpperCase()
-  return s === 'SUCCESS' || s === 'FAILED' || s === 'CANCELLED' || s === 'CANCELED'
-}
-
-const openParseFlowDialog = async (row) => {
-  const id = row?.parseJobId
-  if (!id) return
-  parseFlowJobId.value = id
-  parseFlowDetail.value = null
-  parseFlowDialogVisible.value = true
-  await refreshParseFlowDialog()
-}
-
-const refreshParseFlowDialog = async (options = {}) => {
-  const silent = Boolean(options?.silent)
-  const id = parseFlowJobId.value
-  if (!id) return
-  if (parseFlowRefreshing) return
-  parseFlowRefreshing = true
-  if (!silent) parseFlowLoading.value = true
-  try {
-    const res = await getParseJobFlow(id)
-    const code = Number(res?.data?.code)
-    if (code === 200) {
-      parseFlowDetail.value = res?.data?.data || null
-      return
-    }
-    ElMessage.warning(res?.data?.msg || '加载解析流程失败')
-  } catch (e) {
-    console.error(e)
-    ElMessage.error(e?.response?.data?.msg || '加载解析流程失败')
-  } finally {
-    parseFlowRefreshing = false
-    if (!silent) parseFlowLoading.value = false
-  }
-}
-
-const startParseFlowAutoRefresh = () => {
-  if (parseFlowAutoTimer) return
-  parseFlowAutoTimer = setInterval(async () => {
-    if (!parseFlowDialogVisible.value || !parseFlowJobId.value) return
-    if (isParseFlowTerminal(parseFlowDetail.value)) return
-    await refreshParseFlowDialog({ silent: true })
-  }, 1500)
-}
-
-const stopParseFlowAutoRefresh = () => {
-  if (!parseFlowAutoTimer) return
-  clearInterval(parseFlowAutoTimer)
-  parseFlowAutoTimer = null
-}
-
-const createForm = ref({
-  name: ''
-})
-
-const uploadForm = reactive({
-  fileContextType: 'OTHER',
-  phase: 1,
-  archiveId: null
-})
-const uploadFiles = ref([])
-const uploadProgress = ref(0)
-const uploadUploadedBytes = ref(0)
-const uploadTotalBytes = ref(0)
-const selectedTotalBytes = computed(() => {
-  return uploadFiles.value.reduce((sum, item) => {
-    const size = Number(item?.raw?.size ?? item?.size ?? 0)
-    return sum + (Number.isFinite(size) ? size : 0)
-  }, 0)
-})
-
-const normalizeExt = (name) => {
-  const val = String(name || '').trim()
-  const idx = val.lastIndexOf('.')
-  if (idx <= 0 || idx === val.length - 1) return ''
-  return val.slice(idx + 1).toLowerCase()
-}
-
-const fileExtLabel = (ext) => {
-  if (!ext) return '无后缀'
-  return ext.length > 6 ? `${ext.slice(0, 6)}…` : ext.toUpperCase()
-}
-
-const topFileGroups = computed(() => {
-  const map = new Map()
-  for (const item of uploadFiles.value) {
-    const name = item?.raw?.name ?? item?.name ?? ''
-    const ext = normalizeExt(name)
-    const key = ext || '__none__'
-    const prev = map.get(key) || { key, ext, count: 0 }
-    prev.count += 1
-    map.set(key, prev)
-  }
-  return Array.from(map.values())
-    .sort((a, b) => b.count - a.count || String(a.key).localeCompare(String(b.key)))
-    .slice(0, 6)
-    .map((g) => ({ ...g, label: fileExtLabel(g.ext) }))
-})
-
-const uploadSpeedBps = ref(0)
-const uploadEtaSec = ref(null)
-let uploadSpeedTimer = null
-let uploadSpeedLastTs = 0
-let uploadSpeedLastBytes = 0
-
-const formatSpeed = (bps) => {
-  const val = Number(bps)
-  if (!Number.isFinite(val) || val <= 0) return ''
-  if (val < 1024) return `${Math.round(val)} B/s`
-  if (val < 1024 * 1024) return `${(val / 1024).toFixed(1)} KB/s`
-  if (val < 1024 * 1024 * 1024) return `${(val / (1024 * 1024)).toFixed(1)} MB/s`
-  return `${(val / (1024 * 1024 * 1024)).toFixed(2)} GB/s`
-}
-
-const formatEta = (sec) => {
-  const val = Math.max(0, Math.floor(Number(sec) || 0))
-  if (!Number.isFinite(val) || val <= 0) return ''
-  const m = Math.floor(val / 60)
-  const s = val % 60
-  if (m <= 0) return `${s}s`
-  const h = Math.floor(m / 60)
-  const mm = m % 60
-  if (h <= 0) return `${m}m ${s}s`
-  return `${h}h ${mm}m`
-}
-
-const uploadSpeedText = computed(() => formatSpeed(uploadSpeedBps.value))
-const uploadEtaText = computed(() => formatEta(uploadEtaSec.value))
-
-const startUploadSpeedMeter = () => {
-  if (uploadSpeedTimer) return
-  uploadSpeedBps.value = 0
-  uploadEtaSec.value = null
-  uploadSpeedLastTs = Date.now()
-  uploadSpeedLastBytes = Number(uploadUploadedBytes.value || 0)
-  uploadSpeedTimer = setInterval(() => {
-    const now = Date.now()
-    const bytes = Number(uploadUploadedBytes.value || 0)
-    const dt = now - uploadSpeedLastTs
-    if (dt <= 0) return
-    const db = bytes - uploadSpeedLastBytes
-    if (db > 0) {
-      const inst = (db * 1000) / dt
-      uploadSpeedBps.value = uploadSpeedBps.value > 0 ? uploadSpeedBps.value * 0.72 + inst * 0.28 : inst
-    }
-    uploadSpeedLastTs = now
-    uploadSpeedLastBytes = bytes
-    const total = Number(uploadTotalBytes.value || 0)
-    const remain = Math.max(0, total - bytes)
-    if (remain > 0 && uploadSpeedBps.value > 1) {
-      uploadEtaSec.value = remain / uploadSpeedBps.value
-      return
-    }
-    uploadEtaSec.value = null
-  }, 520)
-}
-
-const stopUploadSpeedMeter = () => {
-  if (!uploadSpeedTimer) return
-  clearInterval(uploadSpeedTimer)
-  uploadSpeedTimer = null
-  uploadSpeedBps.value = 0
-  uploadEtaSec.value = null
-}
-
-const clearUploadFiles = () => {
-  uploadFiles.value = []
-  uploadProgress.value = 0
-  uploadUploadedBytes.value = 0
-  uploadTotalBytes.value = 0
-}
-
-const queryForm = reactive({
-  keyword: '',
-  verifyStatus: '',
-  fileState: '',
-  pageNum: 1,
-  pageSize: 20
-})
-/** 由 table-wrap 可视高度减去分页条动态计算，避免固定 670px 裁切 pager-row */
-const tableWrapRef = ref(null)
-const tableBodyHeight = ref(360)
-let tableWrapResizeObserver = null
-
-const updateTableBodyHeight = () => {
-  const wrap = tableWrapRef.value
-  if (!wrap) return
-  requestAnimationFrame(() => {
-    const el = tableWrapRef.value
-    if (!el) return
-    const pager = el.querySelector('.pager-row')
-    const reserve = (pager ? pager.getBoundingClientRect().height : 0) + 8
-    const next = Math.floor(el.clientHeight - reserve)
-    tableBodyHeight.value = Math.max(160, next)
-  })
-}
-
-const bindTableWrapResizeObserver = () => {
-  const el = tableWrapRef.value
-  if (!el || typeof ResizeObserver === 'undefined') return
-  if (tableWrapResizeObserver) {
-    tableWrapResizeObserver.disconnect()
-    tableWrapResizeObserver = null
-  }
-  tableWrapResizeObserver = new ResizeObserver(() => updateTableBodyHeight())
-  tableWrapResizeObserver.observe(el)
-  updateTableBodyHeight()
-}
-
-const currentProject = computed(() => String(props.projectId || ''))
-const splitContainerRef = ref(null)
-const treePanelWidth = ref(320)
-const minTreePanelWidth = 280
-const minTablePanelWidth = 620
-let isDraggingSplitter = false
-let autoQuerySuppressed = false
-let keywordAutoQueryTimer = null
-
-const { usageCategoryMap, usageCategoryReverseMap } = useFileUploadConstants()
-const {
-  roomInfoLoading,
-  roomInfoData,
-  roomInfoTotal,
-  roomInfoPageNum,
-  roomInfoPageSize,
-  roomSumInfo,
-  showCalibration,
-  calibrationLoading,
-  currentFile,
-  auditSummaryData
-} = useCalibrationState()
-const { auditSummaryDisplay } = useAuditSummaryDisplay(auditSummaryData)
-const isEditing = ref(false)
-const editingRowId = ref('')
-const batchUpdateLoading = ref(false)
+let syncUploadContextByArchive = () => {}
 
 const {
-  currentViewType,
-  preprocessGridfsId: _preprocessGridfsId,
-  isPreprocessAvailable,
-  recognitionMdContent,
-  recognitionMdLoading,
-  calibrationPdfUrl,
-  pdfLoading,
-  realSurveyReportId,
-  switchView,
-  resetCalibrationState,
-  openCalibration,
-  pdfLoaded,
-  pdfLoadError
-} = useCalibrationViewer({
-  currentProject,
-  showCalibration,
-  currentFile,
-  calibrationLoading,
-  roomInfoLoading,
-  roomInfoData,
-  roomInfoTotal,
-  roomInfoPageNum,
-  roomInfoPageSize,
-  roomSumInfo,
-  auditSummaryData,
-  usageCategoryMap
+  archiveLoading,
+  fileLoading,
+  batchDeleteLoading,
+  batchParseLoading,
+  archiveList,
+  archiveFiles,
+  selectedRows,
+  fileTotal,
+  selectedArchiveId,
+  selectedArchiveName,
+  selectedArchive,
+  queryForm,
+  treeProps,
+  treeData,
+  canDeleteSelectedArchive,
+  showThumbnailColumn,
+  canBatchParse,
+  clearArchiveQueryCache,
+  clearFiles,
+  fetchArchiveFiles,
+  fetchArchives,
+  selectArchiveForAudit,
+  confirmDeleteSelectedArchive,
+  handleNodeClick,
+  handleSelectionChange,
+  handleAutoQuery,
+  handleSearch,
+  handleReset,
+  refreshFiles,
+  handlePageChange,
+  handlePageSizeChange,
+  handleParse,
+  handleCancelParse,
+  handleDeleteFile,
+  handleBatchDelete,
+  handleBatchParse,
+  applyInitialArchiveId,
+  cleanupExplorer
+} = useArchiveFolderExplorerData({
+  projectId: () => props.projectId,
+  projectName: () => props.projectName,
+  initialArchiveId: () => props.initialArchiveId,
+  syncUploadContextByArchive: () => syncUploadContextByArchive()
 })
 
-const { recognitionHtml } = useRecognitionMarkdown({ recognitionMdContent })
-  const {
-  enterEditMode,
-  exitEditMode,
-  handleSaveData,
-  handleRefreshSurveyReport,
-  handleCreateRoom,
-  handleDeleteRoom,
-  roomCreateLoading,
-  roomDeleteLoading,
-  reportRefreshLoading,
-  goRoomInfoPage,
-  goRoomInfoPageSizeChange
-} = useRoomEditWorkflow({
-  currentProject,
-  realSurveyReportId,
-  currentFile,
-  roomInfoData,
-  roomInfoLoading,
-  roomInfoTotal,
-  roomInfoPageNum,
-  roomInfoPageSize,
-  isEditing,
-  editingRowId,
-  batchUpdateLoading,
-  usageCategoryMap,
-  usageCategoryReverseMap,
-  auditSummaryData
-})
-const { handleAuditPass } = useCalibrationActions({
-  showCalibration,
-  resetCalibrationState,
-  refreshData: fetchArchiveFiles,
-  currentFile,
-  realSurveyReportId
-})
-
-const stateLabelMap = {
-  UPLOADING: '上传中',
-  WAITING_POST_PROCESS: '上传中',
-  WAITING_PARSE: '待解析',
-  PENDING: '待处理',
-  PARSING: '解析中',
-  PARSE_FAIL: '解析失败',
-  PARSE_COMPLETE: '解析完成',
-  UNPARSEABLE: '不可解析',
-  AUDITING: '审核中',
-  AUDIT_PASS: '审核通过',
-  AUDIT_FAIL: '审核失败'
-}
-
-const parseSceneToState = {
-  PARSE_PENDING: 'PENDING',
-  PARSE_START: 'PARSING',
-  PARSE_SUCCESS: 'PARSE_COMPLETE',
-  PARSE_FAILED: 'PARSE_FAIL',
-  PARSE_FAIL: 'PARSE_FAIL'
-}
-
-const projectNameText = computed(() => props.projectName || '未选择项目')
-const selectedArchive = computed(() => archiveList.value.find((item) => item.id === selectedArchiveId.value))
-/** 树中已选中具体归档夹（非仅项目根节点）时可删除 */
-const canDeleteSelectedArchive = computed(() => Boolean(props.projectId && selectedArchiveId.value))
-const showThumbnailColumn = computed(
-  () => String(selectedArchive.value?.kind || '').toUpperCase() !== 'PROJECT_PARTY_SURVEY_SUMMARY'
-)
-const canBatchParse = computed(() =>
-  selectedRows.value.some((row) => ['WAITING_PARSE', 'PARSE_FAIL', 'PARSE_COMPLETE'].includes(row.fileState))
-)
-
-const createRules = {
-  name: [
-    { required: true, message: '请输入归档夹名称', trigger: 'blur' },
-    { min: 2, max: 30, message: '名称长度需在 2 到 30 个字符', trigger: 'blur' }
-  ]
-}
-
-const treeProps = {
-  label: 'name',
-  children: 'children'
-}
-
-const treeData = computed(() => {
-  if (!props.projectId || archiveList.value.length === 0) return []
-  return [
-    {
-      id: `project-${props.projectId}`,
-      name: projectNameText.value,
-      nodeType: 'project',
-      children: archiveList.value.map((item) => ({
-        id: `archive-${item.id}`,
-        archiveId: item.id,
-        name: item.name,
-        nodeType: 'archive'
-      }))
-    }
-  ]
-})
-
-const formatFileSize = (bytes) => {
-  const value = Number(bytes || 0)
-  if (!value) return '-'
-  if (value < 1024) return `${value} B`
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(2)} KB`
-  return `${(value / 1024 / 1024).toFixed(2)} MB`
-}
-
-const formatDateTime = (value) => {
-  if (!value) return '-'
-  const text = String(value)
-  return text.includes('T') ? text.replace('T', ' ').slice(0, 19) : text
-}
-
-const getStateLabel = (state) => stateLabelMap[state] || state || '-'
-
-const getStateTagType = (state) => {
-  if (state === 'PARSE_COMPLETE' || state === 'AUDIT_PASS') return 'success'
-  if (state === 'PARSE_FAIL' || state === 'AUDIT_FAIL' || state === 'UNPARSEABLE') return 'danger'
-  if (state === 'PARSING' || state === 'AUDITING') return 'warning'
-  return 'info'
-}
-
-const getVerifyStatus = (row) => {
-  const value = row?.isVerified
-  if (value === 1 || value === '1' || value === true) {
-    return { label: '已通过', type: 'success' }
-  }
-  if (value === 0 || value === '0' || value === false) {
-    return { label: '未通过', type: 'danger' }
-  }
-  return { label: '未校验', type: 'info' }
-}
-
-const getFileRecordId = (row) => row?.id || row?.rawId || row?.fileRecordId || null
-
-const shouldSkipThumbnail = (row) => {
-  const contextType = String(row?.fileContextType || '').toUpperCase()
-  if (contextType === 'PROJECT_PARTY_SURVEY_SUMMARY') return true
-  const fileType = String(row?.fileType || '').toUpperCase()
-  return fileType === 'XLS' || fileType === 'XLSX'
-}
-
-const getThumbnailUrl = (row) => {
-  if (shouldSkipThumbnail(row)) return ''
-  if (row?.thumbGridfsId) return `/api/file/download/gridfs/${row.thumbGridfsId}`
-  return ''
-}
-
-const getThumbnailPreviewList = (row) => {
-  const src = getThumbnailUrl(row)
-  return src ? [src] : []
-}
-
-let realtimeRefreshTimer = null
-let realtimePendingRefresh = false
-let readAckTimer = null
-const pendingReadMessageIds = new Set()
-const handledMessageIdOrder = []
-const handledMessageIds = new Set()
-const MAX_HANDLED_MESSAGE_IDS = 2000
-
-const normalizeNotificationList = (payload) => {
-  if (Array.isArray(payload)) return payload
-  if (Array.isArray(payload?.records)) return payload.records
-  if (Array.isArray(payload?.list)) return payload.list
-  if (Array.isArray(payload?.rows)) return payload.rows
-  return []
-}
-
-const extractMessageId = (payload) => String(payload?.messageId || payload?.id || '').trim()
-
-const registerHandledMessageId = (messageId) => {
-  if (!messageId) return true
-  if (handledMessageIds.has(messageId)) return false
-  handledMessageIds.add(messageId)
-  handledMessageIdOrder.push(messageId)
-  if (handledMessageIdOrder.length > MAX_HANDLED_MESSAGE_IDS) {
-    const stale = handledMessageIdOrder.shift()
-    if (stale) handledMessageIds.delete(stale)
-  }
-  return true
-}
-
-const scheduleReadAck = () => {
-  if (readAckTimer) return
-  readAckTimer = setTimeout(async () => {
-    readAckTimer = null
-    const ids = [...pendingReadMessageIds]
-    if (!ids.length) return
-    try {
-      await markStationNotificationsRead(ids)
-      ids.forEach((id) => pendingReadMessageIds.delete(id))
-    } catch (error) {
-      console.error('确认站内通知已读失败:', error)
-    }
-  }, 600)
-}
-
-const handleIncomingNotification = (payload, topicHint = '') => {
-  if (!payload || typeof payload !== 'object') return
-  if (
-    String(payload?.projectId || '')
-    && String(payload.projectId) !== String(props.projectId || '')
-  ) {
-    return
-  }
-  const messageId = extractMessageId(payload)
-  if (!registerHandledMessageId(messageId)) return
-  if (messageId) {
-    pendingReadMessageIds.add(messageId)
-    scheduleReadAck()
-  }
-
-  const scene = String(payload?.scene || '')
-  const hint = String(topicHint || '').toUpperCase()
-  const isBatchByScene = scene.includes('BATCH')
-  const isBatchByHint = hint === 'BATCH'
-  if (isBatchByScene || isBatchByHint) {
-    handleRealtimeBatchUploadUpdate(payload)
-    return
-  }
-  handleRealtimeFileUpdate(payload)
-}
-
-const fetchUnreadNotifications = async (projectId) => {
-  const pid = String(projectId || props.projectId || '').trim()
-  if (!pid) return
-  try {
-    const res = await fetchUnreadStationNotifications([pid])
-    if (res?.data?.code !== 200) return
-    const records = normalizeNotificationList(res?.data?.data)
-    records.forEach((item) => {
-      const body = item?.payload ?? item?.content ?? item?.data ?? item?.extra ?? item
-      let parsed = body
-      if (typeof body === 'string') {
-        try {
-          parsed = JSON.parse(body)
-        } catch {
-          parsed = {}
-        }
-      }
-      const topicKey = String(item?.topicKey || item?.topic || item?.channel || '')
-      const merged = {
-        ...(parsed && typeof parsed === 'object' ? parsed : {}),
-        messageId: item?.messageId ?? item?.id ?? parsed?.messageId
-      }
-      if (String(merged?.projectId || '') && String(merged.projectId) !== pid) return
-      handleIncomingNotification(merged, topicKey.includes('batch-upload') ? 'BATCH' : 'FILE')
-    })
-  } catch (error) {
-    console.error('补拉站内未读通知失败:', error)
-  }
-}
-
-const flushReadAckNow = async () => {
-  if (readAckTimer) {
-    clearTimeout(readAckTimer)
-    readAckTimer = null
-  }
-  const ids = [...pendingReadMessageIds]
-  if (!ids.length) return
-  try {
-    await markStationNotificationsRead(ids)
-    ids.forEach((id) => pendingReadMessageIds.delete(id))
-  } catch (error) {
-    console.error('离开前确认站内通知已读失败:', error)
-  }
-}
-
-const scheduleRealtimeRefresh = () => {
-  realtimePendingRefresh = true
-  archiveQueryCache.clear()
-  if (!props.active) return
-  if (realtimeRefreshTimer) return
-  realtimeRefreshTimer = setTimeout(async () => {
-    realtimeRefreshTimer = null
-    if (!realtimePendingRefresh || !props.active) return
-    realtimePendingRefresh = false
+const {
+  uploadDialogVisible,
+  uploadForm,
+  uploadFiles,
+  uploadLoading,
+  uploadProgress,
+  uploadUploadedBytes,
+  uploadTotalBytes,
+  selectedTotalBytes,
+  topFileGroups,
+  uploadSpeedText,
+  uploadEtaText,
+  isUploadServerProcessing,
+  uploadPhaseLabel,
+  uploadPhase,
+  handleUploadDialogBeforeClose,
+  clearUploadFiles,
+  resetUploadForm,
+  openUploadDialog,
+  handleUploadFileChange,
+  handleUploadFileRemove,
+  removeOneUploadFile,
+  handleBatchUpload,
+  stopUploadSpeedMeter
+} = useArchiveFolderUpload({
+  projectId: () => props.projectId,
+  selectedArchiveId: () => selectedArchiveId.value,
+  syncUploadContextByArchive: () => syncUploadContextByArchive(),
+  onUploadSuccess: async () => {
+    queryForm.pageNum = 1
     await fetchArchiveFiles({ force: true })
-  }, 1200)
-}
+  }
+})
 
-const applyRealtimeRowState = (payload) => {
-  const targetFileId = String(payload?.fileId || '')
-  const nextState = parseSceneToState[payload?.scene] || ''
-  if (!targetFileId || !nextState) return false
-  let hit = false
-  archiveFiles.value = archiveFiles.value.map((row) => {
-    const rowFileId = String(getFileRecordId(row) || row?.fileId || '')
-    if (rowFileId !== targetFileId) return row
-    hit = true
-    return {
-      ...row,
-      fileState: nextState,
-      isVerified: payload?.isVerified ?? row.isVerified,
-      verificationErrorReason: payload?.verificationErrorReason ?? row.verificationErrorReason
-    }
-  })
-  return hit
-}
-
-const handleRealtimeFileUpdate = (payload) => {
-  const scene = String(payload?.scene || '')
-  if (!scene) return
-
-  const isParseTerminalScene = scene === 'PARSE_SUCCESS' || scene === 'PARSE_FAILED' || scene === 'PARSE_FAIL'
-  const isParseProgressScene = scene === 'PARSE_START' || scene === 'PARSE_PENDING'
-
-  const rowUpdated = applyRealtimeRowState(payload)
-
-  if (isParseProgressScene) {
-    if (!rowUpdated) scheduleRealtimeRefresh()
+syncUploadContextByArchive = () => {
+  const kind = selectedArchive.value?.kind
+  uploadForm.archiveId = selectedArchiveId.value ? Number(selectedArchiveId.value) : null
+  if (!kind) {
+    uploadForm.fileContextType = 'OTHER'
     return
   }
-
-  // 解析结束时必须整表刷新，确保校验状态与原因同步到最新
-  if (isParseTerminalScene) {
-    scheduleRealtimeRefresh()
+  if (
+    kind === 'CONTRACT' ||
+    kind === 'SURVEY_REPORT' ||
+    kind === 'PROJECT_PARTY_SURVEY_SUMMARY' ||
+    kind === 'PLANNING_REVIEW' ||
+    kind === 'OTHER'
+  ) {
+    uploadForm.fileContextType = kind
     return
   }
-
-  if (!rowUpdated) {
-    scheduleRealtimeRefresh()
-  }
+  uploadForm.fileContextType = 'OTHER'
 }
 
-const handleRealtimeBatchUploadUpdate = (payload) => {
-  const scene = String(payload?.scene || '')
-  if (!scene) return
-  if (scene === 'BATCH_UPLOAD_COMPLETE') {
-    // 批量上传任务完成后刷新，避免切换归档后出现状态滞后
-    scheduleRealtimeRefresh()
-  }
-}
+const {
+  socketStatus,
+  socketStatusText,
+  flushReadAckNow,
+  resetRealtimeState,
+  cleanupRealtime,
+  onTabActivated
+} = useArchiveFolderRealtime({
+  projectId: () => props.projectId,
+  active: () => props.active,
+  archiveFiles: () => archiveFiles.value,
+  setArchiveFiles: (files) => {
+    archiveFiles.value = files
+  },
+  selectedArchiveId: () => selectedArchiveId.value,
+  fetchArchiveFiles,
+  clearArchiveQueryCache
+})
+
+const {
+  splitContainerRef,
+  treePanelWidth,
+  handleSplitterMouseDown,
+  handleWindowResize,
+  cleanupSplitter
+} = useArchiveFolderSplitter({ onResize: updateTableBodyHeight })
+
+const {
+  parseFlowDialogVisible,
+  parseFlowDetail,
+  parseFlowLoading,
+  openParseFlowDialog,
+  refreshParseFlowDialog,
+  stopParseFlowAutoRefresh
+} = useArchiveParseFlow({ isActive: () => props.active })
 
 const {
   previewVisible,
@@ -1320,477 +337,9 @@ const {
 } = useArchiveFilePreview()
 
 const showPreviewButton = (row) => canPreviewArchiveFile(row)
-const showParseButton = (row) => ['WAITING_PARSE', 'PARSE_FAIL', 'PARSE_COMPLETE'].includes(row.fileState)
-const showCancelParseButton = (row) => ['PENDING', 'PARSING'].includes(row.fileState)
-const showAuditButton = (row) => {
-  const contextType = String(row?.fileContextType || selectedArchive.value?.kind || '')
-  if (contextType === 'CONTRACT') return false
-  return ['PARSE_COMPLETE', 'UNPARSEABLE', 'AUDITING', 'AUDIT_FAIL', 'AUDIT_PASS'].includes(row.fileState)
-}
-
-const parseButtonText = (row) => {
-  if (row.fileState === 'PARSE_FAIL') return '重试解析'
-  if (row.fileState === 'PARSE_COMPLETE') return '重新解析'
-  return '开始解析'
-}
-
-const resetFileQuery = () => {
-  queryForm.keyword = ''
-  queryForm.verifyStatus = ''
-  queryForm.fileState = ''
-  queryForm.pageNum = 1
-  queryForm.pageSize = 20
-}
-
-const clearFiles = () => {
-  selectedArchiveId.value = null
-  selectedArchiveName.value = ''
-  archiveFiles.value = []
-  selectedRows.value = []
-  fileTotal.value = 0
-  resetFileQuery()
-}
-
-const normalizeQueryResult = (payload) => {
-  if (Array.isArray(payload)) {
-    return { records: payload, total: payload.length }
-  }
-  const records = Array.isArray(payload?.records)
-    ? payload.records
-    : Array.isArray(payload?.list)
-      ? payload.list
-      : Array.isArray(payload?.rows)
-        ? payload.rows
-        : []
-  return { records, total: Number(payload?.total ?? records.length) }
-}
-
-async function fetchArchiveFiles(options = {}) {
-  const force = Boolean(options?.force)
-  if (!props.projectId || !selectedArchiveId.value) {
-    archiveFiles.value = []
-    selectedRows.value = []
-    fileTotal.value = 0
-    return
-  }
-
-  const queryKey = JSON.stringify({
-    projectId: Number(props.projectId),
-    archiveId: Number(selectedArchiveId.value),
-    pageNum: queryForm.pageNum,
-    pageSize: queryForm.pageSize,
-    keyword: queryForm.keyword || '',
-    verifyStatus: queryForm.verifyStatus || '',
-    fileState: queryForm.fileState || ''
-  })
-
-  if (!force && archiveQueryCache.has(queryKey)) {
-    const cached = archiveQueryCache.get(queryKey)
-    const isFresh = Date.now() - Number(cached?.cachedAt || 0) <= ARCHIVE_CACHE_TTL
-    if (isFresh) {
-      archiveFiles.value = cached.records
-      selectedRows.value = []
-      fileTotal.value = cached.total
-      return
-    }
-  }
-
-  if (currentFileQueryController) {
-    currentFileQueryController.abort()
-    currentFileQueryController = null
-  }
-  const queryController = new AbortController()
-  currentFileQueryController = queryController
-
-  fileLoading.value = true
-  const currentSeq = ++fileQuerySeq.value
-  try {
-    const payload = {
-      pageNum: queryForm.pageNum,
-      pageSize: queryForm.pageSize,
-      sortField: 'uploadTime',
-      sortDirection: 'desc',
-      projectId: Number(props.projectId),
-      archiveId: Number(selectedArchiveId.value)
-    }
-    if (queryForm.keyword) payload.originalName = queryForm.keyword
-    if (queryForm.verifyStatus) payload.verifyStatus = queryForm.verifyStatus
-    if (queryForm.fileState) payload.fileState = queryForm.fileState
-
-    const res = await queryFiles(payload, { signal: queryController.signal })
-    if (currentSeq !== fileQuerySeq.value) return
-    const parsed = normalizeQueryResult(res.data?.data)
-    archiveFiles.value = parsed.records
-    selectedRows.value = []
-    fileTotal.value = parsed.total
-    archiveQueryCache.set(queryKey, {
-      records: parsed.records,
-      total: parsed.total,
-      cachedAt: Date.now()
-    })
-  } catch (error) {
-    if (currentSeq !== fileQuerySeq.value) return
-    if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED') return
-    console.error('查询归档文件失败:', error)
-    archiveFiles.value = []
-    selectedRows.value = []
-    fileTotal.value = 0
-    ElMessage.error('查询归档文件失败，请稍后重试')
-  } finally {
-    if (currentFileQueryController === queryController) {
-      currentFileQueryController = null
-    }
-    if (currentSeq === fileQuerySeq.value) {
-      fileLoading.value = false
-    }
-  }
-}
-
-const fetchArchives = async () => {
-  if (!props.projectId) {
-    archiveList.value = []
-    clearFiles()
-    return
-  }
-
-  archiveLoading.value = true
-  try {
-    const res = await getProjectArchives(props.projectId)
-    if (res.data?.code === 200 && Array.isArray(res.data.data)) {
-      const oldSelected = selectedArchiveId.value
-      archiveList.value = res.data.data
-
-      if (!archiveList.value.length) {
-        clearFiles()
-        return
-      }
-
-      const initialArchiveIdNum = Number(props.initialArchiveId || 0)
-      const targetArchive =
-        archiveList.value.find((item) => item.id === oldSelected) ||
-        archiveList.value.find((item) => item.id === initialArchiveIdNum) ||
-        archiveList.value[0]
-      selectedArchiveId.value = targetArchive.id
-      selectedArchiveName.value = targetArchive.name
-      queryForm.pageNum = 1
-      syncUploadContextByArchive()
-      fetchArchiveFiles()
-      return
-    }
-
-    archiveList.value = []
-    clearFiles()
-    ElMessage.warning(res.data?.msg || '归档夹列表返回异常')
-  } catch (error) {
-    console.error('获取归档夹列表失败:', error)
-    archiveList.value = []
-    clearFiles()
-    ElMessage.error('获取归档夹列表失败，请稍后重试')
-  } finally {
-    archiveLoading.value = false
-  }
-}
-
-const syncUploadContextByArchive = () => {
-  const kind = selectedArchive.value?.kind
-  uploadForm.archiveId = selectedArchiveId.value ? Number(selectedArchiveId.value) : null
-  if (!kind) {
-    uploadForm.fileContextType = 'OTHER'
-    return
-  }
-  // 支持按归档类型自动带出上传归类
-  if (
-    kind === 'CONTRACT' ||
-    kind === 'SURVEY_REPORT' ||
-    kind === 'PROJECT_PARTY_SURVEY_SUMMARY' ||
-    kind === 'PLANNING_REVIEW' ||
-    kind === 'OTHER'
-  ) {
-    uploadForm.fileContextType = kind
-    return
-  }
-  // DATA_FILE 以及自定义归档统一走 OTHER，并配合 archiveId 定位归档夹
-  uploadForm.fileContextType = 'OTHER'
-}
 
 const openCreateDialog = () => {
-  createForm.value = { name: '' }
   createDialogVisible.value = true
-}
-
-const submitCreateArchive = async () => {
-  if (!createFormRef.value || !props.projectId) return
-
-  try {
-    await createFormRef.value.validate()
-  } catch {
-    return
-  }
-
-  createLoading.value = true
-  try {
-    const payload = {
-      projectId: Number(props.projectId),
-      name: createForm.value.name
-    }
-    const res = await createProjectArchive(payload)
-    if (res.data?.code === 200) {
-      ElMessage.success(res.data?.msg || '归档夹创建成功')
-      createDialogVisible.value = false
-      fetchArchives()
-    } else {
-      ElMessage.warning(res.data?.msg || '归档夹创建失败')
-    }
-  } catch (error) {
-    console.error('创建归档夹失败:', error)
-    ElMessage.error('创建归档夹失败，请稍后重试')
-  } finally {
-    createLoading.value = false
-  }
-}
-
-const confirmDeleteSelectedArchive = async () => {
-  if (!props.projectId || !selectedArchiveId.value) return
-  const name = selectedArchiveName.value || '该归档夹'
-  try {
-    await ElMessageBox.confirm(
-      `确定删除归档夹「${name}」吗？删除后不可恢复。`,
-      '删除归档夹',
-      {
-        type: 'warning',
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        confirmButtonClass: 'el-button--danger'
-      }
-    )
-  } catch {
-    return
-  }
-  await handleDeleteArchive({ archiveId: selectedArchiveId.value })
-}
-
-const handleDeleteArchive = async (nodeData) => {
-  if (!props.projectId || !nodeData?.archiveId) return
-
-  try {
-    const res = await deleteProjectArchive(Number(props.projectId), Number(nodeData.archiveId))
-    if (res.data?.code === 200) {
-      ElMessage.success(res.data?.msg || '归档夹删除成功')
-      if (selectedArchiveId.value === nodeData.archiveId) {
-        selectedArchiveId.value = null
-        selectedArchiveName.value = ''
-      }
-      fetchArchives()
-    } else {
-      ElMessage.warning(res.data?.msg || '归档夹删除失败')
-    }
-  } catch (error) {
-    console.error('删除归档夹失败:', error)
-    ElMessage.error(error?.response?.data?.msg || '删除归档夹失败')
-  }
-}
-
-const handleNodeClick = (data) => {
-  if (!data?.archiveId) return
-  selectedArchiveId.value = data.archiveId
-  selectedArchiveName.value = data.name
-  selectedRows.value = []
-  queryForm.pageNum = 1
-  syncUploadContextByArchive()
-  fetchArchiveFiles()
-}
-
-const handleSelectionChange = (rows) => {
-  selectedRows.value = rows
-}
-
-const triggerAutoQuery = () => {
-  if (!selectedArchiveId.value) return
-  queryForm.pageNum = 1
-  fetchArchiveFiles()
-}
-
-const handleAutoQuery = (source) => {
-  if (!selectedArchiveId.value || autoQuerySuppressed) return
-  if (source === 'keyword') {
-    if (keywordAutoQueryTimer) window.clearTimeout(keywordAutoQueryTimer)
-    keywordAutoQueryTimer = window.setTimeout(() => {
-      keywordAutoQueryTimer = null
-      triggerAutoQuery()
-    }, 350)
-    return
-  }
-  triggerAutoQuery()
-}
-
-const handleSearch = () => {
-  if (!selectedArchiveId.value) return
-  queryForm.pageNum = 1
-  fetchArchiveFiles()
-}
-
-const handleReset = () => {
-  if (!selectedArchiveId.value) return
-  autoQuerySuppressed = true
-  resetFileQuery()
-  autoQuerySuppressed = false
-  fetchArchiveFiles()
-}
-
-const refreshFiles = () => {
-  if (!selectedArchiveId.value) return
-  fetchArchiveFiles({ force: true })
-}
-
-const clampTreePanelWidth = (targetWidth) => {
-  const containerWidth = Number(splitContainerRef.value?.clientWidth || 0)
-  if (!containerWidth) return Math.max(minTreePanelWidth, Number(targetWidth || treePanelWidth.value))
-  const maxTreeWidth = Math.max(minTreePanelWidth, containerWidth - minTablePanelWidth)
-  return Math.min(maxTreeWidth, Math.max(minTreePanelWidth, Number(targetWidth || treePanelWidth.value)))
-}
-
-const handleSplitterMouseMove = (event) => {
-  if (!isDraggingSplitter) return
-  const containerRect = splitContainerRef.value?.getBoundingClientRect?.()
-  if (!containerRect) return
-  const nextWidth = event.clientX - containerRect.left
-  treePanelWidth.value = clampTreePanelWidth(nextWidth)
-}
-
-const stopSplitterDrag = () => {
-  if (!isDraggingSplitter) return
-  isDraggingSplitter = false
-  window.removeEventListener('mousemove', handleSplitterMouseMove)
-  window.removeEventListener('mouseup', stopSplitterDrag)
-  document.body.classList.remove('resizing-splitter')
-  nextTick(() => updateTableBodyHeight())
-}
-
-const handleSplitterMouseDown = () => {
-  isDraggingSplitter = true
-  document.body.classList.add('resizing-splitter')
-  window.addEventListener('mousemove', handleSplitterMouseMove)
-  window.addEventListener('mouseup', stopSplitterDrag)
-}
-
-const handleWindowResize = () => {
-  treePanelWidth.value = clampTreePanelWidth(treePanelWidth.value)
-  updateTableBodyHeight()
-}
-
-watch(
-  () => props.active,
-  (isActive) => {
-    if (!isActive) return
-    nextTick(() => {
-      bindTableWrapResizeObserver()
-    })
-  }
-)
-
-watch([selectedArchiveId, fileLoading], () => {
-  nextTick(() => updateTableBodyHeight())
-})
-
-const handlePageChange = (page) => {
-  queryForm.pageNum = page
-  fetchArchiveFiles()
-}
-
-const handlePageSizeChange = (size) => {
-  queryForm.pageSize = size
-  queryForm.pageNum = 1
-  fetchArchiveFiles()
-}
-
-const handleParse = async (row) => {
-  const fileId = getFileRecordId(row)
-  if (!fileId) {
-    ElMessage.warning('缺少文件记录ID，无法解析')
-    return
-  }
-
-  try {
-    const res = await parseFileById(fileId)
-    if (res.data?.code === 200) {
-      ElMessage.success(res.data?.msg || '解析任务已提交')
-      fetchArchiveFiles({ force: true })
-    } else {
-      ElMessage.warning(res.data?.msg || '解析请求被拒绝')
-    }
-  } catch (error) {
-    console.error('启动解析失败:', error)
-    ElMessage.error(error?.response?.data?.msg || '启动解析失败')
-  }
-}
-
-const handleCancelParse = async (row) => {
-  const fileId = getFileRecordId(row)
-  if (!fileId) {
-    ElMessage.warning('缺少文件记录ID，无法取消解析')
-    return
-  }
-
-  try {
-    const res = await cancelParseByFileId(fileId, 'user_cancel')
-    if (res.data?.code === 200) {
-      ElMessage.success(res.data?.msg || '已取消解析')
-      fetchArchiveFiles({ force: true })
-    } else {
-      ElMessage.warning(res.data?.msg || '取消解析失败')
-    }
-  } catch (error) {
-    console.error('取消解析失败:', error)
-    ElMessage.error(error?.response?.data?.msg || '取消解析失败')
-  }
-}
-
-const openPlanningReviewAudit = async (row) => {
-  const fileRecordId = getFileRecordId(row)
-  if (!fileRecordId) {
-    ElMessage.warning('缺少文件记录ID，无法打开规划复核审核')
-    return
-  }
-  if (!props.projectId) {
-    ElMessage.warning('缺少项目ID，无法打开规划复核审核')
-    return
-  }
-  try {
-    const res = await queryPlanningReviewForms({
-      pageNum: 1,
-      pageSize: 1,
-      sortField: 'updateTime',
-      sortDirection: 'desc',
-      projectId: Number(props.projectId),
-      fileRecordId: Number(fileRecordId)
-    })
-    if (res.data?.code !== 200) {
-      ElMessage.warning(res.data?.msg || '查询规划复核表失败')
-      return
-    }
-    const records = Array.isArray(res.data?.data?.records) ? res.data.data.records : []
-    const form = records[0]
-    if (!form) {
-      ElMessage.warning('当前文件暂无规划复核表数据，请稍后重试')
-      return
-    }
-    planningReviewAuditForm.value = form
-    planningReviewAuditVisible.value = true
-  } catch (error) {
-    console.error('打开规划复核审核失败:', error)
-    ElMessage.error('打开规划复核审核失败，请稍后重试')
-  }
-}
-
-const openProjectPartySummaryAudit = (row) => {
-  const fileRecordId = getFileRecordId(row)
-  if (!fileRecordId) {
-    ElMessage.warning('缺少文件记录ID，无法打开项目方实测汇总表审核')
-    return
-  }
-  partySummaryAuditFileRecordId.value = String(fileRecordId)
-  partySummaryAuditInitialFile.value = { ...row, id: fileRecordId }
-  partySummaryAuditVisible.value = true
 }
 
 const handlePreview = async (row) => {
@@ -1803,362 +352,23 @@ const onExcelPreviewError = (error) => {
   ElMessage.error('Excel 预览失败，可尝试下载原文件查看')
 }
 
-const handleAudit = async (row) => {
-  const fileId = getFileRecordId(row)
-  if (!fileId) {
-    ElMessage.warning('缺少文件记录ID，无法审核')
-    return
-  }
-  const contextType = String(row?.fileContextType || selectedArchive.value?.kind || '').toUpperCase()
-  if (contextType === 'PLANNING_REVIEW') {
-    await openPlanningReviewAudit(row)
-    return
-  }
-  if (contextType === 'PROJECT_PARTY_SURVEY_SUMMARY') {
-    openProjectPartySummaryAudit(row)
-    return
-  }
-  const currentRow = {
-    ...row,
-    rawId: fileId,
-    name: row?.originalName || row?.name || '-',
-    fileId: row?.fileId || row?.gridfsId || row?.sourceGridfsId || '',
-    preprocessGridfsId: row?.preprocessGridfsId || '',
-    status: row?.fileState || row?.status || ''
-  }
-  if (!currentRow.fileId) {
-    ElMessage.warning('该文件缺少可预览的源文件ID，无法进入审核')
-    return
-  }
-  openCalibration(currentRow)
-}
-
-const findFileAcrossArchives = async (targetFileRecordId) => {
-  const targetId = String(targetFileRecordId || '')
-  if (!targetId || !props.projectId || !archiveList.value.length) return null
-
-  try {
-    const directRes = await queryFiles({
-      pageNum: 1,
-      pageSize: 1,
-      sortField: 'uploadTime',
-      sortDirection: 'desc',
-      projectId: Number(props.projectId),
-      fileId: targetId
-    })
-    const directParsed = normalizeQueryResult(directRes.data?.data)
-    const directRow = directParsed.records?.[0]
-    if (directRow) {
-      const archiveId = Number(directRow.archiveId || 0)
-      const archive = archiveList.value.find((item) => Number(item.id) === archiveId)
-      return {
-        archiveId: archive?.id || archiveId || null,
-        archiveName: archive?.name || '',
-        row: directRow
-      }
-    }
-  } catch (error) {
-    console.error('按 fileId 直查文件失败，回退遍历归档夹:', error)
-  }
-
-  for (const archive of archiveList.value) {
-    try {
-      const payload = {
-        pageNum: 1,
-        pageSize: 200,
-        sortField: 'uploadTime',
-        sortDirection: 'desc',
-        projectId: Number(props.projectId),
-        archiveId: Number(archive.id)
-      }
-      const res = await queryFiles(payload)
-      const parsed = normalizeQueryResult(res.data?.data)
-      const found = parsed.records.find((item) => String(getFileRecordId(item)) === targetId)
-      if (found) {
-        return {
-          archiveId: archive.id,
-          archiveName: archive.name,
-          row: found
-        }
-      }
-    } catch (error) {
-      console.error('遍历归档夹定位文件失败:', error)
-    }
-  }
-
-  return null
-}
-
-const openAuditByFileRecordId = async (targetFileRecordId, options = {}) => {
-  const targetId = String(targetFileRecordId || '')
-  const force = Boolean(options?.force)
-  if (!targetId || !props.projectId) return
-  if (!props.active && !force) return
-
-  if (!archiveList.value.length) {
-    await fetchArchives()
-  }
-
-  const localFound = archiveFiles.value.find((item) => String(getFileRecordId(item)) === targetId)
-  if (localFound) {
-    await handleAudit(localFound)
-    emit('audit-consumed')
-    return
-  }
-
-  const located = await findFileAcrossArchives(targetId)
-  if (!located?.row) {
-    ElMessage.warning('未在当前项目归档中找到对应文件，无法直接打开审核')
-    emit('audit-consumed')
-    return
-  }
-
-  if (located.archiveId && Number(selectedArchiveId.value) !== Number(located.archiveId)) {
-    selectedArchiveId.value = located.archiveId
-    selectedArchiveName.value = located.archiveName
-    queryForm.pageNum = 1
-    syncUploadContextByArchive()
-    await fetchArchiveFiles({ force: true })
-  }
-
-  await handleAudit(located.row)
-  emit('audit-consumed')
-}
-
-const handleCalibrationBack = () => {
-  showCalibration.value = false
-}
-
-const handleCalibrationClosed = async () => {
-  isEditing.value = false
-  editingRowId.value = ''
-  resetCalibrationState()
-  await fetchArchiveFiles()
-}
-
-const handleDeleteFile = async (row) => {
-  const fileId = getFileRecordId(row)
-  if (!fileId) {
-    ElMessage.warning('缺少文件记录ID，无法删除')
-    return
-  }
-
-  try {
-    const res = await deleteFileById(fileId)
-    if (res.data?.code === 200) {
-      ElMessage.success(res.data?.msg || '文件删除成功')
-      fetchArchiveFiles({ force: true })
-    } else {
-      ElMessage.warning(res.data?.msg || '文件删除失败')
-    }
-  } catch (error) {
-    console.error('删除文件失败:', error)
-    ElMessage.error(error?.response?.data?.msg || '删除文件失败')
-  }
-}
-
-const handleBatchDelete = async () => {
-  if (!selectedRows.value.length) return
-  const ids = selectedRows.value.map((row) => getFileRecordId(row)).filter(Boolean)
-  if (!ids.length) {
-    ElMessage.warning('未找到可删除的文件记录ID')
-    return
-  }
-
-  try {
-    await ElMessageBox.confirm(`确认删除选中的 ${ids.length} 个文件吗？删除后不可恢复。`, '批量删除', {
-      type: 'warning',
-      confirmButtonText: '确认删除',
-      cancelButtonText: '取消'
-    })
-  } catch {
-    return
-  }
-
-  batchDeleteLoading.value = true
-  try {
-    await Promise.all(ids.map((id) => deleteFileById(id)))
-    ElMessage.success('批量删除完成')
-    await fetchArchiveFiles({ force: true })
-  } catch (error) {
-    console.error('批量删除失败:', error)
-    ElMessage.error(error?.response?.data?.msg || '批量删除失败')
-  } finally {
-    batchDeleteLoading.value = false
-  }
-}
-
-const handleBatchParse = async () => {
-  if (!canBatchParse.value) return
-  const parseRows = selectedRows.value.filter((row) =>
-    ['WAITING_PARSE', 'PARSE_FAIL', 'PARSE_COMPLETE'].includes(row.fileState)
-  )
-  const ids = parseRows.map((row) => getFileRecordId(row)).filter(Boolean)
-  if (!ids.length) {
-    ElMessage.warning('未找到可解析的文件记录ID')
-    return
-  }
-
-  try {
-    await ElMessageBox.confirm(`确认解析选中的 ${ids.length} 个可解析文件吗？`, '批量解析', {
-      type: 'info',
-      confirmButtonText: '立即解析',
-      cancelButtonText: '取消'
-    })
-  } catch {
-    return
-  }
-
-  batchParseLoading.value = true
-  try {
-    await Promise.all(ids.map((id) => parseFileById(id)))
-    ElMessage.success('批量解析任务已提交')
-    await fetchArchiveFiles({ force: true })
-  } catch (error) {
-    console.error('批量解析失败:', error)
-    ElMessage.error(error?.response?.data?.msg || '批量解析失败')
-  } finally {
-    batchParseLoading.value = false
-  }
-}
-
-const resetUploadForm = () => {
-  uploadFiles.value = []
-  uploadLoading.value = false
-  uploadPhase.value = null
-  uploadAbortController.value = null
-  uploadProgress.value = 0
-  uploadUploadedBytes.value = 0
-  uploadTotalBytes.value = 0
-  uploadForm.phase = 1
-  syncUploadContextByArchive()
-  stopUploadSpeedMeter()
-}
-
-const openUploadDialog = () => {
-  if (!props.projectId || !selectedArchiveId.value) {
-    ElMessage.warning('请先选择归档夹')
-    return
-  }
-  resetUploadForm()
-  uploadDialogVisible.value = true
-}
-
-const handleUploadFileChange = (_, list) => {
-  uploadFiles.value = list
-}
-
-const handleUploadFileRemove = (_, list) => {
-  uploadFiles.value = list
-}
-
-const uploadFileDisplayName = (item) => String(item?.raw?.name ?? item?.name ?? '未命名文件')
-
-const uploadFileSize = (item) => {
-  const size = Number(item?.raw?.size ?? item?.size ?? 0)
-  return Number.isFinite(size) ? size : 0
-}
-
-const removeOneUploadFile = (file) => {
-  const uid = file?.uid
-  uploadFiles.value = uploadFiles.value.filter((f) => (uid != null ? f.uid !== uid : f !== file))
-}
-
-const handleBatchUpload = async () => {
-  if (!props.projectId || !selectedArchiveId.value) {
-    ElMessage.warning('请先选择归档夹')
-    return
-  }
-  if (!uploadFiles.value.length) {
-    ElMessage.warning('请先选择文件')
-    return
-  }
-  if (uploadForm.fileContextType === 'OTHER' && !selectedArchiveId.value) {
-    ElMessage.warning('请先选择归档夹')
-    return
-  }
-
-  uploadAbortController.value?.abort()
-  const ac = new AbortController()
-  uploadAbortController.value = ac
-
-  uploadLoading.value = true
-  uploadPhase.value = 'transferring'
-  uploadProgress.value = 0
-  uploadUploadedBytes.value = 0
-  uploadTotalBytes.value = 0
-  startUploadSpeedMeter()
-  try {
-    const formData = new FormData()
-    uploadFiles.value.forEach((item) => {
-      if (item.raw) formData.append('files', item.raw)
-    })
-
-    const params = {
-      projectId: Number(props.projectId),
-      fileContextType: uploadForm.fileContextType
-    }
-    if (params.fileContextType === 'SURVEY_REPORT') {
-      params.phase = uploadForm.phase
-    }
-    if (params.fileContextType === 'OTHER') {
-      params.archiveId = Number(selectedArchiveId.value)
-    }
-
-    const res = await batchUploadFiles(formData, {
-      params,
-      signal: ac.signal,
-      onUploadProgress: (event) => {
-        const total = Number(event.total || 0)
-        const loaded = Number(event.loaded || 0)
-        uploadUploadedBytes.value = loaded
-        if (total > 0) {
-          uploadTotalBytes.value = total
-          if (loaded >= total) {
-            uploadPhase.value = 'server_processing'
-          }
-          uploadProgress.value = Math.min(99, Math.round((loaded / total) * 100))
-        }
-      }
-    })
-    if (res.data?.code === 200) {
-      uploadProgress.value = 100
-      if (uploadTotalBytes.value > 0) {
-        uploadUploadedBytes.value = uploadTotalBytes.value
-      }
-      ElMessage.success(
-        res.data?.msg ||
-          '上传已完成。若未看到新文件，请确认未按状态筛选，或稍候待后处理完成后再刷新。'
-      )
-      uploadLoading.value = false
-      uploadPhase.value = null
-      uploadAbortController.value = null
+watch(
+  () => props.active,
+  (isActive) => {
+    if (!isActive) {
+      stopParseFlowAutoRefresh()
       stopUploadSpeedMeter()
-      uploadDialogVisible.value = false
-      queryForm.pageNum = 1
-      fetchArchiveFiles({ force: true })
-    } else {
-      ElMessage.warning(res.data?.msg || '文件上传失败')
+      return
     }
-  } catch (error) {
-    if (isUploadAbortError(error)) {
-      ElMessage.info('已取消上传')
-    } else {
-      console.error('文件上传失败:', error)
-      const backendMsg =
-        error?.response?.data?.msg ||
-        error?.response?.data?.message ||
-        error?.message ||
-        '文件上传失败'
-      ElMessage.error(backendMsg)
-    }
-  } finally {
-    uploadLoading.value = false
-    uploadPhase.value = null
-    uploadAbortController.value = null
-    stopUploadSpeedMeter()
+    nextTick(() => {
+      bindTableWrapResizeObserver()
+    })
   }
-}
+)
+
+watch([selectedArchiveId, fileLoading], () => {
+  nextTick(() => updateTableBodyHeight())
+})
 
 watch(
   () => [props.projectId, props.active],
@@ -2179,14 +389,9 @@ watch(
   () => props.projectId,
   async () => {
     await flushReadAckNow()
-    pendingReadMessageIds.clear()
-    handledMessageIds.clear()
-    handledMessageIdOrder.length = 0
-    archiveQueryCache.clear()
-    if (currentFileQueryController) {
-      currentFileQueryController.abort()
-      currentFileQueryController = null
-    }
+    resetRealtimeState()
+    clearArchiveQueryCache()
+    cleanupExplorer()
   }
 )
 
@@ -2194,47 +399,14 @@ watch(
   () => props.active,
   async (active) => {
     if (!active) return
-    await fetchUnreadNotifications(props.projectId)
-    if (selectedArchiveId.value) {
-      await fetchArchiveFiles({ force: realtimePendingRefresh })
-    }
-    if (realtimePendingRefresh) {
-      scheduleRealtimeRefresh()
-    }
-  }
-)
-
-watch(
-  () => parseFlowDialogVisible.value,
-  (visible) => {
-    if (!visible) {
-      stopParseFlowAutoRefresh()
-      return
-    }
-    startParseFlowAutoRefresh()
-  }
-)
-
-watch(
-  () => parseFlowDetail.value?.status,
-  (status) => {
-    if (!parseFlowDialogVisible.value) return
-    if (isParseFlowTerminal({ status })) stopParseFlowAutoRefresh()
+    await onTabActivated()
   }
 )
 
 watch(
   () => props.initialArchiveId,
   (archiveId) => {
-    const targetId = Number(archiveId || 0)
-    if (!targetId || !Array.isArray(archiveList.value) || archiveList.value.length === 0) return
-    const target = archiveList.value.find((item) => Number(item.id) === targetId)
-    if (!target || Number(selectedArchiveId.value) === targetId) return
-    selectedArchiveId.value = target.id
-    selectedArchiveName.value = target.name
-    queryForm.pageNum = 1
-    syncUploadContextByArchive()
-    fetchArchiveFiles()
+    applyInitialArchiveId(archiveId)
   }
 )
 
@@ -2243,39 +415,13 @@ watch(
   async ([pendingAuditFileId, active, projectId]) => {
     const targetId = String(pendingAuditFileId || '')
     if (!targetId || !active || !projectId) return
-    await openAuditByFileRecordId(targetId)
+    await auditStackRef.value?.openAuditByFileRecordId(targetId)
   }
 )
 
-const {
-  connectionState,
-  reconnectCount,
-  maxReconnectAttempts
-} = useProjectStomp({
-  projectIdRef: () => props.projectId,
-  activeRef: () => Boolean(props.active && props.projectId),
-  onFileUpdate: (payload) => handleIncomingNotification(payload, 'FILE'),
-  onBatchUploadUpdate: (payload) => handleIncomingNotification(payload, 'BATCH'),
-  onConnected: async (projectId) => {
-    await fetchUnreadNotifications(projectId)
-  }
-})
-
-const socketStatus = computed(() => connectionState.value)
-const socketStatusText = computed(() => {
-  if (connectionState.value === 'connected') return '实时连接: 已连接'
-  if (connectionState.value === 'connecting') return '实时连接: 连接中'
-  if (connectionState.value === 'reconnecting') {
-    return `实时连接: 重连中 ${reconnectCount.value}/${maxReconnectAttempts}`
-  }
-  if (connectionState.value === 'stopped') return '实时连接: 重连已停止'
-  if (connectionState.value === 'error') return '实时连接: 异常'
-  if (connectionState.value === 'disconnected') return '实时连接: 已断开'
-  return '实时连接: 空闲'
-})
-
 defineExpose({
-  openAuditByFileRecordId
+  openAuditByFileRecordId: (fileRecordId, options) =>
+    auditStackRef.value?.openAuditByFileRecordId(fileRecordId, options)
 })
 
 onMounted(() => {
@@ -2286,34 +432,11 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  if (tableWrapResizeObserver) {
-    try {
-      tableWrapResizeObserver.disconnect()
-    } catch {
-      /* ignore */
-    }
-    tableWrapResizeObserver = null
-  }
-  flushReadAckNow()
-  stopSplitterDrag()
+  cleanupRealtime()
+  cleanupSplitter()
+  cleanupExplorer()
   window.removeEventListener('resize', handleWindowResize)
   stopParseFlowAutoRefresh()
-  if (keywordAutoQueryTimer) {
-    clearTimeout(keywordAutoQueryTimer)
-    keywordAutoQueryTimer = null
-  }
-  if (currentFileQueryController) {
-    currentFileQueryController.abort()
-    currentFileQueryController = null
-  }
-  if (realtimeRefreshTimer) {
-    clearTimeout(realtimeRefreshTimer)
-    realtimeRefreshTimer = null
-  }
-  if (readAckTimer) {
-    clearTimeout(readAckTimer)
-    readAckTimer = null
-  }
 })
 </script>
 
@@ -2329,7 +452,6 @@ onBeforeUnmount(() => {
   background: linear-gradient(180deg, var(--home-header-grad-start) 0%, #f2f7fc 100%);
 }
 
-/* 实时连接：无文案，仅色点；悬停 title / aria-label 仍为完整说明 */
 .socket-status {
   display: inline-block;
   flex-shrink: 0;
@@ -2378,82 +500,6 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.tree-panel,
-.table-panel {
-  border: 1px solid var(--home-soft-border);
-  border-radius: var(--home-card-radius);
-  background: #fff;
-  padding: 12px;
-  height: 100%;
-  min-height: 0;
-}
-
-.tree-panel {
-  flex: 0 0 380px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.tree-panel-actions {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  align-items: stretch;
-  gap: 8px;
-  flex-shrink: 0;
-  margin-bottom: 10px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid rgba(219, 228, 239, 0.95);
-}
-
-.tree-panel-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-.tree-action-btn {
-  flex: 1 1 0;
-  min-width: 0;
-  height: 32px;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 13px;
-}
-
-:deep(.tree-panel-actions .tree-action-btn.el-button) {
-  flex: 1 1 0;
-  min-width: 0;
-}
-
-:deep(.tree-action-btn--create.el-button--primary) {
-  border-color: #c8ddf1;
-  background: #e8f2fc;
-  color: #1f4e79;
-}
-
-:deep(.tree-action-btn--create.el-button--primary:hover) {
-  border-color: #a8c6e8;
-  background: #dceaf8;
-  color: #163a5c;
-}
-
-:deep(.tree-action-btn--delete.is-plain) {
-  border-color: #f7c4bf;
-  background: #fff3f2;
-  color: #b42318;
-}
-
-:deep(.tree-action-btn--delete.is-plain:hover:not(.is-disabled)) {
-  border-color: #ef9a94;
-  background: #ffe8e6;
-  color: #991b1b;
-}
-
 .splitter-handle {
   flex: 0 0 12px;
   align-self: stretch;
@@ -2498,827 +544,8 @@ onBeforeUnmount(() => {
   opacity: 1;
 }
 
-.archive-tree {
-  --el-tree-node-hover-bg-color: transparent;
-  --el-tree-text-color: #303133;
-  font-size: 14px;
-}
-
-:deep(.archive-tree .el-tree-node__content) {
-  border-radius: 8px;
-  margin: 2px 0;
-  min-height: 36px;
-  padding-right: 6px;
-  transition: background-color 0.15s ease;
-}
-
-.tree-node-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-height: 36px;
-  padding: 6px 8px;
-  border-radius: 8px;
-  position: relative;
-  transition: background-color 0.15s ease;
-}
-
-.tree-node-row:hover {
-  background: #f2f6fc;
-}
-
-.tree-node-row.selected {
-  background: var(--el-color-primary-light-9, #e8f2fc);
-}
-
-.tree-node-row.selected::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 6px;
-  bottom: 6px;
-  width: 3px;
-  border-radius: 999px;
-  background: var(--el-color-primary, #1f4e79);
-}
-
-.folder-icon {
-  color: #d0892c;
-}
-
-.node-name {
-  color: #303133;
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.table-panel {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.table-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  padding: 8px 8px 12px;
-  border-bottom: 1px solid #f0f2f5;
-}
-
-.table-header .title {
-  font-weight: 600;
-  color: #1f2937;
-  font-size: 16px;
-}
-
-.table-header .subtitle {
-  font-size: 14px;
-  color: #8590a3;
-  background: #f2f6fc;
-  border: 1px solid #e6edf7;
-  border-radius: 10px;
-  padding: 2px 10px;
-}
-
-.batch-row {
-  display: none;
-}
-
-.query-bar {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 10px;
-  padding: 12px;
-  border: 1px solid var(--home-soft-border);
-  border-radius: var(--home-card-radius);
-  background: linear-gradient(180deg, var(--home-panel-grad-start) 0%, var(--home-panel-grad-end) 100%);
-}
-
-.query-top {
-  display: flex;
-  align-items: flex-end;
-  justify-content: flex-start;
-  gap: 10px 12px;
-  flex-wrap: wrap;
-}
-
-.query-bottom {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px 12px;
-  flex-wrap: wrap;
-  padding-top: 10px;
-  border-top: 1px dashed #d4deea;
-}
-
-.query-fields {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  flex: 1 1 520px;
-  min-width: 0;
-}
-
-.query-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  flex: 0 0 auto;
-}
-
-.batch-actions {
-  display: flex;
-  gap: 8px;
-  flex: 0 0 auto;
-}
-
-.query-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-  color: #607286;
-  font-size: 13px;
-  line-height: 1;
-}
-
-.meta-dot {
-  opacity: 0.75;
-}
-
-:deep(.batch-actions .el-button) {
-  min-width: 98px;
-  height: 32px;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 13px;
-  border-color: #9aa8ba;
-  color: #334155;
-}
-
-:deep(.batch-actions .el-button--danger) {
-  border-color: #c79aa0;
-  color: #7a2e35;
-}
-
-:deep(.batch-actions .el-button--primary) {
-  border-color: #c8ddf1;
-  color: #1f4e79;
-}
-
-:deep(.batch-actions .el-button--primary.is-plain) {
-  background: #e8f2fc;
-  color: #1f4e79;
-}
-
-:deep(.batch-actions .el-button--danger.is-plain) {
-  background: #fff3f2;
-  border-color: #f7c4bf;
-  color: #b42318;
-}
-
-:deep(.query-actions .el-button) {
-  min-width: 84px;
-  height: 32px;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 13px;
-}
-
-:deep(.query-actions .el-button--primary) {
-  background: #e8f2fc;
-  border-color: #c8ddf1;
-  color: #1f4e79;
-}
-
-.query-item {
-  width: 150px !important;
-  flex: 0 0 150px;
-  --el-font-size-base: 14px;
-}
-
-.query-item.keyword {
-  width: 260px !important;
-  flex: 1 1 260px;
-}
-
-.table-wrap {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-:deep(.table-wrap .el-table) {
-  border-radius: 8px;
-}
-
-:deep(.table-wrap .el-table th.el-table__cell) {
-  background: #f1f6fc;
-  color: #445468;
-  font-weight: 600;
-  padding-top: 11px;
-  padding-bottom: 11px;
-}
-
-:deep(.table-wrap .el-table td.el-table__cell) {
-  padding-top: 10px;
-  padding-bottom: 10px;
-}
-
-:deep(.table-wrap .el-table .el-table__row:hover > td.el-table__cell) {
-  background: #f0f7ff !important;
-}
-
-.thumb {
-  width: 70px;
-  height: 46px;
-  border-radius: 6px;
-  border: 1px solid #e5e7eb;
-}
-
-.thumb-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 70px;
-  height: 46px;
-  color: #9ca3af;
-  border-radius: 6px;
-  border: 1px solid #e5e7eb;
-  background: #f8fafc;
-}
-
-.pager-row {
-  flex-shrink: 0;
-  margin-top: 8px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 6px 10px;
-  border-top: 1px solid #e8eef5;
-}
-
-.file-count {
-  color: #607286;
-  font-size: 13px;
-}
-
-:deep(.pager-row .el-pagination) {
-  --el-color-primary: #1f4e79;
-}
-
-:deep(.pager-row .el-pagination.is-background .el-pager li.is-active) {
-  background: #e8f2fc !important;
-  border-color: #c8ddf1;
-  color: #1f4e79;
-}
-
-:deep(.pager-row .el-pagination.is-background .btn-next),
-:deep(.pager-row .el-pagination.is-background .btn-prev),
-:deep(.pager-row .el-pagination.is-background .el-pager li) {
-  background: #f3f4f6;
-  color: #475569;
-}
-
-:deep(.parse-flow-archive-dialog.el-dialog) {
-  border-radius: 16px;
-  overflow: hidden;
-  border: 1px solid var(--home-soft-border);
-  box-shadow: var(--home-soft-shadow);
-}
-
-:deep(.parse-flow-archive-dialog .el-dialog__header) {
-  margin-right: 0;
-  padding: 16px 18px 12px;
-  border-bottom: 1px solid rgba(219, 228, 239, 0.9);
-  background: linear-gradient(180deg, var(--home-header-grad-start) 0%, var(--home-header-grad-end) 100%);
-}
-
-:deep(.parse-flow-archive-dialog .el-dialog__title) {
-  font-weight: 800;
-  color: #0f172a;
-  letter-spacing: 0.2px;
-}
-
-:deep(.parse-flow-archive-dialog .el-dialog__headerbtn) {
-  top: 14px;
-  right: 14px;
-}
-
-:deep(.parse-flow-archive-dialog .el-dialog__headerbtn .el-dialog__close) {
-  border-radius: 10px;
-}
-
-:deep(.parse-flow-archive-dialog .el-dialog__body) {
-  padding: 14px 18px 18px;
-  background: #ffffff;
-}
-
-.upload-form {
-  padding-top: 2px;
-}
-
-.upload-grid {
-  width: 100%;
-}
-
-.upload-meta-col,
-.upload-drop-col {
-  min-width: 0;
-}
-
-.upload-footer-left b {
-  font-weight: 800;
-  color: #0f172a;
-}
-
-.upload-drop-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-}
-
-.upload-icon-wrap {
-  width: 56px;
-  height: 56px;
-  border-radius: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(180deg, rgba(239, 246, 255, 0.95) 0%, rgba(219, 234, 254, 0.9) 100%);
-  border: 1px solid rgba(59, 130, 246, 0.18);
-  box-shadow: 0 18px 44px -30px rgba(37, 99, 235, 0.55);
-}
-
-.upload-drop-title {
-  font-size: 14px;
-  font-weight: 800;
-  color: #0f172a;
-  letter-spacing: 0.2px;
-}
-
-.upload-drop-sub {
-  font-size: 12px;
-  color: #475569;
-}
-
-.upload-icon {
-  font-size: 30px;
-  color: rgba(37, 99, 235, 0.92);
-  margin-bottom: 0;
-}
-
-.upload-current-archive {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 8px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(203, 213, 225, 0.95);
-  background: rgba(248, 250, 252, 0.95);
-  font-size: 14px;
-  font-weight: 700;
-  color: #0f172a;
-  line-height: 1.4;
-}
-
-.upload-footer {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-:deep(.upload-archive-dialog.el-dialog) {
-  border-radius: 18px;
-  overflow: hidden;
-  border: 1px solid var(--home-soft-border);
-  box-shadow: var(--home-soft-shadow);
-}
-
-:deep(.upload-archive-dialog .el-dialog__header) {
-  margin-right: 0;
-  padding: 16px 18px 12px;
-  border-bottom: 1px solid rgba(219, 228, 239, 0.9);
-  background: linear-gradient(180deg, var(--home-header-grad-start) 0%, var(--home-header-grad-end) 100%);
-}
-
-:deep(.upload-archive-dialog .el-dialog__title) {
-  font-weight: 900;
-  color: #0f172a;
-  letter-spacing: 0.2px;
-}
-
-:deep(.upload-archive-dialog .el-dialog__body) {
-  padding: 14px 18px 8px;
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0.82) 0%, rgba(241, 245, 249, 0.66) 100%);
-}
-
-:deep(.upload-archive-dialog .el-dialog__footer) {
-  border-top: 1px solid rgba(219, 228, 239, 0.9);
-  background: #ffffff;
-  padding: 12px 18px;
-}
-
-:deep(.upload-archive-dialog .el-form-item__label) {
-  color: #0f172a;
-  font-weight: 800;
-}
-
-:deep(.upload-archive-dialog .el-select__wrapper),
-:deep(.upload-archive-dialog .el-input__wrapper) {
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(148, 163, 184, 0.32);
-  box-shadow: 0 10px 24px -22px rgba(15, 23, 42, 0.22);
-}
-
-:deep(.upload-archive-dialog .el-select__wrapper.is-focused),
-:deep(.upload-archive-dialog .el-input__wrapper.is-focus) {
-  border-color: rgba(37, 99, 235, 0.5);
-  box-shadow: 0 18px 44px -30px rgba(37, 99, 235, 0.5);
-}
-
-:deep(.upload-archive-dialog .el-input-number) {
-  width: 100%;
-}
-
-:deep(.upload-archive-dialog .el-input-number .el-input__wrapper) {
-  width: 100%;
-}
-
-.upload-unified-panel {
-  border-radius: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 18px 44px -34px rgba(15, 23, 42, 0.22);
-  padding: 12px 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  min-width: 0;
-}
-
-.upload-panel-toolbar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  padding-bottom: 10px;
-  margin-bottom: 10px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
-}
-
-.upload-panel-toolbar.is-empty {
-  align-items: center;
-}
-
-.upload-toolbar-main {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 8px;
-  min-width: 0;
-  font-size: 13px;
-  color: #0f172a;
-}
-
-.upload-toolbar-stat {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  white-space: nowrap;
-}
-
-.upload-toolbar-stat .muted {
-  color: #64748b;
-  font-weight: 600;
-  font-size: 12px;
-}
-
-.upload-toolbar-stat strong {
-  font-weight: 900;
-  font-size: 14px;
-}
-
-.upload-toolbar-dot {
-  color: #cbd5e1;
-  font-weight: 700;
-  user-select: none;
-}
-
-.upload-toolbar-chips {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-
-:deep(.upload-dropzone .el-upload-dragger) {
-  border-radius: 18px;
-  border: 1px dashed rgba(148, 163, 184, 0.45);
-  background: rgba(255, 255, 255, 0.85);
-  padding: 16px 14px;
-  transition: transform 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease;
-}
-
-:deep(.upload-dropzone.is-compact .el-upload-dragger) {
-  padding: 10px 14px;
-  min-height: 0;
-}
-
-:deep(.upload-dropzone .el-upload-dragger:hover) {
-  border-color: rgba(37, 99, 235, 0.55);
-  box-shadow: 0 22px 54px -40px rgba(37, 99, 235, 0.5);
-  transform: translateY(-1px);
-}
-
-:deep(.upload-dropzone.is-compact .el-upload-dragger:hover) {
-  transform: none;
-}
-
-:deep(.upload-dropzone.is-dragover .el-upload-dragger) {
-  border-color: rgba(37, 99, 235, 0.75);
-  background: linear-gradient(180deg, rgba(239, 246, 255, 0.95) 0%, rgba(255, 255, 255, 0.9) 65%);
-  box-shadow: 0 26px 60px -44px rgba(37, 99, 235, 0.6);
-}
-
-.upload-drop-compact {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  text-align: left;
-}
-
-.upload-drop-compact-icon {
-  font-size: 22px;
-  color: rgba(37, 99, 235, 0.88);
-  flex-shrink: 0;
-}
-
-.upload-drop-compact-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.upload-drop-compact-title {
-  font-size: 13px;
-  font-weight: 900;
-  color: #0f172a;
-}
-
-.upload-drop-compact-sub {
-  font-size: 12px;
-  color: #64748b;
-  font-weight: 600;
-}
-
-.upload-file-list-wrap {
-  margin-top: 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  background: rgba(248, 250, 252, 0.65);
-  overflow: hidden;
-  min-width: 0;
-}
-
-.upload-file-list-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 10px;
-  font-size: 12px;
-  font-weight: 800;
-  color: #334155;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(255, 255, 255, 0.75);
-}
-
-.upload-file-list-meta {
-  font-weight: 600;
-  color: #94a3b8;
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.upload-file-scroll {
-  max-height: min(240px, 40vh);
-  overflow: auto;
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.file-row-remove {
-  flex-shrink: 0;
-  margin-left: 4px;
-}
-
-.upload-phase-label {
-  margin-top: 10px;
-  font-size: 13px;
-  font-weight: 800;
-  color: #1e293b;
-  letter-spacing: 0.2px;
-}
-
-.upload-progress-phase-hint {
-  color: #64748b;
-  font-weight: 600;
-}
-
-.upload-progress {
-  margin-top: 8px;
-}
-
-:deep(.upload-progress .el-progress-bar__outer) {
-  background: rgba(148, 163, 184, 0.22);
-}
-
-:deep(.upload-progress .el-progress-bar__inner) {
-  background-image: linear-gradient(
-    90deg,
-    var(--el-color-primary, #1f4e79) 0%,
-    rgba(59, 130, 246, 0.95) 40%,
-    var(--el-color-primary, #1f4e79) 80%
-  );
-  background-size: 200% 100%;
-  animation: uploadShimmer 1.6s ease-in-out infinite;
-}
-
-.upload-progress-bytes {
-  margin-top: 6px;
-  font-size: 12px;
-  color: #334155;
-}
-
-.upload-progress-tip {
-  margin-top: 6px;
-  font-size: 12px;
-  color: #64748b;
-}
-
-.upload-speed,
-.upload-eta {
-  color: #64748b;
-  font-weight: 600;
-}
-
-:deep(.upload-clear-btn.el-button) {
-  padding-left: 8px;
-  padding-right: 8px;
-  border-radius: 10px;
-  font-weight: 800;
-  flex-shrink: 0;
-}
-
-.group-chip {
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid rgba(59, 130, 246, 0.18);
-  background: rgba(239, 246, 255, 0.75);
-  color: #1d4ed8;
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1.6;
-}
-
-.file-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 6px 8px;
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(255, 255, 255, 0.95);
-}
-
-.file-row .fn {
-  flex: 1;
-  min-width: 0;
-  color: #0f172a;
-  font-size: 12px;
-  font-weight: 700;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.file-row .fs {
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-:deep(.upload-archive-dialog .el-button) {
-  border-radius: 10px;
-  font-weight: 700;
-}
-
-:deep(.upload-archive-dialog .el-button--primary) {
-  border-color: rgba(37, 99, 235, 0.28);
-  background: linear-gradient(180deg, rgba(37, 99, 235, 0.92) 0%, rgba(29, 78, 216, 0.92) 100%);
-  box-shadow: 0 16px 42px -30px rgba(37, 99, 235, 0.8);
-}
-
-:deep(.upload-archive-dialog .el-button--primary:hover) {
-  background: linear-gradient(180deg, rgba(59, 130, 246, 0.96) 0%, rgba(37, 99, 235, 0.96) 100%);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  :deep(.upload-progress .el-progress-bar__inner) {
-    animation: none;
-  }
-}
-
-@keyframes uploadShimmer {
-  0% {
-    background-position: 180% 0;
-  }
-  100% {
-    background-position: -40% 0;
-  }
-}
-
-/* 表格操作按钮样式见 @/styles/app-button-system.css（.op-btn / .parse-btn / .audit-btn / .delete-btn） */
-
 :global(body.resizing-splitter) {
   cursor: col-resize !important;
   user-select: none !important;
-}
-
-@media (max-width: 1366px) {
-  .query-top {
-    align-items: flex-start;
-  }
-
-  .query-fields {
-    flex-basis: 100%;
-  }
-
-  .query-actions {
-    width: 100%;
-  }
-
-  .query-meta {
-    width: 100%;
-    margin-left: 0;
-  }
-
-  .query-item.keyword {
-    width: 220px !important;
-    flex: 1 1 220px;
-  }
-}
-
-.upload-select,
-.upload-phase {
-  width: 100%;
-}
-
-.state-tag-parse-flow {
-  cursor: pointer;
-}
-
-.state-tag-parse-flow:hover {
-  filter: brightness(0.97);
-  box-shadow: 0 0 0 1px rgba(31, 78, 121, 0.2);
-}
-
-.archive-file-name-link,
-.archive-file-name-text {
-  display: inline-block;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  vertical-align: middle;
-}
-
-.archive-file-name-link:hover {
-  text-decoration: underline;
 }
 </style>

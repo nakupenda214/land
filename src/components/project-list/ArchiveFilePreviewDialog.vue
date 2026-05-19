@@ -27,7 +27,7 @@
           title="PDF 预览"
         />
         <div v-else-if="mode === 'excel'" class="archive-preview-excel">
-          <VueOfficeExcel
+          <VueOfficeExcelAsync
             v-if="excelSrc"
             :src="excelSrc"
             class="archive-preview-excel-view"
@@ -51,8 +51,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import VueOfficeExcel from '@vue-office/excel'
-import '@vue-office/excel/lib/index.css'
+import { VueOfficeExcelAsync } from '@/components/project-list/lazyVueOfficeExcel.js'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },

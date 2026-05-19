@@ -77,18 +77,42 @@
       </div>
     </header>
 
-    <div class="summary-table-wrap project-tab-panel__body project-tab-panel__body--flush">
+    <div
+      class="summary-table-wrap project-tab-panel__body project-tab-panel__body--flush"
+      v-loading="dataLoading"
+      element-loading-text="正在加载汇总数据…"
+    >
+      <el-empty
+        v-if="!dataLoading && currentProjectInfo.id && !(displayTableData || []).length"
+        description="暂无已解析实测报告，请先上传并解析报告，或点击「刷新文件列表」"
+        :image-size="88"
+        class="summary-table-empty"
+      />
+      <template v-else>
+      <div class="summary-table-floating-search" role="search" aria-label="汇总表内容搜索">
+        <el-input
+          v-model="summarySearchKeyword"
+          class="summary-table-floating-search__input"
+          size="small"
+          clearable
+          placeholder="搜索本表…"
+          :prefix-icon="Search"
+        />
+        <span v-if="summarySearchKeyword.trim()" class="summary-table-floating-search__hint" aria-live="polite">
+          {{ filteredDisplayTableData.length }}/{{ (displayTableData || []).length }}
+        </span>
+      </div>
       <el-table
         ref="tableRef"
         class="project-tab-el-table summary-modern-table summary-modern-table--cell-center"
-        :data="displayTableData"
+        :data="filteredDisplayTableData"
         border
         stripe
         style="width: 100%"
         :max-height="SUMMARY_TABLE_MAX_HEIGHT"
         scrollbar-always-on
         :row-class-name="tableRowClassName"
-        :virtual-scroll="false"
+        :virtual-scroll="filteredDisplayTableData.length > 80"
       >
         <el-table-column label="序号" type="index" width="50" align="center" header-align="center" fixed="left" :index="(index) => index + 1" />
         <el-table-column label="工程名称" width="160" fixed="left" align="center" header-align="center" class-name="summary-col-project-name">
@@ -143,21 +167,33 @@
         <el-table-column label="备注" prop="remarks" v-bind="remarksColProps" show-overflow-tooltip header-align="center" />
         <el-table-column label="文件原始名" prop="fileOriginalName" :width="colW.fileOriginalName" show-overflow-tooltip header-align="center" />
         <el-table-column label="待确认面积" prop="pendingConfirmArea" :width="colW.pendingConfirmArea" align="center" />
-        <el-table-column prop="hasUnknownUsage" label="是否有未知用途" :width="colW.hasUnknownUsage" align="center" header-align="center">
-          <template #default="{ row }">
-            <el-tag :type="row.hasUnknownUsage === 1 ? 'warning' : 'success'" size="small" effect="light" round>
-              {{ row.hasUnknownUsage === 1 ? '是' : '否' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="验证状态" prop="isVerified" :width="colW.isVerified" align="center" header-align="center">
+        <el-table-column
+          label="验证状态"
+          prop="isVerified"
+          :width="colW.isVerified"
+          align="center"
+          header-align="center"
+          class-name="summary-col-status-tag"
+          :show-overflow-tooltip="false"
+        >
           <template #default="{ row }">
             <el-tag :type="getVerifiedTagType(row.isVerified)" size="small" effect="light" round>
               {{ getVerifiedText(row.isVerified) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="未知用途详情" prop="unknownUsages" v-bind="unknownUsagesColProps" show-overflow-tooltip header-align="center" />
+        <el-table-column label="未知用途详情" v-bind="unknownUsagesColProps" header-align="center">
+          <template #default="{ row }">
+            <el-tooltip
+              :content="unknownUsagesTooltip(row.unknownUsages)"
+              placement="top"
+              :show-after="350"
+              :disabled="!hasUnknownUsageRow(row)"
+            >
+              <span class="unknown-usages-cell-text">{{ formatUnknownUsagesCell(row.unknownUsages) }}</span>
+            </el-tooltip>
+          </template>
+        </el-table-column>
         <el-table-column label="验证失败原因" prop="verificationErrorReason" v-bind="verificationErrorReasonColProps" show-overflow-tooltip header-align="center" />
       </el-table>
 
@@ -201,12 +237,13 @@
           </el-button>
         </el-tooltip>
       </div>
+      </template>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, toRef, computed } from 'vue'
+import { ref, computed } from 'vue'
 import {
   View,
   Refresh,
@@ -217,7 +254,8 @@ import {
   Warning,
   Printer,
   DArrowLeft,
-  DArrowRight
+  DArrowRight,
+  Search
 } from '@element-plus/icons-vue'
 import { useSummaryTableHorizontalScroll } from '@/composables/project-list/useSummaryTableHorizontalScroll'
 
@@ -252,6 +290,10 @@ const props = defineProps({
   displayTableData: {
     type: Array,
     default: () => []
+  },
+  dataLoading: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -301,8 +343,7 @@ const colW = computed(() => {
     ),
     reportNo: colWidth(rows, 'reportNo', '房地产勘测报告书编号', 210),
     pendingConfirmArea: colWidth(rows, 'pendingConfirmArea', '待确认面积', 108),
-    hasUnknownUsage: colWidth(rows, 'hasUnknownUsage', '是否有未知用途', 112),
-    isVerified: colWidth(rows, 'isVerified', '验证状态', 96)
+    isVerified: colWidth(rows, 'isVerified', '验证状态', 104)
   }
 })
 
@@ -319,7 +360,7 @@ const unknownUsagesColProps = computed(() => {
   if (allRowsEmpty(rows, 'unknownUsages')) {
     return { width: headerOnlyWidth('未知用途详情') }
   }
-  return { minWidth: 140 }
+  return { minWidth: 160 }
 })
 
 const verificationErrorReasonColProps = computed(() => {
@@ -330,13 +371,7 @@ const verificationErrorReasonColProps = computed(() => {
   return { minWidth: 180 }
 })
 
-const tableRef = ref(null)
-const {
-  showXScrollProxy,
-  canScrollLeft,
-  canScrollRight,
-  scrollTableBy
-} = useSummaryTableHorizontalScroll(tableRef, toRef(props, 'displayTableData'))
+const summarySearchKeyword = ref('')
 
 const normalizeVerifiedFlag = (value) => {
   if (value === 1 || value === '1' || value === true) return 1
@@ -358,7 +393,101 @@ const getVerifiedTagType = (value) => {
   return 'info'
 }
 
-const tableRowClassName = ({ row }) => (normalizeVerifiedFlag(row?.isVerified) === 0 ? 'summary-row-unverified' : '')
+/** 与汇总接口 hasUnknownUsage 一致：1 表示含未知用途需人工确认 */
+const hasUnknownUsageRow = (row) => Number(row?.hasUnknownUsage) === 1
+
+const formatUnknownUsagesCell = (raw) => {
+  if (raw == null || raw === '') return '—'
+  const s = String(raw).trim()
+  if (s === '[]' || s === '{}' || s === 'null') return '—'
+  try {
+    const o = JSON.parse(s)
+    if (Array.isArray(o)) {
+      const vals = o.map((x) => String(x ?? '').trim()).filter(Boolean)
+      return vals.length ? vals.join('、') : '—'
+    }
+    if (o && typeof o === 'object') {
+      const vals = [...new Set(Object.values(o).map((x) => String(x ?? '').trim()).filter(Boolean))]
+      return vals.length ? vals.join('、') : '—'
+    }
+  } catch {
+    /* 非 JSON 则原样简短展示 */
+  }
+  return s.length > 80 ? `${s.slice(0, 80)}…` : s
+}
+
+const unknownUsagesTooltip = (raw) => {
+  if (!raw) return ''
+  const s = String(raw).trim()
+  try {
+    const o = JSON.parse(s)
+    if (o && typeof o === 'object' && !Array.isArray(o)) {
+      const lines = Object.entries(o)
+        .map(([k, v]) => `${k}：${v}`)
+        .filter((line) => line.length > 2)
+      return lines.length ? lines.join('\n') : formatUnknownUsagesCell(raw)
+    }
+  } catch {
+    /* ignore */
+  }
+  return formatUnknownUsagesCell(raw)
+}
+
+const tableRowClassName = ({ row }) => {
+  const classes = []
+  if (normalizeVerifiedFlag(row?.isVerified) === 0) classes.push('summary-row-unverified')
+  if (hasUnknownUsageRow(row)) classes.push('summary-row-unknown-usage')
+  return classes.join(' ')
+}
+
+/** 简易搜索：在各列文本与标签文案中做子串匹配（不区分大小写） */
+const SUMMARY_SEARCH_FIELDS = [
+  'projectName',
+  'certNo',
+  'contractNo',
+  'phase',
+  'totalArea',
+  'calcCommercial',
+  'calcResidential',
+  'calcPropMgmt',
+  'calcOther',
+  'nonCalcCommunity',
+  'nonCalcOther',
+  'areaConfirmationNoticeNo',
+  'reportNo',
+  'remarks',
+  'fileOriginalName',
+  'pendingConfirmArea',
+  'unknownUsages',
+  'verificationErrorReason'
+]
+
+const buildSummarySearchHaystack = (row) => {
+  const parts = SUMMARY_SEARCH_FIELDS.map((f) => String(row?.[f] ?? '').trim())
+  parts.push(getVerifiedText(row?.isVerified))
+  parts.push(formatUnknownUsagesCell(row?.unknownUsages))
+  if (hasUnknownUsageRow(row)) parts.push('含未知用途', '待确认')
+  return parts.join('\u0001').toLowerCase()
+}
+
+const filteredDisplayTableData = computed(() => {
+  const rows = props.displayTableData || []
+  const raw = String(summarySearchKeyword.value || '').trim().toLowerCase()
+  if (!raw) return rows
+  const tokens = raw.split(/\s+/).filter(Boolean)
+  return rows.filter((row) => {
+    const hay = buildSummarySearchHaystack(row)
+    return tokens.every((t) => hay.includes(t))
+  })
+})
+
+const tableRef = ref(null)
+const {
+  showXScrollProxy,
+  canScrollLeft,
+  canScrollRight,
+  scrollTableBy
+} = useSummaryTableHorizontalScroll(tableRef, filteredDisplayTableData)
 </script>
 
 <style scoped>
@@ -608,6 +737,43 @@ const tableRowClassName = ({ row }) => (normalizeVerifiedFlag(row?.isVerified) =
   background: #fff;
 }
 
+.summary-table-floating-search {
+  position: absolute;
+  top: 7px;
+  right: 10px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(248px, 46vw);
+  pointer-events: auto;
+}
+
+.summary-table-floating-search__input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.summary-table-floating-search__input :deep(.el-input__wrapper) {
+  padding-left: 8px;
+  padding-right: 8px;
+  box-shadow: 0 0 0 1px rgba(226, 232, 240, 0.95) inset, 0 1px 2px rgba(15, 23, 42, 0.06);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.summary-table-floating-search__hint {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #475569;
+  white-space: nowrap;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(241, 245, 249, 0.98);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+}
+
 .project-name-trigger {
   display: block;
   width: 100%;
@@ -723,16 +889,76 @@ const tableRowClassName = ({ row }) => (normalizeVerifiedFlag(row?.isVerified) =
   text-align: center !important;
 }
 
+/* 状态标签列：禁用单元格省略号，避免「已通过」等被裁成「已通过…」 */
+:deep(.summary-modern-table td.summary-col-status-tag > .cell) {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+:deep(.summary-modern-table td.summary-col-status-tag .el-tag) {
+  max-width: 100%;
+}
+
 :deep(.summary-modern-table--cell-center td.el-table__cell.is-right > .cell) {
   text-align: center !important;
 }
 
-:deep(.summary-modern-table .el-table__body tr.summary-row-unverified > td.el-table__cell) {
+/* 仅「校验不通过」：逐格底色（与未知用途行区分） */
+:deep(.summary-modern-table .el-table__body tr.summary-row-unverified:not(.summary-row-unknown-usage) > td.el-table__cell) {
   background-color: #fff1f2 !important;
 }
 
-:deep(.summary-modern-table .el-table__body tr.summary-row-unverified:hover > td.el-table__cell) {
+:deep(
+  .summary-modern-table .el-table__body tr.summary-row-unverified:not(.summary-row-unknown-usage):hover > td.el-table__cell
+) {
   background-color: #ffe4e6 !important;
+}
+
+/*
+ * 含未知用途：整行统一底色（tr），单元格透明，避免每格 inset 阴影/底色叠加发乌。
+ * 左侧强调线仅画在首列单元格上一条。
+ */
+:deep(.summary-modern-table .el-table__body tr.summary-row-unknown-usage > td.el-table__cell) {
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:deep(.summary-modern-table .el-table__body tr.summary-row-unknown-usage.el-table__row--striped > td.el-table__cell) {
+  background-color: transparent !important;
+}
+
+:deep(.summary-modern-table .el-table__body tr.summary-row-unknown-usage) {
+  background-color: #fffbeb !important;
+}
+
+:deep(.summary-modern-table .el-table__body tr.summary-row-unknown-usage:hover) {
+  background-color: #fff3cd !important;
+}
+
+:deep(.summary-modern-table .el-table__body tr.summary-row-unknown-usage:hover > td.el-table__cell) {
+  background-color: transparent !important;
+}
+
+:deep(.summary-modern-table .el-table__body tr.summary-row-unknown-usage.summary-row-unverified) {
+  background-color: #fff4e6 !important;
+}
+
+:deep(.summary-modern-table .el-table__body tr.summary-row-unknown-usage.summary-row-unverified:hover) {
+  background-color: #ffe8cc !important;
+}
+
+:deep(.summary-modern-table .el-table__body tr.summary-row-unknown-usage > td.el-table__cell:first-child) {
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+
+.unknown-usages-cell-text {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
 @media (max-width: 1200px) {

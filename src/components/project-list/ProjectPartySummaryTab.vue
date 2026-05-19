@@ -106,7 +106,7 @@
                       class="party-file-card__status"
                       :class="`party-file-card__status--${(f.parseStatus || 'unknown').toLowerCase()}`"
                     >
-                      {{ parseStatusText[f.parseStatus] || '未解析' }}
+                      {{ parseStatusText[f.parseStatus] || '未知' }}
                     </span>
                     <span class="party-file-card__index">#{{ idx + 1 }}</span>
                   </span>
@@ -250,12 +250,14 @@ const buildMainFormDraftFromRow = (row) => ({
 })
 
 const parseStatusText = {
+  PENDING: '待解析',
   SUCCESS: '成功',
   PARTIAL: '成功',
   FAILED: '失败'
 }
 
 const parseStatusTagType = {
+  PENDING: 'warning',
   SUCCESS: 'success',
   PARTIAL: 'success',
   FAILED: 'danger'
@@ -654,6 +656,11 @@ watch(
 .party-file-card__status--partial {
   background: rgba(16, 185, 129, 0.12);
   color: #047857;
+}
+
+.party-file-card__status--pending {
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
 }
 
 .party-file-card__status--failed {

@@ -36,11 +36,7 @@
             <el-icon><MapLocation /></el-icon>
             <span>土地类型管理</span>
           </el-menu-item>
-          <el-menu-item index="/notifications">
-            <el-icon><Bell /></el-icon>
-            <span>通知订阅管理</span>
-          </el-menu-item>
-          <el-menu-item index="/users">
+          <el-menu-item v-if="canAccessUserManagement()" index="/users">
             <el-icon><UserFilled /></el-icon>
             <span>用户权限管理</span>
           </el-menu-item>
@@ -87,10 +83,11 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
-import { DataAnalysis, ArrowDown, Odometer, UserFilled, MapLocation, Bell, Fold, Expand } from '@element-plus/icons-vue'
+import { DataAnalysis, ArrowDown, Odometer, UserFilled, MapLocation, Fold, Expand } from '@element-plus/icons-vue'
 import GlobalAgentAssistant from '@/components/layout/GlobalAgentAssistant.vue'
 import FloatingTaskPoolStatus from '@/components/layout/FloatingTaskPoolStatus.vue'
 import { clearAuth } from '@/utils/auth-token'
+import { canAccessUserManagement } from '@/utils/auth-session.js'
 
 const route = useRoute()
 const router = useRouter()

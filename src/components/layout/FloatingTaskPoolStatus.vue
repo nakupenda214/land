@@ -117,7 +117,6 @@
               <div class="queue-tags">
                 <el-tag size="small" type="danger" effect="plain">高 {{ highPriorityCount }}</el-tag>
                 <el-tag size="small" type="warning" effect="plain">中 {{ normalPriorityCount }}</el-tag>
-                <el-tag size="small" type="info" effect="plain">低 {{ lowPriorityCount }}</el-tag>
               </div>
             </div>
           </div>
@@ -426,7 +425,6 @@ const listQueuedCount = computed(() => runningTasks.value.filter((t) => String(t
 
 const highPriorityCount = computed(() => Number(statusData.value?.queueTasks?.highPriorityCount || 0))
 const normalPriorityCount = computed(() => Number(statusData.value?.queueTasks?.normalPriorityCount || 0))
-const lowPriorityCount = computed(() => Number(statusData.value?.queueTasks?.lowPriorityCount || 0))
 
 const coreThreads = computed(() => Number(statusData.value?.threadPoolStatus?.corePoolSize || 0))
 const maxThreads = computed(() => Number(statusData.value?.threadPoolStatus?.maximumPoolSize || 0))

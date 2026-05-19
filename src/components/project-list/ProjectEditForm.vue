@@ -29,10 +29,10 @@
             <el-form-item label="项目时间" prop="projectTime">
               <el-date-picker
                 v-model="form.projectTime"
-                type="month"
+                type="date"
                 placeholder="请选择项目时间"
-                format="YYYY年MM月"
-                value-format="YYYY年MM月"
+                format="YYYY-MM-DD"
+                value-format="YYYY-MM-DD"
                 style="width: 100%;"
                 clearable
               />

@@ -13,9 +13,9 @@
       <el-form-item label="项目时间" prop="projectTime">
         <el-date-picker
           v-model="newProjectForm.projectTime"
-          type="month"
-          format="YYYY年MM月"
-          value-format="YYYY年MM月"
+          type="date"
+          format="YYYY-MM-DD"
+          value-format="YYYY-MM-DD"
           placeholder="请选择业务时间"
           style="width: 100%;"
           :locale="locale"

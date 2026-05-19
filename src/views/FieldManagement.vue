@@ -12,13 +12,23 @@
 
     <el-card class="section-card" shadow="never">
       <div class="table-toolbar">
-        <span class="title">已知用途</span>
-        <span class="count">共 {{ standardFields.length }} 条</span>
+        <div class="table-toolbar__main">
+          <span class="title">已知用途</span>
+          <el-input
+            v-model="knownSearchKeyword"
+            class="table-search"
+            size="small"
+            clearable
+            placeholder="搜索匹配模式、类别、备注等"
+            :prefix-icon="Search"
+          />
+        </div>
+        <span class="count">{{ knownCountText }}</span>
       </div>
       <div class="table-container">
         <el-table
           class="compact-table"
-          :data="standardFields"
+          :data="filteredStandardFields"
           border
           stripe
           size="small"
@@ -37,7 +47,6 @@
           <el-table-column label="正则" width="90" align="center">
             <template #default="{ row }">{{ Number(row.isRegex) === 1 ? '是' : '否' }}</template>
           </el-table-column>
-          <el-table-column prop="priority" label="优先级" width="90" align="center" />
           <el-table-column label="状态" width="90" align="center">
             <template #default="{ row }">{{ Number(row.status) === 1 ? '启用' : '禁用' }}</template>
           </el-table-column>
@@ -60,13 +69,23 @@
 
     <el-card class="section-card" shadow="never">
       <div class="table-toolbar">
-        <span class="title">未知用途</span>
-        <span class="count">共 {{ specialFields.length }} 条</span>
+        <div class="table-toolbar__main">
+          <span class="title">未知用途</span>
+          <el-input
+            v-model="unknownSearchKeyword"
+            class="table-search"
+            size="small"
+            clearable
+            placeholder="搜索用途名称、项目、文件等"
+            :prefix-icon="Search"
+          />
+        </div>
+        <span class="count">{{ unknownCountText }}</span>
       </div>
       <div class="table-container">
         <el-table
           class="compact-table"
-          :data="specialFields"
+          :data="filteredSpecialFields"
           border
           stripe
           size="small"
@@ -167,9 +186,6 @@
             <el-radio label="1">是</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="优先级" prop="priority">
-          <el-input-number v-model="addForm.priority" :min="1" :max="999" />
-        </el-form-item>
         <el-form-item label="状态" prop="status">
           <el-radio-group v-model="addForm.status">
             <el-radio label="1">启用</el-radio>
@@ -217,9 +233,6 @@
             <el-radio label="1">是</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="优先级" prop="priority">
-          <el-input-number v-model="editForm.priority" :min="1" :max="999" />
-        </el-form-item>
         <el-form-item label="状态" prop="status">
           <el-radio-group v-model="editForm.status">
             <el-radio label="1">启用</el-radio>
@@ -241,7 +254,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Check, CollectionTag, Delete, Edit, Plus, Refresh, View } from '@element-plus/icons-vue'
+import { Check, CollectionTag, Delete, Edit, Plus, Refresh, Search, View } from '@element-plus/icons-vue'
 import { ElLoading, ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 
@@ -250,6 +263,8 @@ const router = useRouter()
 const loading = ref(false)
 const standardFields = ref([])
 const specialFields = ref([])
+const knownSearchKeyword = ref('')
+const unknownSearchKeyword = ref('')
 
 const addDialogVisible = ref(false)
 const editDialogVisible = ref(false)
@@ -257,6 +272,9 @@ const addFormRef = ref(null)
 const editFormRef = ref(null)
 
 const tableMaxHeight = computed(() => Math.max(220, Math.floor((window.innerHeight - 320) / 2)))
+
+/** 后端仍需要 priority；界面不展示，新增固定为该默认值，编辑沿用原记录 */
+const DEFAULT_USAGE_PRIORITY = 100
 
 const categoryMap = {
   calcCommercial: { usageCategory: 'COMMERCIAL', floorAreaType: 'BUILDABLE' },
@@ -271,7 +289,6 @@ const formRules = reactive({
   usagePattern: [{ required: true, message: '请输入用途匹配模式', trigger: 'blur' }],
   usageCategory: [{ required: true, message: '请选择用途类别', trigger: 'change' }],
   isRegex: [{ required: true, message: '请选择是否正则匹配', trigger: 'change' }],
-  priority: [{ required: true, message: '请输入优先级', trigger: 'blur' }],
   status: [{ required: true, message: '请选择状态', trigger: 'change' }]
 })
 
@@ -295,7 +312,7 @@ const addForm = reactive({
   usageCategory: '',
   floorAreaType: 'BUILDABLE',
   isRegex: '0',
-  priority: 100,
+  priority: DEFAULT_USAGE_PRIORITY,
   status: '1',
   remark: '',
   collectionName: ''
@@ -307,7 +324,7 @@ const editForm = reactive({
   usageCategory: '',
   floorAreaType: 'BUILDABLE',
   isRegex: '0',
-  priority: 100,
+  priority: DEFAULT_USAGE_PRIORITY,
   status: '1',
   remark: '',
   collectionName: ''
@@ -318,6 +335,79 @@ const formatTime = (timeStr) => {
   const text = String(timeStr).replace('T', ' ')
   return text.split('.')[0]
 }
+
+const usageCategoryLabelMap = Object.fromEntries(
+  usageCategoryOptions.map((item) => [item.value, item.label])
+)
+
+const targetCategoryLabelMap = {
+  calcCommercial: '商业',
+  calcResidential: '住宅',
+  calcPropMgmt: '物管',
+  calcOther: '其他计容',
+  nonCalcCommunity: '社区用房',
+  nonCalcOther: '其他公用'
+}
+
+const normalizeSearchText = (value) => String(value ?? '').trim().toLowerCase()
+
+const rowMatchesKeyword = (parts, keyword) => {
+  if (!keyword) return true
+  const haystack = parts.map((part) => normalizeSearchText(part)).join(' ')
+  return haystack.includes(keyword)
+}
+
+const filteredStandardFields = computed(() => {
+  const keyword = normalizeSearchText(knownSearchKeyword.value)
+  if (!keyword) return standardFields.value
+  return standardFields.value.filter((row) =>
+    rowMatchesKeyword(
+      [
+        row.usagePattern,
+        row.usageCategory,
+        usageCategoryLabelMap[row.usageCategory],
+        row.floorAreaType === 'BUILDABLE' ? '计容' : '不计容',
+        Number(row.isRegex) === 1 ? '是' : '否',
+        Number(row.status) === 1 ? '启用' : '禁用',
+        row.remark
+      ],
+      keyword
+    )
+  )
+})
+
+const filteredSpecialFields = computed(() => {
+  const keyword = normalizeSearchText(unknownSearchKeyword.value)
+  if (!keyword) return specialFields.value
+  return specialFields.value.filter((row) =>
+    rowMatchesKeyword(
+      [
+        row.usageName,
+        row.occurrenceCount,
+        row.recentProjectName,
+        row.recentFileName,
+        targetCategoryLabelMap[row.targetCategory],
+        row.targetCategory,
+        formatTime(row.updateTime)
+      ],
+      keyword
+    )
+  )
+})
+
+const knownCountText = computed(() => {
+  const total = standardFields.value.length
+  const shown = filteredStandardFields.value.length
+  if (!normalizeSearchText(knownSearchKeyword.value)) return `共 ${total} 条`
+  return `共 ${shown} 条（筛选自 ${total} 条）`
+})
+
+const unknownCountText = computed(() => {
+  const total = specialFields.value.length
+  const shown = filteredSpecialFields.value.length
+  if (!normalizeSearchText(unknownSearchKeyword.value)) return `共 ${total} 条`
+  return `共 ${shown} 条（筛选自 ${total} 条）`
+})
 
 const fetchUsageConfigList = async () => {
   loading.value = true
@@ -469,7 +559,7 @@ const resetAddForm = () => {
     usageCategory: '',
     floorAreaType: 'BUILDABLE',
     isRegex: '0',
-    priority: 100,
+    priority: DEFAULT_USAGE_PRIORITY,
     status: '1',
     remark: '',
     collectionName: ''
@@ -517,7 +607,7 @@ const resetEditForm = () => {
     usageCategory: '',
     floorAreaType: 'BUILDABLE',
     isRegex: '0',
-    priority: 100,
+    priority: DEFAULT_USAGE_PRIORITY,
     status: '1',
     remark: '',
     collectionName: ''
@@ -647,6 +737,20 @@ onMounted(async () => {
   font-weight: 800;
   color: #0f172a;
   letter-spacing: 0.2px;
+}
+
+.table-toolbar__main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.table-search {
+  width: min(320px, 100%);
+  flex: 1;
+  max-width: 360px;
 }
 
 .table-toolbar .count {

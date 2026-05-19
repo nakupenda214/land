@@ -1,3 +1,5 @@
+import { clearUserSession } from '@/utils/auth-session.js'
+
 /**
  * Sa-Token 与后端 sa-token.token-name 一致（默认 satoken）。
  */
@@ -22,6 +24,7 @@ export function clearAuth() {
   sessionStorage.removeItem(TOKEN_KEY)
   sessionStorage.removeItem('isAuthenticated')
   sessionStorage.removeItem('userId')
+  clearUserSession()
 }
 
 export function isLoggedIn() {

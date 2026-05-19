@@ -221,6 +221,18 @@
               </div>
               <div class="right">
                 <el-button
+                  v-if="hasRoomToolbarRefresh"
+                  size="small"
+                  type="default"
+                  plain
+                  :loading="reportRefreshLoading"
+                  :disabled="roomToolbarRefreshCooldown || reportRefreshLoading"
+                  title="按实测报告重新汇总用途与户室相关统计，每 5 秒可操作一次"
+                  @click="handleRoomToolbarRefreshClick"
+                >
+                  重新计算
+                </el-button>
+                <el-button
                   size="small"
                   type="primary"
                   plain
@@ -621,7 +633,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useCalibrationUnknownUsagePolicy, parseUnknownUsageNames } from '@/composables/file-upload/useCalibrationUnknownUsagePolicy'
 import { useCalibrationRoomTableFilter } from '@/composables/file-upload/useCalibrationRoomTableFilter'
 import { Loading, CircleCheck, WarningFilled, Search } from '@element-plus/icons-vue'
@@ -708,8 +720,48 @@ const roomTableCountText = computed(() => {
   return `共 ${total} 条`
 })
 
+const hasRoomToolbarRefresh = computed(() => typeof props.handleRefreshSurveyReport === 'function')
+const reportRefreshLoading = computed(() => Boolean(props.reportRefreshLoading))
+const roomToolbarRefreshCooldown = ref(false)
+let roomToolbarRefreshCooldownTimer = null
+
+const clearRoomToolbarRefreshCooldownTimer = () => {
+  if (roomToolbarRefreshCooldownTimer != null) {
+    clearTimeout(roomToolbarRefreshCooldownTimer)
+    roomToolbarRefreshCooldownTimer = null
+  }
+}
+
+const handleRoomToolbarRefreshClick = async () => {
+  const fn = props.handleRefreshSurveyReport
+  if (typeof fn !== 'function') return
+  if (roomToolbarRefreshCooldown.value || reportRefreshLoading.value) {
+    ElMessage.warning('请稍后再试（每 5 秒最多刷新一次）')
+    return
+  }
+  roomToolbarRefreshCooldown.value = true
+  clearRoomToolbarRefreshCooldownTimer()
+  roomToolbarRefreshCooldownTimer = setTimeout(() => {
+    roomToolbarRefreshCooldown.value = false
+    roomToolbarRefreshCooldownTimer = null
+  }, 5000)
+  try {
+    await fn()
+  } catch (e) {
+    console.error(e)
+  }
+}
+
 watch(dialogVisible, (open) => {
-  if (!open) clearRoomTableKeyword()
+  if (!open) {
+    clearRoomTableKeyword()
+    clearRoomToolbarRefreshCooldownTimer()
+    roomToolbarRefreshCooldown.value = false
+  }
+})
+
+onBeforeUnmount(() => {
+  clearRoomToolbarRefreshCooldownTimer()
 })
 
 const auditSummaryDataRef = computed(() => props.auditSummaryData)

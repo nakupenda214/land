@@ -48,7 +48,7 @@ function fixRunInAtxHeadingLine(line) {
   return null
 }
 
-export function fixRunInAtxHeadingMarkdown(markdown) {
+function fixRunInAtxHeadingMarkdown(markdown) {
   const s = String(markdown ?? '')
   const lines = s.split(/\r?\n/)
   for (let i = 0; i < lines.length; i++) {

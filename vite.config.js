@@ -22,12 +22,30 @@ export default defineConfig({
     exclude: ['xlsx-populate'],
     include: ['buffer']
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          if (id.includes('element-plus')) return 'element-plus'
+          if (id.includes('echarts')) return 'echarts'
+          if (id.includes('exceljs')) return 'exceljs'
+          if (id.includes('@vue-office')) return 'vue-office'
+          if (id.includes('@vue-flow')) return 'vue-flow'
+          if (id.includes('@codemirror')) return 'codemirror'
+          if (id.includes('marked') || id.includes('highlight.js')) return 'markdown'
+          return undefined
+        }
+      }
+    }
+  },
   server: {
     host: '0.0.0.0',
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://10.123.69.140:8082',
+        // 本地开发可通过 .env.local 设置 VITE_API_PROXY_TARGET，避免将内网地址写入仓库
+        target: process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8082',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '')
       }

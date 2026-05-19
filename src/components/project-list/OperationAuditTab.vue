@@ -122,6 +122,13 @@
           </el-table-column>
         </el-table>
 
+        <el-empty
+          v-if="!loading && projectId && logs.length === 0"
+          description="暂无审计日志，可调整筛选条件或点击刷新"
+          :image-size="80"
+          class="audit-empty"
+        />
+
         <div
           v-show="showXScrollProxy"
           class="planning-table-x-float"

@@ -187,12 +187,6 @@ export function deleteLlmNodeRoute(nodeId) {
     .then((res) => unwrapResponse(res, '删除节点路由失败'))
 }
 
-export function getLlmEffectiveConfig(nodeId) {
-  return axios
-    .get(`${API_PREFIX}/llm-config/effective/${encodeURIComponent(nodeId)}`)
-    .then((res) => unwrapResponse(res, '查询生效配置失败'))
-}
-
 /** 批量查询节点生效配置（单次请求，nodeIds 为节点 ID 列表） */
 export function getLlmEffectiveConfigs(nodeIds) {
   const ids = (nodeIds || []).filter(Boolean)
@@ -332,13 +326,6 @@ export function upsertTraceAnnotation(body) {
   return axios
     .post(`${API_PREFIX}/agent-traces/annotations`, body)
     .then((res) => unwrapAgentApi(res, '保存标注失败'))
-}
-
-/** 最近人工标注 */
-export function listTraceAnnotationsRecent(limit = 50, route) {
-  return axios
-    .get(`${API_PREFIX}/agent-traces/annotations/recent`, { params: { limit, route } })
-    .then((res) => unwrapAgentApi(res, '加载标注列表失败'))
 }
 
 /** 按 traceId 取标注（可能为 null） */
@@ -554,13 +541,6 @@ export function listOptimizationVersions(params = {}) {
   return axios
     .get(`${API_PREFIX}/agent-traces/self-opt/versions`, { params })
     .then((res) => unwrapAgentApi(res, '查询优化版本列表失败'))
-}
-
-/** 查询某任务下的全部优化版本（按 createTime desc） */
-export function listOptimizationVersionsByTask(taskId) {
-  return axios
-    .get(`${API_PREFIX}/agent-traces/self-opt/tasks/${encodeURIComponent(taskId)}/versions`)
-    .then((res) => unwrapAgentApi(res, '查询任务优化版本失败'))
 }
 
 /** 新增基准用例 */

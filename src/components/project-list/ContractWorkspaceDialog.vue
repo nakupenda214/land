@@ -9,39 +9,28 @@
     :destroy-on-close="false"
   >
     <div class="contract-workspace-root">
-      <div class="workspace-topbar">
-        <div class="topbar-left">
-          <span class="topbar-title">合同工作区</span>
-          <span class="topbar-sub">全屏工作区 · 可拖动中间分隔条调整左右宽度</span>
-        </div>
-        <div class="topbar-right">
-          <el-tag type="info" effect="plain" class="meta-tag" :title="fileName || '未关联合同文件'">
-            {{ fileName || '未关联合同文件' }}
-          </el-tag>
-          <div class="file-picker-row">
-            <el-select
-              :model-value="selectedFileId"
-              filterable
-              clearable
-              placeholder="选择项目文件（可搜索）"
-              class="file-picker-select"
-              popper-class="project-file-select-dropdown"
-              :loading="fileOptionsLoading"
-              @update:model-value="(v) => emit('update:selectedFileId', v)"
-            >
-              <el-option v-for="item in fileOptions" :key="item.value" :label="item.label" :value="item.value" />
-            </el-select>
-          </div>
-        </div>
-      </div>
-
       <div
         ref="auditLayoutRef"
         class="audit-split-layout audit-split-layout--responsive contract-workspace-split"
       >
         <section class="pdf-panel audit-split-layout__left" :style="leftPanelStyle" v-loading="pdfLoading">
+          <div class="pdf-panel-toolbar">
+            <el-select
+              :model-value="selectedFileId"
+              filterable
+              clearable
+              placeholder="切换预览文件"
+              class="pdf-file-select"
+              popper-class="project-file-select-dropdown"
+              :loading="fileOptionsLoading"
+              :title="fileName || undefined"
+              @update:model-value="(v) => emit('update:selectedFileId', v)"
+            >
+              <el-option v-for="item in fileOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+          </div>
           <iframe v-if="pdfUrl" class="pdf-frame" :src="pdfUrl" title="合同预览" />
-          <el-empty v-else description="暂无可预览PDF" />
+          <el-empty v-else class="pdf-empty" description="暂无可预览PDF" />
         </section>
 
         <div
@@ -130,7 +119,6 @@ const { auditLayoutRef, leftPanelStyle, onSplitterMouseDown } = useAuditSplitPan
 .contract-workspace-root {
   display: flex;
   flex-direction: column;
-  gap: 8px;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -145,72 +133,18 @@ const { auditLayoutRef, leftPanelStyle, onSplitterMouseDown } = useAuditSplitPan
   overflow: hidden;
 }
 
-.workspace-topbar {
+.pdf-panel-toolbar {
   flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  margin-bottom: 0;
-  border: 1px solid #e9eef7;
-  border-radius: 10px;
-  background: #ffffff;
+  margin-bottom: 8px;
   min-width: 0;
 }
 
-.topbar-left {
-  min-width: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
+.pdf-file-select {
+  width: 100%;
 }
 
-.topbar-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #1f2d3d;
-}
-
-.topbar-sub {
-  font-size: 12px;
-  color: #7a879a;
-  white-space: nowrap;
-}
-
-.topbar-right {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.meta-tag {
-  max-width: 360px;
-}
-
-:deep(.meta-tag .el-tag__content) {
-  display: inline-block;
-  max-width: 330px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.file-picker-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 0;
-}
-
-.file-picker-select {
-  width: 320px;
-}
-
-:deep(.file-picker-select .el-input__wrapper) {
-  min-height: 34px;
+:deep(.pdf-file-select .el-select__wrapper) {
+  min-height: 32px;
 }
 
 :deep(.project-file-select-dropdown .el-select-dropdown__wrap) {
@@ -247,6 +181,14 @@ const { auditLayoutRef, leftPanelStyle, onSplitterMouseDown } = useAuditSplitPan
   width: 100%;
   border: none;
   border-radius: 8px;
+}
+
+.pdf-empty {
+  flex: 1 1 auto;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .contract-form-scroll {
@@ -304,19 +246,6 @@ const { auditLayoutRef, leftPanelStyle, onSplitterMouseDown } = useAuditSplitPan
 }
 
 @media (max-width: 1280px) {
-  .workspace-topbar {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .topbar-left {
-    flex-wrap: wrap;
-  }
-
-  .topbar-sub {
-    white-space: normal;
-  }
-
   .contract-workspace-split .pdf-panel {
     min-height: 360px;
     height: 46vh;

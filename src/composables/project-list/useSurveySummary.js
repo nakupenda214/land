@@ -31,15 +31,20 @@ const createEmptyAreaComparison = () => ({
   }
 })
 
-export function useSurveySummary({ reportList: _reportList }) {
+export function useSurveySummary() {
   const rawTableData = ref([])
   const unknownUsages = ref([])
   const isSavingPolicy = ref(false)
   const displayTableData = computed(() => rawTableData.value)
   const requestSeq = ref(0)
+  let surveyAbortController = null
+
+  const isAbortError = (error) =>
+    error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError' || error?.name === 'AbortError'
   const areaComparison = ref(createEmptyAreaComparison())
   const selectedComparisonGroups = ref([...COMPARISON_GROUP_KEYS])
   const uploadedSurveyReportTotal = ref(0)
+  const surveyLoading = ref(false)
 
   const surveyStats = computed(() => {
     const verifiedCount = rawTableData.value.filter((item) => normalizeVerifiedFlag(item.isVerified) === 1).length
@@ -85,20 +90,26 @@ export function useSurveySummary({ reportList: _reportList }) {
 
   const fetchSurveyReports = async (projectId) => {
     if (!projectId) {
+      surveyAbortController?.abort()
+      surveyAbortController = null
       resetSummaryMetrics()
-      return
+      return false
     }
 
+    surveyAbortController?.abort()
+    surveyAbortController = new AbortController()
+    const { signal } = surveyAbortController
     const currentSeq = ++requestSeq.value
 
     rawTableData.value = []
     unknownUsages.value = []
+    surveyLoading.value = true
 
     try {
       const [surveyRes, uploadedTotal, comparisonRes] = await Promise.all([
-        getParsedSurveyReportsByProject(projectId),
+        getParsedSurveyReportsByProject(projectId, { signal }),
         fetchUploadedSurveyReportTotal(projectId),
-        queryProjectAreaComparison(projectId)
+        queryProjectAreaComparison(projectId, { signal })
       ])
       if (currentSeq !== requestSeq.value) return true
 
@@ -127,12 +138,9 @@ export function useSurveySummary({ reportList: _reportList }) {
         projectName: item.buildingName || '未知楼栋',
         certNo: item.propertyCertificateNumber || '-',
         contractNo:
-          item.contractNo ||
-          item.contractNumber ||
-          item.contractApprovalNumber ||
-          item.approvalDocumentNumber ||
-          item.propertyAreaConfirmationNoticeNumber ||
-          '-',
+          item.contractApprovalNumber != null && String(item.contractApprovalNumber).trim() !== ''
+            ? String(item.contractApprovalNumber).trim()
+            : '-',
         areaConfirmationNoticeNo: item.propertyAreaConfirmationNoticeNumber || '-',
         phase: item.phase || '-',
         totalArea: (item.actualTotalBuildingArea || 0).toFixed(2),
@@ -165,15 +173,22 @@ export function useSurveySummary({ reportList: _reportList }) {
       }
       return true
     } catch (error) {
-      if (currentSeq !== requestSeq.value) return true
+      if (isAbortError(error) || currentSeq !== requestSeq.value) return true
       console.error('拉取汇总表数据失败:', error)
       resetSummaryMetrics()
       ElMessage.error(getApiErrorMessage(error, '汇总表数据加载失败，请重试'))
       return false
+    } finally {
+      if (currentSeq === requestSeq.value) {
+        surveyLoading.value = false
+      }
     }
   }
 
   const resetSummaryMetrics = () => {
+    surveyAbortController?.abort()
+    surveyAbortController = null
+    surveyLoading.value = false
     rawTableData.value = []
     unknownUsages.value = []
     uploadedSurveyReportTotal.value = 0
@@ -189,6 +204,7 @@ export function useSurveySummary({ reportList: _reportList }) {
     areaComparison,
     selectedComparisonGroups,
     surveyStats,
+    surveyLoading,
     fetchSurveyReports,
     resetSummaryMetrics
   }

@@ -21,22 +21,22 @@ export const getProjectList = async () => {
   }
 }
 
-export const queryProjects = (payload) =>
-  axios.post('/api/project/projects/query', payload)
+export const queryProjects = (payload, config = {}) =>
+  axios.post('/api/project/projects/query', payload, config)
+
+export const getParsedSurveyReportsByProject = (projectId, config = {}) =>
+  axios.get(`/api/project/${projectId}/survey-reports/parsed`, config)
+
+export const queryProjectAreaComparison = (projectId, config = {}) =>
+  axios.get(`/api/project/${projectId}/area-comparison/triple-lines`, config)
 
 export const createProject = (projectName, projectTime) =>
   axios.post('/api/project/create', null, {
     params: { projectName, projectTime }
   })
 
-export const getParsedSurveyReportsByProject = (projectId) =>
-  axios.get(`/api/project/${projectId}/survey-reports/parsed`)
-
 export const refreshSurveyReportsByProject = (projectId) =>
   axios.post(`/api/project/${projectId}/refresh-survey-reports`)
-
-export const queryProjectAreaComparison = (projectId) =>
-  axios.get(`/api/project/${projectId}/area-comparison/triple-lines`)
 
 export const getSurveyRoomInfo = (projectId, reportId) =>
   axios.get(`/api/project/${projectId}/survey-reports/${reportId}/room-info`)
@@ -53,8 +53,8 @@ export const updateSurveyReportInfo = (payload) =>
 export const queryOperationAuditLogs = (payload) =>
   axios.post('/api/operation-audit/query', payload)
 
-export const queryProjectDetails = (payload) =>
-  axios.post('/api/project/projects/query/detail', payload)
+export const queryProjectDetails = (payload, config = {}) =>
+  axios.post('/api/project/projects/query/detail', payload, config)
 
 export const deleteProjectById = (projectId) =>
   axios.delete(`/api/project/${projectId}`)

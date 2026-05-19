@@ -1,3 +1,5 @@
+import { formatProjectTimeForDisplay } from '@/utils/projectTimePresent'
+
 const PRINT_FIELDS = [
   { label: '项目名称', key: 'projectName' },
   { label: '项目时间', key: 'projectTime' },
@@ -19,7 +21,9 @@ export const useDashboardPrint = () => {
     const records = safeRows.map((row) =>
       PRINT_FIELDS.map((item) => {
         const value = row?.[item.key]
-        return isEmpty(value) ? '-' : String(value)
+        if (isEmpty(value)) return '-'
+        if (item.key === 'projectTime') return formatProjectTimeForDisplay(String(value))
+        return String(value)
       })
     )
     return {

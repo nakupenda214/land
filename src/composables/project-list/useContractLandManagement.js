@@ -189,15 +189,31 @@ export function useContractLandManagement({ filterProject, currentProjectInfo, o
     await loadContractPdfByFileRecordId(selectedPreviewFileId.value)
   }
 
+  let contractListAbortController = null
+  let contractListRequestSeq = 0
+
+  const isAbortError = (error) =>
+    error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError' || error?.name === 'AbortError'
+
   const fetchContractListByProjectId = async (projectId) => {
     if (!projectId) return false
 
+    contractListAbortController?.abort()
+    contractListAbortController = new AbortController()
+    const { signal } = contractListAbortController
+    const seq = ++contractListRequestSeq
+
     try {
-      const res = await axios.post('/api/project/contracts/query', {
-        projectId: Number(projectId),
-        current: 1,
-        size: 100
-      })
+      const res = await axios.post(
+        '/api/project/contracts/query',
+        {
+          projectId: Number(projectId),
+          current: 1,
+          size: 100
+        },
+        { signal }
+      )
+      if (seq !== contractListRequestSeq) return false
 
       if (res.data.code === 200) {
         contractLandList.value = (res.data.data.records || []).map((contract) => ({
@@ -221,6 +237,7 @@ export function useContractLandManagement({ filterProject, currentProjectInfo, o
       }
       return false
     } catch (error) {
+      if (isAbortError(error) || seq !== contractListRequestSeq) return false
       console.error('查询项目合同列表失败:', error)
       ElMessage.error('获取合同列表失败，请重试')
       contractLandList.value = []

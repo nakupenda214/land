@@ -1,5 +1,8 @@
+import axios from 'axios'
 import { createRouter, createWebHistory } from 'vue-router'
 import { isLoggedIn } from '@/utils/auth-token'
+import { getUserSession, setUserSession } from '@/utils/auth-session.js'
+import { isRouteAccessDenied } from '@/router/routeAccess.js'
 
 const routes = [
   {
@@ -40,7 +43,7 @@ const routes = [
         path: 'users',
         name: 'UserList',
         component: () => import('../views/UserList.vue'),
-        meta: { title: '用户权限管理' }
+        meta: { title: '用户权限管理', requiresUserManagement: true }
       },
       {
         path: 'fields',
@@ -48,12 +51,13 @@ const routes = [
         component: () => import('../views/FieldManagement.vue'),
         meta: { title: '土地类型管理' }
       },
-      {
-        path: 'notifications',
-        name: 'NotificationManagement',
-        component: () => import('../views/NotificationManagement.vue'),
-        meta: { title: '通知订阅管理' }
-      },
+      /* 暂时隐藏：通知订阅管理（恢复时同步放开 Layout.vue 侧栏菜单） */
+      // {
+      //   path: 'notifications',
+      //   name: 'NotificationManagement',
+      //   component: () => import('../views/NotificationManagement.vue'),
+      //   meta: { title: '通知订阅管理' }
+      // },
       {
         path: 'agent-management',
         name: 'AgentManagement',
@@ -75,11 +79,31 @@ const router = createRouter({
 
 const PUBLIC_ROUTE_NAMES = ['Login', 'Register']
 
-// 路由守卫：以 Sa-Token 是否存在于 sessionStorage 为准（登录、注册页除外）
-router.beforeEach((to, from, next) => {
+async function ensureUserSessionHydrated() {
+  if (!isLoggedIn() || getUserSession()?.userType) return
+  try {
+    const { data } = await axios.get('/api/auth/me')
+    if (Number(data?.code) === 200 && data?.data) {
+      setUserSession(data.data)
+    }
+  } catch {
+    /* 由接口 401 拦截器处理未登录 */
+  }
+}
+
+// 路由守卫：登录态 + 用户管理页权限（与后端 @SaCheckRole 对齐）
+router.beforeEach(async (to, from, next) => {
   if (!PUBLIC_ROUTE_NAMES.includes(to.name) && !isLoggedIn()) {
     next({ name: 'Login' })
     return
+  }
+  if (!PUBLIC_ROUTE_NAMES.includes(to.name)) {
+    await ensureUserSessionHydrated()
+    const denied = isRouteAccessDenied(to)
+    if (denied) {
+      next(denied)
+      return
+    }
   }
   next()
 })

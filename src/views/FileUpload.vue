@@ -64,7 +64,12 @@
     />
 
     <div v-if="isAuditOnlyMode && !showCalibration" class="audit-loading">
-      正在打开审核界面...
+      <el-skeleton animated>
+        <template #template>
+          <el-skeleton-item variant="rect" style="width: 100%; height: 72vh; border-radius: 12px" />
+        </template>
+      </el-skeleton>
+      <p class="audit-loading__hint">正在打开审核界面…</p>
     </div>
 
     <CalibrationWorkspaceDialog
@@ -76,6 +81,7 @@
       :exit-edit-mode="exitEditMode"
       :handle-save-data="handleSaveData"
       :handle-refresh-survey-report="handleRefreshSurveyReport"
+      :report-refresh-loading="reportRefreshLoading"
       :handle-audit-pass="handleAuditPass"
       :calibration-loading="calibrationLoading"
       :current-view-type="currentViewType"
@@ -163,6 +169,7 @@ const {
   exitEditMode,
   handleSaveData,
   handleRefreshSurveyReport,
+  reportRefreshLoading,
   handleAuditPass,
   calibrationLoading,
   currentViewType,
@@ -245,10 +252,18 @@ watch(
 .audit-loading {
   min-height: 72vh;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   justify-content: center;
+  gap: 12px;
+  padding: 24px;
   color: #64748b;
-  font-size: 15px;
+}
+
+.audit-loading__hint {
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
 }
 
 :deep(.upload-confirm-btn:not(:disabled)) {

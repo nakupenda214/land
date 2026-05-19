@@ -20,7 +20,7 @@
         </div>
 
         <div ref="excelViewRef" v-show="leftView === 'excel'" class="excel-view">
-          <VueOfficeExcel
+          <VueOfficeExcelAsync
             v-if="excelPreviewSrc"
             :src="excelPreviewSrc"
             class="office-excel"
@@ -96,9 +96,8 @@
 <script setup>
 import { computed, nextTick, onUnmounted, reactive, ref, watch } from 'vue'
 import axios from 'axios'
-import VueOfficeExcel from '@vue-office/excel'
-import '@vue-office/excel/lib/index.css'
 import { ElMessage } from 'element-plus'
+import { VueOfficeExcelAsync } from '@/components/project-list/lazyVueOfficeExcel.js'
 import { downloadGridFsFile, queryFiles } from '@/services/file.service'
 import { updateProjectPartySummaryForm } from '@/services/project.service'
 import { useRecognitionMarkdown } from '@/composables/file-upload/useRecognitionMarkdown'

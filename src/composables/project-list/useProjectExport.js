@@ -1,5 +1,4 @@
-﻿import ExcelJS from 'exceljs'
-import { saveAs } from 'file-saver'
+﻿import { saveAs } from 'file-saver'
 import { ElMessage } from 'element-plus'
 import {
   resolveVisibleColumnDefs,
@@ -99,6 +98,7 @@ export function useProjectExport({
       return
     }
 
+    const { default: ExcelJS } = await import('exceljs')
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('房产实测汇总表')
 
@@ -118,8 +118,7 @@ export function useProjectExport({
     displayTableData.value.forEach((item, index) => {
       const values = defs.map((col) => formatSummaryCellValue(col, item, index))
       const row = worksheet.addRow(values)
-      row.eachCell((cell, colNumber) => {
-        const col = defs[colNumber - 1]
+      row.eachCell((cell) => {
         cell.alignment = {
           horizontal: excelHorizontalAlign(),
           vertical: 'middle'

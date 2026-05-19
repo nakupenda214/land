@@ -81,6 +81,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { USER_TYPE_OPTIONS, userTypeLabel } from '@/constants/userTypes'
+import { listUsersPage } from '@/services/user.service'
 
 const loading = ref(false)
 const rows = ref([])
@@ -137,7 +138,7 @@ async function loadList() {
     }
     const k = keyword.value.trim()
     if (k) params.username = k
-    const { data } = await axios.get('/api/user/list', { params })
+    const data = await listUsersPage(params)
     if (Number(data.code) !== 200) {
       ElMessage.error(data.msg || '加载失败')
       return

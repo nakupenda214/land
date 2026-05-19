@@ -4,7 +4,7 @@
 
 import { formatAreaDigits } from '@/composables/project-list/summaryExportColumnSchema.js'
 
-export const SUMMARY_COMPARISON_GROUP_META = [
+const SUMMARY_COMPARISON_GROUP_META = [
   { key: 'systemCalculated', title: '实测报告对比结果' },
   { key: 'projectPartyDeclared', title: '项目方统计比对结果' },
   { key: 'planningCalculated', title: '规划复核对比结果' }

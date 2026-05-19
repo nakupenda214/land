@@ -54,7 +54,14 @@
         </header>
 
         <div class="contracts-table-wrap contracts-table-wrap--contract-list">
+          <el-empty
+            v-if="!contractLandList.length"
+            description="当前项目暂无合同，可点击「刷新数据」或前往归档上传合同文件"
+            :image-size="88"
+            class="contracts-empty"
+          />
           <el-table
+            v-else
             ref="contractsTableRef"
             class="project-tab-el-table contract-list-modern-table"
             :data="contractLandList"
@@ -64,7 +71,7 @@
             scrollbar-always-on
             highlight-current-row
             row-key="id"
-            :virtual-scroll="false"
+            :virtual-scroll="contractLandList.length > 80"
             @row-click="(row) => emit('contract-row-click', row)"
           >
             <el-table-column

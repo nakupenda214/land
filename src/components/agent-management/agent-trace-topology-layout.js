@@ -163,7 +163,7 @@ export function resolveCanonicalEndId(nodes) {
   return '__END__'
 }
 
-export function normalizeGraphEndpoint(id, canonicalEndId) {
+function normalizeGraphEndpoint(id, canonicalEndId) {
   const s = String(id ?? '').trim()
   if (!s) return s
   const c = canonicalEndId || s
@@ -220,7 +220,7 @@ export function eventTouchesNode(ev, nodeId) {
  * 例如 {@code mql_generate:mql_repair} → {@code mql_generate}。
  * @param {string} label
  */
-export function nodeIdFromLlmCallLabel(label) {
+function nodeIdFromLlmCallLabel(label) {
   const s = String(label ?? '').trim()
   if (!s) return ''
   const i = s.indexOf(':')
@@ -231,7 +231,7 @@ export function nodeIdFromLlmCallLabel(label) {
  * 与 lc-agent {@code AgentGraphTopology#runtimeNodeIds()} 顺序一致（不含 __START__/END）。
  * 用于「思考流 / LLM 分区」等与图执行序对齐；勿随意改序，改后端拓扑时请同步。
  */
-export const AGENT_RUNTIME_LLM_STREAM_ORDER = Object.freeze([
+const AGENT_RUNTIME_LLM_STREAM_ORDER = Object.freeze([
   'intent_classify',
   'common_chat',
   'knowledge_qa_answer',
@@ -256,7 +256,7 @@ const _llmStreamOrderIndex = new Map(AGENT_RUNTIME_LLM_STREAM_ORDER.map((id, i) 
  * @param {string} nodeIdRaw
  * @returns {string}
  */
-export function canonicalRuntimeNodeIdForLlmStreamOrder(nodeIdRaw) {
+function canonicalRuntimeNodeIdForLlmStreamOrder(nodeIdRaw) {
   const s = String(nodeIdRaw ?? '').trim()
   if (!s) return ''
   if (s === 'AnswerWrapNode') return 'answer_wrap'

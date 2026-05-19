@@ -94,7 +94,7 @@ export function extractPlannerNodeOutputFromEvents(events) {
  * @param {unknown[]} events
  * @returns {Array<{ step: number, toolToUse: string }>|null}
  */
-export function extractLastPlanOutlineSteps(events) {
+function extractLastPlanOutlineSteps(events) {
   if (!Array.isArray(events)) return null
   for (let i = events.length - 1; i >= 0; i--) {
     const ev = events[i]

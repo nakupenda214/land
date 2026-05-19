@@ -9,7 +9,7 @@ function schemaIds() {
  * @param {string | null} raw
  * @returns {Array<{ id: string, visible: boolean }>}
  */
-export function parseStoredSummaryLayout(raw) {
+function parseStoredSummaryLayout(raw) {
   const defaults = getDefaultSummaryLayoutRows()
   if (!raw) return defaults
 

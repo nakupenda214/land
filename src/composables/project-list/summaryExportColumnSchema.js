@@ -80,11 +80,6 @@ export function getSummaryColumnDef(id) {
   return schemaById[id]
 }
 
-export function getColumnFlatHeader(col) {
-  if (!col.headerGroup) return col.subLabel
-  return `${col.groupLabel}·${col.subLabel}`
-}
-
 /** 设置弹窗「列名」列展示（与双层表头语义一致） */
 export function getColumnConfigLabel(col) {
   if (!col.headerGroup) return col.subLabel

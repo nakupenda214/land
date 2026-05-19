@@ -6,17 +6,6 @@ const TASK_STATUS_KIND = {
   MANUAL_REVIEW: 'manual'
 }
 
-const RISK_LEVEL_KIND = {
-  LOW: 'success',
-  MEDIUM: 'warning',
-  HIGH: 'danger'
-}
-
-const VERIFY_STATUS_KIND = {
-  PASS: 'success',
-  FAIL: 'danger'
-}
-
 const STAGE_KIND = {
   INGEST: 'info',
   DIAGNOSIS: 'info',
@@ -34,16 +23,6 @@ function normalize(raw) {
 export function statusPillClass(raw) {
   const key = normalize(raw)
   return `status-pill status-pill--${TASK_STATUS_KIND[key] || 'default'}`
-}
-
-export function riskTagType(raw) {
-  const key = normalize(raw)
-  return RISK_LEVEL_KIND[key] || 'info'
-}
-
-export function verifyTagType(raw) {
-  const key = normalize(raw)
-  return VERIFY_STATUS_KIND[key] || 'info'
 }
 
 export function stageTagType(raw) {

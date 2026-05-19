@@ -8,6 +8,10 @@ alwaysApply: false
 - 在 `e:\dev\Code\Js\land` 根目录执行 `npm run verify`（`build` + `test` + `eslint src`），须通过。
 - 行数与热点文件：`npm run metrics:src`（输出 JSON，含各一级目录行数与最大文件列表）。
 
+## 与后端契约
+
+- 项目 `projectTime`：存库与接口为 **ISO `yyyy-MM-dd` 自然日**（如 `2025-11-15`）；`el-date-picker` 使用 **`type="date"`** 与 `value-format="YYYY-MM-DD"`。列表展示可用 `src/utils/projectTimePresent.js` 的 `formatProjectTimeForDisplay`。Dashboard 按项目时间范围筛选用 **`type="daterange"`**。
+
 ## 重构约定（与 backend refactor 原则对齐）
 
 - 行为不变、小步提交；重构与功能需求分 PR。

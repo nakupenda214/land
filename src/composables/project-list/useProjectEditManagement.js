@@ -7,7 +7,8 @@ export function useProjectEditManagement({
   filterProject,
   currentProjectInfo,
   fetchProjectList,
-  fetchProjectDetail
+  applyProjectMeta,
+  reloadActiveTabData
 }) {
   const projectEditRef = ref(null)
   const setProjectEditRef = (formRef) => {
@@ -51,7 +52,8 @@ export function useProjectEditManagement({
 
     try {
       await fetchProjectList()
-      await fetchProjectDetail(filterProject.value)
+      applyProjectMeta?.(filterProject.value)
+      await reloadActiveTabData?.(filterProject.value)
       await fetchProjectOriginalData(filterProject.value)
     } catch (error) {
       console.error('刷新项目关联数据失败:', error)
