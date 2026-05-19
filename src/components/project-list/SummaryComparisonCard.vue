@@ -35,6 +35,32 @@
           </el-table>
         </article>
       </div>
+
+      <!-- 仅界面展示：不参与打印/导出（整块汇总区已在 #app，打印走 #print-target） -->
+      <section class="comparison-cross no-print" aria-label="计容面积两侧差值">
+        <header class="comparison-cross__header">
+          <div class="comparison-cross__titles">
+            <h4 class="comparison-cross__title">计容面积差值（实测 − 项目方）</h4>
+          </div>
+          <el-tag size="small" effect="plain" :type="crossBuildableDiff.available ? 'success' : 'info'">
+            {{ crossBuildableDiff.available ? '可计算' : '暂无两侧计容' }}
+          </el-tag>
+        </header>
+        <el-table
+          class="comparison-table comparison-cross__table"
+          :data="crossBuildableDiff.rows"
+          border
+          stripe
+          size="small"
+        >
+          <el-table-column prop="label" label="维度" min-width="120" />
+          <el-table-column prop="diff" label="差值（㎡）" min-width="140" align="right">
+            <template #default="{ row }">
+              <span :class="{ 'comparison-cross__diff--muted': row.diff === '-' }">{{ row.diff }}</span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </section>
     </div>
   </el-card>
 </template>
@@ -71,6 +97,33 @@ const formatArea = (value) => {
   if (!Number.isFinite(num)) return '-'
   return num.toFixed(2)
 }
+
+const TRIPLE_KEYS = [
+  { lineKey: 'totalBuilding', label: '建筑面积' },
+  { lineKey: 'commercial', label: '商业面积' },
+  { lineKey: 'residential', label: '住宅面积' }
+]
+
+const parseAreaNumber = (value) => {
+  const num = Number(value)
+  return Number.isFinite(num) ? num : null
+}
+
+/** 实测报告计容 − 项目方计容，按维度对齐；任一侧缺失则该行差值为「-」 */
+const crossBuildableDiff = computed(() => {
+  const sys = props.areaComparison?.systemCalculated
+  const party = props.areaComparison?.projectPartyDeclared
+  const rows = TRIPLE_KEYS.map(({ lineKey, label }) => {
+    const a = parseAreaNumber(sys?.[lineKey]?.buildableArea)
+    const b = parseAreaNumber(party?.[lineKey]?.buildableArea)
+    if (a === null || b === null) {
+      return { label, diff: '-' }
+    }
+    return { label, diff: formatArea(a - b) }
+  })
+  const available = rows.some((r) => r.diff !== '-')
+  return { rows, available }
+})
 
 const checkedGroupKeys = computed({
   get: () => props.selectedGroups,
@@ -167,6 +220,49 @@ const displayGroups = computed(() =>
   font-size: 14px;
   font-weight: 700;
   color: #1f2937;
+}
+
+.comparison-cross {
+  margin-top: 2px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px dashed #c7d2fe;
+  background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 55%, #ffffff 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+}
+
+.comparison-cross__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.comparison-cross__titles {
+  min-width: 0;
+}
+
+.comparison-cross__title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #312e81;
+}
+
+.comparison-cross__hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+.comparison-cross__table {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.comparison-cross__diff--muted {
+  color: #94a3b8;
 }
 
 ::deep(.comparison-table .el-table__header th) {

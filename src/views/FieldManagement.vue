@@ -5,7 +5,7 @@
         <h2><el-icon><CollectionTag /></el-icon> 土地类型管理</h2>
       </div>
       <div class="header-right">
-        <el-button class="biz-btn" type="primary" plain :icon="Refresh" @click="handleRefresh">同步刷新</el-button>
+        <el-button class="biz-btn" type="primary" plain :icon="Refresh" @click="handleRefresh">刷新</el-button>
         <el-button class="biz-btn" type="primary" :icon="Plus" @click="openAddDialog">新增映射</el-button>
       </div>
     </div>

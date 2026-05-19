@@ -7,14 +7,24 @@
           <el-icon class="brand-icon"><FolderOpened /></el-icon>
         </div>
         <div class="brand-copy">
-          <div class="brand-title-row">
-            <span class="brand-title">项目工作区</span>
-          </div>
-          <div class="current-project" :class="{ empty: !selectedProjectName && !optionsLoading }">
-            <el-icon class="hint-icon"><InfoFilled /></el-icon>
-            <span v-if="optionsLoading">正在同步项目列表…</span>
-            <span v-else-if="selectedProjectName">当前查看：{{ selectedProjectName }}</span>
-            <span v-else>未选择项目，请先在右侧输入关键词并选择项目</span>
+          <div
+            class="project-display"
+            :class="{
+              loading: optionsLoading,
+              selected: !!selectedProjectName && !optionsLoading,
+              empty: !selectedProjectName && !optionsLoading
+            }"
+          >
+            <template v-if="optionsLoading">
+              <span class="project-name loading-text">正在同步项目列表…</span>
+            </template>
+            <template v-else-if="selectedProjectName">
+              <span class="project-name" :title="selectedProjectName">{{ selectedProjectName }}</span>
+            </template>
+            <template v-else>
+              <span class="project-name empty-title">请选择项目</span>
+              <span class="project-hint">在右侧搜索框输入名称或编号进行筛选</span>
+            </template>
           </div>
         </div>
       </div>
@@ -87,7 +97,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { FolderOpened, Search, Plus, Promotion, InfoFilled } from '@element-plus/icons-vue'
+import { FolderOpened, Search, Plus, Promotion } from '@element-plus/icons-vue'
 
 const props = defineProps({
   modelValue: {
@@ -264,10 +274,11 @@ function formatShortTime(val) {
 
 .filter-brand {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 14px;
   min-width: 200px;
-  max-width: 320px;
+  max-width: 360px;
+  flex-shrink: 0;
 }
 
 .brand-icon-wrap {
@@ -291,49 +302,51 @@ function formatShortTime(val) {
 
 .brand-copy {
   min-width: 0;
-}
-
-.brand-title-row {
+  flex: 1;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 10px;
-  margin-bottom: 4px;
 }
 
-.brand-title {
-  font-size: 17px;
+.project-display {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+
+.project-name {
+  font-size: 18px;
   font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--biz-text, #1f2d3d);
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  color: var(--biz-text, #0f172a);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
-.current-project {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  font-size: 12.5px;
-  color: #334155;
-  background: rgba(59, 130, 246, 0.08);
-  border: 1px solid rgba(59, 130, 246, 0.14);
+.project-display.selected .project-name {
+  color: #0f172a;
 }
 
-.current-project.empty {
-  background: rgba(148, 163, 184, 0.12);
-  border-color: rgba(148, 163, 184, 0.22);
-  color: #475569;
-}
-
-.hint-icon {
-  font-size: 16px;
-  color: #1d4ed8;
-}
-
-.current-project.empty .hint-icon {
+.project-display.loading .project-name.loading-text {
+  font-size: 15px;
+  font-weight: 600;
   color: #64748b;
+}
+
+.project-display.empty .project-name.empty-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.project-hint {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #94a3b8;
 }
 
 .filter-toolbar {
@@ -395,10 +408,6 @@ function formatShortTime(val) {
   color: #64748b;
   background: rgba(248, 250, 252, 0.95);
   border-color: rgba(148, 163, 184, 0.4);
-}
-
-.hint-icon {
-  font-size: 14px;
 }
 
 .project-select {

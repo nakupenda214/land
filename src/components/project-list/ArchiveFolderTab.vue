@@ -84,14 +84,14 @@
                   @keyup.enter="handleSearch"
                 />
                 <el-select
-                  v-model="queryForm.fileType"
-                  placeholder="文件类型"
+                  v-model="queryForm.verifyStatus"
+                  placeholder="校验状态"
                   clearable
                   class="query-item"
-                  @change="handleAutoQuery('fileType')"
-                  @clear="handleAutoQuery('fileType')"
+                  @change="handleAutoQuery('verifyStatus')"
+                  @clear="handleAutoQuery('verifyStatus')"
                 >
-                  <el-option v-for="item in fileTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+                  <el-option v-for="item in verifyStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
                 </el-select>
                 <el-select
                   v-model="queryForm.fileState"
@@ -179,7 +179,23 @@
                     </div>
                   </template>
                 </el-table-column>
-                <el-table-column prop="originalName" label="文件名" min-width="280" show-overflow-tooltip />
+                <el-table-column label="文件名" min-width="280">
+                  <template #default="{ row }">
+                    <el-link
+                      v-if="showPreviewButton(row)"
+                      type="primary"
+                      :underline="false"
+                      class="archive-file-name-link"
+                      :title="`点击预览：${row.originalName || ''}`"
+                      @click="handlePreview(row)"
+                    >
+                      {{ row.originalName || '-' }}
+                    </el-link>
+                    <span v-else class="archive-file-name-text" :title="row.originalName || ''">
+                      {{ row.originalName || '-' }}
+                    </span>
+                  </template>
+                </el-table-column>
                 <el-table-column label="上传时间" width="180" align="center">
                   <template #default="{ row }">{{ formatDateTime(row.uploadTime) }}</template>
                 </el-table-column>
@@ -470,7 +486,6 @@
       :is-editing="isEditing"
       :editing-row-id="editingRowId"
       :start-row-edit="enterEditMode"
-      :handle-usage-category-change="handleEditUsageCategoryChange"
       :exit-edit-mode="exitEditMode"
       :handle-save-data="handleSaveData"
       :handle-refresh-survey-report="handleRefreshSurveyReport"
@@ -516,6 +531,20 @@
       :initial-file="partySummaryAuditInitialFile"
     />
 
+    <ArchiveFilePreviewDialog
+      v-model="previewVisible"
+      :loading="previewLoading"
+      :mode="previewMode"
+      :file-meta="previewFileMeta"
+      :pdf-url="pdfPreviewUrl"
+      :image-url="imagePreviewUrl"
+      :excel-src="excelPreviewSrc"
+      @closed="handlePreviewClosed"
+      @download="downloadPreviewFile"
+      @excel-rendered="previewLoading = false"
+      @excel-error="onExcelPreviewError"
+    />
+
     <el-dialog
       v-model="parseFlowDialogVisible"
       title="任务阶段详情"
@@ -542,6 +571,7 @@ import CalibrationWorkspaceDialog from '@/components/file-upload/CalibrationWork
 import TaskParseFlowDetailPanel from '@/components/layout/TaskParseFlowDetailPanel.vue'
 import PlanningReviewAuditDialog from '@/components/project-list/PlanningReviewAuditDialog.vue'
 import ProjectPartySummaryAuditDialog from '@/components/project-list/ProjectPartySummaryAuditDialog.vue'
+import ArchiveFilePreviewDialog from '@/components/project-list/ArchiveFilePreviewDialog.vue'
 import { useCalibrationState } from '@/composables/file-upload/useCalibrationState'
 import { useCalibrationViewer } from '@/composables/file-upload/useCalibrationViewer'
 import { useRoomEditWorkflow } from '@/composables/file-upload/useRoomEditWorkflow'
@@ -549,6 +579,7 @@ import { useCalibrationActions } from '@/composables/file-upload/useCalibrationA
 import { useFileUploadConstants, useAuditSummaryDisplay } from '@/composables/file-upload/useFileUploadConstants'
 import { useRecognitionMarkdown } from '@/composables/file-upload/useRecognitionMarkdown'
 import { useProjectStomp } from '@/composables/project-list/useProjectStomp'
+import { canPreviewArchiveFile, useArchiveFilePreview } from '@/composables/project-list/useArchiveFilePreview'
 import { queryPlanningReviewForms } from '@/services/project.service'
 import {
   batchUploadFiles,
@@ -590,16 +621,10 @@ const props = defineProps({
 })
 const emit = defineEmits(['audit-consumed'])
 
-const fileTypeOptions = [
-  { label: 'PDF', value: 'PDF' },
-  { label: 'XLS', value: 'XLS' },
-  { label: 'XLSX', value: 'XLSX' },
-  { label: 'DOC', value: 'DOC' },
-  { label: 'DOCX', value: 'DOCX' },
-  { label: 'PNG', value: 'PNG' },
-  { label: 'JPEG', value: 'JPEG' },
-  { label: 'GIF', value: 'GIF' },
-  { label: 'UNKNOWN', value: 'UNKNOWN' }
+const verifyStatusOptions = [
+  { label: '已通过', value: 'PASSED' },
+  { label: '未通过', value: 'FAILED' },
+  { label: '未校验', value: 'UNVERIFIED' }
 ]
 
 const fileStateOptions = [
@@ -855,7 +880,7 @@ const clearUploadFiles = () => {
 
 const queryForm = reactive({
   keyword: '',
-  fileType: '',
+  verifyStatus: '',
   fileState: '',
   pageNum: 1,
   pageSize: 20
@@ -949,7 +974,6 @@ const {
 const { recognitionHtml } = useRecognitionMarkdown({ recognitionMdContent })
   const {
   enterEditMode,
-  handleEditUsageCategoryChange,
   exitEditMode,
   handleSaveData,
   handleRefreshSurveyReport,
@@ -1282,6 +1306,20 @@ const handleRealtimeBatchUploadUpdate = (payload) => {
   }
 }
 
+const {
+  previewVisible,
+  previewLoading,
+  previewMode,
+  previewFileMeta,
+  pdfPreviewUrl,
+  imagePreviewUrl,
+  excelPreviewSrc,
+  openArchivePreview,
+  handlePreviewClosed,
+  downloadPreviewFile
+} = useArchiveFilePreview()
+
+const showPreviewButton = (row) => canPreviewArchiveFile(row)
 const showParseButton = (row) => ['WAITING_PARSE', 'PARSE_FAIL', 'PARSE_COMPLETE'].includes(row.fileState)
 const showCancelParseButton = (row) => ['PENDING', 'PARSING'].includes(row.fileState)
 const showAuditButton = (row) => {
@@ -1298,7 +1336,7 @@ const parseButtonText = (row) => {
 
 const resetFileQuery = () => {
   queryForm.keyword = ''
-  queryForm.fileType = ''
+  queryForm.verifyStatus = ''
   queryForm.fileState = ''
   queryForm.pageNum = 1
   queryForm.pageSize = 20
@@ -1342,7 +1380,7 @@ async function fetchArchiveFiles(options = {}) {
     pageNum: queryForm.pageNum,
     pageSize: queryForm.pageSize,
     keyword: queryForm.keyword || '',
-    fileType: queryForm.fileType || '',
+    verifyStatus: queryForm.verifyStatus || '',
     fileState: queryForm.fileState || ''
   })
 
@@ -1376,7 +1414,7 @@ async function fetchArchiveFiles(options = {}) {
       archiveId: Number(selectedArchiveId.value)
     }
     if (queryForm.keyword) payload.originalName = queryForm.keyword
-    if (queryForm.fileType) payload.fileType = queryForm.fileType
+    if (queryForm.verifyStatus) payload.verifyStatus = queryForm.verifyStatus
     if (queryForm.fileState) payload.fileState = queryForm.fileState
 
     const res = await queryFiles(payload, { signal: queryController.signal })
@@ -1753,6 +1791,16 @@ const openProjectPartySummaryAudit = (row) => {
   partySummaryAuditFileRecordId.value = String(fileRecordId)
   partySummaryAuditInitialFile.value = { ...row, id: fileRecordId }
   partySummaryAuditVisible.value = true
+}
+
+const handlePreview = async (row) => {
+  await openArchivePreview(row)
+}
+
+const onExcelPreviewError = (error) => {
+  previewLoading.value = false
+  console.error('Excel 预览渲染失败:', error)
+  ElMessage.error('Excel 预览失败，可尝试下载原文件查看')
 }
 
 const handleAudit = async (row) => {
@@ -3258,5 +3306,19 @@ onBeforeUnmount(() => {
 .state-tag-parse-flow:hover {
   filter: brightness(0.97);
   box-shadow: 0 0 0 1px rgba(31, 78, 121, 0.2);
+}
+
+.archive-file-name-link,
+.archive-file-name-text {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.archive-file-name-link:hover {
+  text-decoration: underline;
 }
 </style>

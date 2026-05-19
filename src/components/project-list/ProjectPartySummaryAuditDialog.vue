@@ -41,27 +41,13 @@
         role="separator"
         aria-orientation="vertical"
         aria-label="拖动调节左右区域宽度"
-        @mousedown="onSplitterMouseDown"
+        @pointerdown="onSplitterMouseDown"
       />
 
       <section class="right-panel audit-split-layout__right">
-        <div v-if="SHOW_PARTY_SUMMARY_ROWS_AUDIT" class="right-workspace-toolbar">
-          <el-radio-group v-model="rightWorkspace" size="small" class="right-workspace-tabs">
-            <el-radio-button :label="RIGHT_TAB_MAIN">主表编辑</el-radio-button>
-            <el-radio-button :label="RIGHT_TAB_ROWS">明细审核</el-radio-button>
-          </el-radio-group>
-        </div>
-
-        <div class="right-workspace-panes">
-          <div
-            v-show="!SHOW_PARTY_SUMMARY_ROWS_AUDIT || rightWorkspace === RIGHT_TAB_MAIN"
-            class="right-pane right-pane--main"
-          >
-            <div class="main-form-edit-header">
-              <div class="query-left">
-                <span class="row-count">对照左侧原表核对后，可修改主表字段与底部三行声明汇总</span>
-                <el-tag v-if="formEdit.id" size="small" type="info" effect="plain">主表 id: {{ formEdit.id }}</el-tag>
-              </div>
+        <div class="right-pane right-pane--main">
+            <div v-if="formEdit.id" class="main-form-edit-header">
+              <el-tag size="small" type="info" effect="plain">主表 id: {{ formEdit.id }}</el-tag>
             </div>
             <div class="main-form-edit-body">
               <el-form label-position="top" class="main-form-edit-form">
@@ -101,249 +87,9 @@
               <el-button @click="dialogVisible = false">关闭</el-button>
               <el-button type="primary" :loading="mainFormSaveLoading" @click="submitMainFormEdit">保存主表</el-button>
             </div>
-          </div>
-
-          <div
-            v-show="SHOW_PARTY_SUMMARY_ROWS_AUDIT && rightWorkspace === RIGHT_TAB_ROWS"
-            class="right-pane right-pane--rows"
-          >
-            <div class="query-bar">
-              <div class="query-left">
-                <span class="row-count">共 {{ rowTotal }} 行</span>
-                <el-tag size="small" type="info" effect="plain">summaryFormId: {{ summaryFormId || '-' }}</el-tag>
-              </div>
-              <div class="query-actions">
-                <el-button size="small" type="primary" plain @click="openCreateDialog" :disabled="!canCreateRow">新增行</el-button>
-                <el-button size="small" :icon="Refresh" @click="fetchRows">刷新</el-button>
-              </div>
-            </div>
-
-            <div class="table-wrap" v-loading="rowsLoading">
-              <el-table
-                :data="rows"
-                class="summary-rows-table"
-                border
-                stripe
-                size="small"
-                height="100%"
-                row-key="id"
-                :header-cell-style="AUDIT_TABLE_HEADER_STYLE"
-                :cell-style="AUDIT_TABLE_CELL_STYLE"
-              >
-                <el-table-column type="index" label="#" width="48" align="center" fixed="left" />
-                <el-table-column prop="engineeringProject" label="工程项目/楼栋" min-width="140" fixed="left" show-overflow-tooltip />
-                <el-table-column prop="propertyCertificateNumber" label="不动产权证编号" min-width="130" show-overflow-tooltip />
-                <el-table-column prop="contractApprovalNumber" label="合同/批文编号" min-width="120" show-overflow-tooltip />
-                <el-table-column prop="phase" label="期数" width="52" align="center" />
-                <el-table-column prop="actualTotalBuildingArea" label="实测总面积" width="96" align="right">
-                  <template #default="{ row }">{{ formatNum(row.actualTotalBuildingArea) }}</template>
-                </el-table-column>
-
-                <el-table-column label="计容建筑面积" align="center">
-                  <el-table-column prop="actualCommercialArea" label="商业" width="78" align="right">
-                    <template #default="{ row }">{{ formatNum(row.actualCommercialArea) }}</template>
-                  </el-table-column>
-                  <el-table-column prop="actualResidentialArea" label="住宅" width="78" align="right">
-                    <template #default="{ row }">{{ formatNum(row.actualResidentialArea) }}</template>
-                  </el-table-column>
-                  <el-table-column prop="actualManagementRoomArea" label="物管" width="78" align="right">
-                    <template #default="{ row }">{{ formatNum(row.actualManagementRoomArea) }}</template>
-                  </el-table-column>
-                  <el-table-column prop="actualOtherBuildableArea" label="其他" width="78" align="right">
-                    <template #default="{ row }">{{ formatNum(row.actualOtherBuildableArea) }}</template>
-                  </el-table-column>
-                </el-table-column>
-
-                <el-table-column label="不计容建筑面积" align="center">
-                  <el-table-column prop="actualCommunityArea" label="社区" width="78" align="right">
-                    <template #default="{ row }">{{ formatNum(row.actualCommunityArea) }}</template>
-                  </el-table-column>
-                  <el-table-column prop="actualOtherPublicArea" label="公用" width="78" align="right">
-                    <template #default="{ row }">{{ formatNum(row.actualOtherPublicArea) }}</template>
-                  </el-table-column>
-                </el-table-column>
-
-                <el-table-column prop="totalBuildableArea" label="计容合计" width="88" align="right">
-                  <template #default="{ row }">{{ formatNum(row.totalBuildableArea) }}</template>
-                </el-table-column>
-                <el-table-column prop="totalNonBuildableArea" label="不计容合计" width="96" align="right">
-                  <template #default="{ row }">{{ formatNum(row.totalNonBuildableArea) }}</template>
-                </el-table-column>
-
-                <el-table-column prop="remark" label="备注" min-width="100" show-overflow-tooltip />
-                <el-table-column
-                  label="操作"
-                  width="128"
-                  align="center"
-                  fixed="right"
-                  class-name="party-summary-audit-op-col"
-                >
-                  <template #default="{ row }">
-                    <div class="party-audit-row-actions">
-                      <el-button
-                        class="party-audit-op-btn op-btn audit-btn"
-                        size="small"
-                        type="primary"
-                        plain
-                        @click="openEditDialog(row)"
-                      >
-                        编辑
-                      </el-button>
-                      <el-popconfirm title="确认删除该行？" width="220" @confirm="handleDeleteRow(row)">
-                        <template #reference>
-                          <el-button class="party-audit-op-btn op-btn delete-btn" size="small" type="danger" plain>
-                            删除
-                          </el-button>
-                        </template>
-                      </el-popconfirm>
-                    </div>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </div>
-
-            <div class="pager-row">
-              <el-pagination
-                background
-                layout="total, sizes, prev, pager, next"
-                :total="rowTotal"
-                :page-size="query.pageSize"
-                :current-page="query.pageNum"
-                :page-sizes="[10, 20, 50, 100]"
-                @size-change="handleSizeChange"
-                @current-change="handlePageChange"
-              />
-            </div>
-          </div>
         </div>
       </section>
     </div>
-
-    <el-dialog
-      v-model="editDialogVisible"
-      :title="isCreating ? '新增汇总行' : '编辑汇总行'"
-      width="720px"
-      append-to-body
-      align-center
-      destroy-on-close
-      class="party-summary-row-edit-dialog"
-    >
-      <el-form label-position="top" class="row-edit-form">
-        <div class="edit-block">
-          <div class="edit-block-title">基础信息</div>
-          <el-row :gutter="16">
-            <el-col :xs="24" :sm="8">
-              <el-form-item label="行号">
-                <el-input-number v-model="editForm.rowIndex" :min="1" controls-position="right" class="w100" />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="8">
-              <el-form-item label="期数">
-                <el-input-number v-model="editForm.phase" :min="1" controls-position="right" class="w100" />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="8">
-              <el-form-item label="实测总面积（㎡）">
-                <el-input-number v-model="editForm.actualTotalBuildingArea" :precision="2" controls-position="right" class="w100" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-form-item label="工程项目 / 楼栋">
-            <el-input v-model.trim="editForm.engineeringProject" placeholder="楼栋或工程名称" clearable />
-          </el-form-item>
-          <el-row :gutter="16">
-            <el-col :xs="24" :sm="12">
-              <el-form-item label="不动产权证编号">
-                <el-input v-model.trim="editForm.propertyCertificateNumber" clearable />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12">
-              <el-form-item label="合同 / 批文编号">
-                <el-input v-model.trim="editForm.contractApprovalNumber" clearable />
-              </el-form-item>
-            </el-col>
-          </el-row>
-        </div>
-
-        <div class="edit-block">
-          <div class="edit-block-title">计容建筑面积（㎡）</div>
-          <el-row :gutter="16">
-            <el-col :xs="24" :sm="12">
-              <el-form-item label="商业">
-                <el-input-number v-model="editForm.actualCommercialArea" :precision="2" controls-position="right" class="w100" />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12">
-              <el-form-item label="住宅">
-                <el-input-number v-model="editForm.actualResidentialArea" :precision="2" controls-position="right" class="w100" />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12">
-              <el-form-item label="物管">
-                <el-input-number v-model="editForm.actualManagementRoomArea" :precision="2" controls-position="right" class="w100" />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12">
-              <el-form-item label="其他计容">
-                <el-input-number v-model="editForm.actualOtherBuildableArea" :precision="2" controls-position="right" class="w100" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-        </div>
-
-        <div class="edit-block">
-          <div class="edit-block-title">不计容建筑面积（㎡）</div>
-          <el-row :gutter="16">
-            <el-col :xs="24" :sm="12">
-              <el-form-item label="社区">
-                <el-input-number v-model="editForm.actualCommunityArea" :precision="2" controls-position="right" class="w100" />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12">
-              <el-form-item label="公用">
-                <el-input-number v-model="editForm.actualOtherPublicArea" :precision="2" controls-position="right" class="w100" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-        </div>
-
-        <div class="edit-block">
-          <div class="edit-block-title">合计（㎡）</div>
-          <el-row :gutter="16">
-            <el-col :xs="24" :sm="12">
-              <el-form-item label="计容合计">
-                <el-input-number v-model="editForm.totalBuildableArea" :precision="2" controls-position="right" class="w100" />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12">
-              <el-form-item label="不计容合计">
-                <el-input-number v-model="editForm.totalNonBuildableArea" :precision="2" controls-position="right" class="w100" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-        </div>
-
-        <div class="edit-block">
-          <div class="edit-block-title">报告与备注</div>
-          <el-form-item label="房地产勘测报告书编号">
-            <el-input v-model.trim="editForm.realEstateSurveyReportNumber" clearable />
-          </el-form-item>
-          <el-form-item label="房产面积确认告知书编号">
-            <el-input v-model.trim="editForm.propertyAreaConfirmationNoticeNumber" clearable />
-          </el-form-item>
-          <el-form-item label="备注">
-            <el-input v-model.trim="editForm.remark" type="textarea" :rows="3" maxlength="500" show-word-limit placeholder="选填" />
-          </el-form-item>
-        </div>
-      </el-form>
-
-      <template #footer>
-        <div class="row-edit-footer">
-          <el-button @click="editDialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="saveLoading" @click="handleSaveRow">保存</el-button>
-        </div>
-      </template>
-    </el-dialog>
   </el-dialog>
 </template>
 
@@ -353,37 +99,21 @@ import axios from 'axios'
 import VueOfficeExcel from '@vue-office/excel'
 import '@vue-office/excel/lib/index.css'
 import { ElMessage } from 'element-plus'
-import { Refresh } from '@element-plus/icons-vue'
 import { downloadGridFsFile, queryFiles } from '@/services/file.service'
-import {
-  createProjectPartySummaryRow,
-  deleteProjectPartySummaryRow,
-  queryProjectPartySummaryRows,
-  updateProjectPartySummaryForm,
-  updateProjectPartySummaryRow
-} from '@/services/project.service'
+import { updateProjectPartySummaryForm } from '@/services/project.service'
 import { useRecognitionMarkdown } from '@/composables/file-upload/useRecognitionMarkdown'
 import { useAuditSplitPanel } from '@/composables/audit/useAuditSplitPanel'
-import { AUDIT_TABLE_HEADER_STYLE, AUDIT_TABLE_CELL_STYLE } from '@/constants/auditTableStyles'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   projectId: { type: [String, Number], default: '' },
   fileRecordId: { type: [String, Number], default: '' },
   initialFile: { type: Object, default: null },
-  /** 打开时右侧默认面板：mainForm 主表编辑；rows 明细审核（仅当 SHOW_PARTY_SUMMARY_ROWS_AUDIT 为 true 时有效） */
-  initialRightTab: { type: String, default: 'mainForm' },
   /** 主表表单初始数据（来自主表列表行）；缺省时打开后按 fileRecordId 从接口拉取 */
   mainFormDraft: { type: Object, default: null }
 })
 
 const emit = defineEmits(['update:modelValue', 'main-form-saved'])
-
-/** 为 false 时隐藏「明细审核」切换与表格，且不请求行列表；改 true 可恢复 */
-const SHOW_PARTY_SUMMARY_ROWS_AUDIT = false
-
-const RIGHT_TAB_MAIN = 'mainForm'
-const RIGHT_TAB_ROWS = 'rows'
 
 const dialogTitle = computed(() => '项目方实测汇总表')
 
@@ -392,18 +122,10 @@ const dialogVisible = computed({
   set: (v) => emit('update:modelValue', v)
 })
 
-/** 右侧面板：主表编辑 / 明细审核（同一弹窗内切换） */
-const rightWorkspace = ref(RIGHT_TAB_MAIN)
-
 const leftView = ref('excel')
 const metaLoading = ref(false)
 const mdLoading = ref(false)
-const rowsLoading = ref(false)
 const excelPreviewLoading = ref(false)
-const saveLoading = ref(false)
-const rows = ref([])
-const rowTotal = ref(0)
-const summaryFormId = ref('')
 
 const recognitionMdContent = ref('')
 const { recognitionHtml } = useRecognitionMarkdown({ recognitionMdContent })
@@ -468,13 +190,6 @@ onUnmounted(() => {
   unbindExcelViewResizeObserver()
 })
 
-const query = reactive({
-  pageNum: 1,
-  pageSize: 20,
-  sortField: 'rowIndex',
-  sortDirection: 'asc'
-})
-
 const mainFormSaveLoading = ref(false)
 
 const emptyDeclaredTotals = () => ({
@@ -516,70 +231,16 @@ const assignMainFormFromDraft = (draft) => {
   })
 }
 
-const editDialogVisible = ref(false)
-const isCreating = ref(false)
-const editForm = reactive({
-  id: null,
-  rowIndex: 1,
-  engineeringProject: '',
-  propertyCertificateNumber: '',
-  contractApprovalNumber: '',
-  phase: 1,
-  actualTotalBuildingArea: null,
-  actualCommercialArea: null,
-  actualResidentialArea: null,
-  actualManagementRoomArea: null,
-  actualOtherBuildableArea: null,
-  actualCommunityArea: null,
-  actualOtherPublicArea: null,
-  totalBuildableArea: null,
-  totalNonBuildableArea: null,
-  realEstateSurveyReportNumber: '',
-  propertyAreaConfirmationNoticeNumber: '',
-  remark: ''
-})
-
-const canCreateRow = computed(() => Boolean(props.projectId && props.fileRecordId && summaryFormId.value))
-
 const normalizePage = (payload) => {
   if (Array.isArray(payload)) return { records: payload, total: payload.length }
   const records = Array.isArray(payload?.records) ? payload.records : []
   return { records, total: Number(payload?.total ?? records.length) }
 }
 
-const formatNum = (num) => {
-  if (num === null || num === undefined || num === '') return '-'
-  const val = Number(num)
-  return Number.isNaN(val) ? '-' : val.toFixed(2)
-}
-
 const toNullableNumber = (v) => {
   if (v === '' || v === null || v === undefined) return null
   const n = Number(v)
   return Number.isNaN(n) ? null : n
-}
-
-const resetEditForm = () => {
-  Object.assign(editForm, {
-    id: null,
-    rowIndex: 1,
-    engineeringProject: '',
-    propertyCertificateNumber: '',
-    contractApprovalNumber: '',
-    phase: 1,
-    actualTotalBuildingArea: null,
-    actualCommercialArea: null,
-    actualResidentialArea: null,
-    actualManagementRoomArea: null,
-    actualOtherBuildableArea: null,
-    actualCommunityArea: null,
-    actualOtherPublicArea: null,
-    totalBuildableArea: null,
-    totalNonBuildableArea: null,
-    realEstateSurveyReportNumber: '',
-    propertyAreaConfirmationNoticeNumber: '',
-    remark: ''
-  })
 }
 
 const onExcelRendered = () => {
@@ -593,9 +254,8 @@ const onExcelError = (e) => {
   ElMessage.error('Excel 预览失败，可尝试下载原文件查看')
 }
 
-/** 按 fileRecordId 拉取主表一行，并写入 summaryFormId；供无 mainFormDraft 时填充右侧主表表单 */
+/** 按 fileRecordId 拉取主表一行；供无 mainFormDraft 时填充右侧主表表单 */
 const fetchSummaryFormRow = async () => {
-  summaryFormId.value = ''
   if (!props.fileRecordId || !props.projectId) return null
   try {
     const res = await axios.post('/api/project/project-party-summary-forms/query', {
@@ -607,9 +267,7 @@ const fetchSummaryFormRow = async () => {
       fileRecordId: Number(props.fileRecordId)
     })
     if (res.data?.code !== 200) return null
-    const form = Array.isArray(res.data?.data?.records) ? res.data.data.records[0] : null
-    if (form?.id) summaryFormId.value = String(form.id)
-    return form || null
+    return Array.isArray(res.data?.data?.records) ? res.data.data.records[0] : null
   } catch (error) {
     console.error('查询项目方实测汇总主表失败:', error)
     return null
@@ -693,161 +351,6 @@ const fetchMarkdown = async () => {
   }
 }
 
-const fetchRows = async () => {
-  if (!SHOW_PARTY_SUMMARY_ROWS_AUDIT) {
-    rows.value = []
-    rowTotal.value = 0
-    return
-  }
-  if (!props.fileRecordId) {
-    rows.value = []
-    rowTotal.value = 0
-    return
-  }
-  rowsLoading.value = true
-  try {
-    const res = await queryProjectPartySummaryRows({
-      pageNum: query.pageNum,
-      pageSize: query.pageSize,
-      sortField: query.sortField,
-      sortDirection: query.sortDirection,
-      fileRecordId: Number(props.fileRecordId)
-    })
-    if (res.data?.code !== 200) {
-      rows.value = []
-      rowTotal.value = 0
-      ElMessage.warning(res.data?.msg || '查询汇总行失败')
-      return
-    }
-    const parsed = normalizePage(res.data?.data)
-    rows.value = parsed.records
-    rowTotal.value = parsed.total
-    if (!summaryFormId.value && parsed.records?.[0]?.summaryFormId) {
-      summaryFormId.value = String(parsed.records[0].summaryFormId)
-    }
-  } catch (error) {
-    console.error('查询项目方汇总行失败:', error)
-    rows.value = []
-    rowTotal.value = 0
-    ElMessage.error('查询汇总行失败，请稍后重试')
-  } finally {
-    rowsLoading.value = false
-  }
-}
-
-const buildSavePayload = () => ({
-  id: isCreating.value ? undefined : Number(editForm.id),
-  rowIndex: toNullableNumber(editForm.rowIndex),
-  engineeringProject: editForm.engineeringProject || null,
-  propertyCertificateNumber: editForm.propertyCertificateNumber || null,
-  contractApprovalNumber: editForm.contractApprovalNumber || null,
-  phase: toNullableNumber(editForm.phase),
-  actualTotalBuildingArea: toNullableNumber(editForm.actualTotalBuildingArea),
-  actualCommercialArea: toNullableNumber(editForm.actualCommercialArea),
-  actualResidentialArea: toNullableNumber(editForm.actualResidentialArea),
-  actualManagementRoomArea: toNullableNumber(editForm.actualManagementRoomArea),
-  actualOtherBuildableArea: toNullableNumber(editForm.actualOtherBuildableArea),
-  actualCommunityArea: toNullableNumber(editForm.actualCommunityArea),
-  actualOtherPublicArea: toNullableNumber(editForm.actualOtherPublicArea),
-  totalBuildableArea: toNullableNumber(editForm.totalBuildableArea),
-  totalNonBuildableArea: toNullableNumber(editForm.totalNonBuildableArea),
-  realEstateSurveyReportNumber: editForm.realEstateSurveyReportNumber || null,
-  propertyAreaConfirmationNoticeNumber: editForm.propertyAreaConfirmationNoticeNumber || null,
-  remark: editForm.remark || null
-})
-
-const openCreateDialog = () => {
-  if (!canCreateRow.value) {
-    ElMessage.warning('缺少 summaryFormId，无法新增。请先刷新右侧数据。')
-    return
-  }
-  isCreating.value = true
-  resetEditForm()
-  editDialogVisible.value = true
-}
-
-const openEditDialog = (row) => {
-  isCreating.value = false
-  resetEditForm()
-  Object.assign(editForm, {
-    id: row.id,
-    rowIndex: row.rowIndex ?? 1,
-    engineeringProject: row.engineeringProject || '',
-    propertyCertificateNumber: row.propertyCertificateNumber || '',
-    contractApprovalNumber: row.contractApprovalNumber || '',
-    phase: row.phase ?? 1,
-    actualTotalBuildingArea: row.actualTotalBuildingArea,
-    actualCommercialArea: row.actualCommercialArea,
-    actualResidentialArea: row.actualResidentialArea,
-    actualManagementRoomArea: row.actualManagementRoomArea,
-    actualOtherBuildableArea: row.actualOtherBuildableArea,
-    actualCommunityArea: row.actualCommunityArea,
-    actualOtherPublicArea: row.actualOtherPublicArea,
-    totalBuildableArea: row.totalBuildableArea,
-    totalNonBuildableArea: row.totalNonBuildableArea,
-    realEstateSurveyReportNumber: row.realEstateSurveyReportNumber || '',
-    propertyAreaConfirmationNoticeNumber: row.propertyAreaConfirmationNoticeNumber || '',
-    remark: row.remark || ''
-  })
-  editDialogVisible.value = true
-}
-
-const handleSaveRow = async () => {
-  saveLoading.value = true
-  try {
-    if (isCreating.value) {
-      const payload = {
-        projectId: Number(props.projectId),
-        fileRecordId: Number(props.fileRecordId),
-        summaryFormId: Number(summaryFormId.value),
-        ...buildSavePayload()
-      }
-      delete payload.id
-      const res = await createProjectPartySummaryRow(payload)
-      if (res.data?.code !== 200) {
-        ElMessage.error(res.data?.msg || '新增失败')
-        return
-      }
-      ElMessage.success(res.data?.msg || '新增成功')
-    } else {
-      const payload = buildSavePayload()
-      const res = await updateProjectPartySummaryRow(payload)
-      if (res.data?.code !== 200) {
-        ElMessage.error(res.data?.msg || '更新失败')
-        return
-      }
-      ElMessage.success(res.data?.msg || '更新成功')
-    }
-    editDialogVisible.value = false
-    await fetchRows()
-  } catch (error) {
-    console.error('保存项目方汇总行失败:', error)
-    ElMessage.error('保存失败，请稍后重试')
-  } finally {
-    saveLoading.value = false
-  }
-}
-
-const handleDeleteRow = async (row) => {
-  if (!row?.id) {
-    ElMessage.warning('缺少行ID，无法删除')
-    return
-  }
-  try {
-    const res = await deleteProjectPartySummaryRow(Number(row.id))
-    if (res.data?.code !== 200) {
-      ElMessage.error(res.data?.msg || '删除失败')
-      return
-    }
-    ElMessage.success(res.data?.msg || '删除成功')
-    if (rows.value.length === 1 && query.pageNum > 1) query.pageNum -= 1
-    await fetchRows()
-  } catch (error) {
-    console.error('删除项目方汇总行失败:', error)
-    ElMessage.error('删除失败，请稍后重试')
-  }
-}
-
 const downloadSourceFile = async () => {
   if (!fileMeta.gridfsId) {
     ElMessage.warning('缺少 gridfsId，无法下载')
@@ -870,28 +373,10 @@ const downloadSourceFile = async () => {
   }
 }
 
-const handlePageChange = (page) => {
-  query.pageNum = page
-  fetchRows()
-}
-
-const handleSizeChange = (size) => {
-  query.pageSize = size
-  query.pageNum = 1
-  fetchRows()
-}
-
 const handleClosed = () => {
   leftView.value = 'excel'
-  rightWorkspace.value = SHOW_PARTY_SUMMARY_ROWS_AUDIT ? RIGHT_TAB_ROWS : RIGHT_TAB_MAIN
-  rows.value = []
-  rowTotal.value = 0
-  summaryFormId.value = ''
   recognitionMdContent.value = ''
   excelPreviewSrc.value = null
-  editDialogVisible.value = false
-  isCreating.value = false
-  resetEditForm()
   resetMainFormEdit()
   mainFormSaveLoading.value = false
 }
@@ -934,28 +419,18 @@ const submitMainFormEdit = async () => {
 }
 
 watch(
-  () => [dialogVisible.value, props.fileRecordId, props.initialRightTab, props.mainFormDraft],
+  () => [dialogVisible.value, props.fileRecordId, props.mainFormDraft],
   async ([visible, fileRecordId]) => {
     if (!visible || !fileRecordId) return
-    rightWorkspace.value =
-      !SHOW_PARTY_SUMMARY_ROWS_AUDIT || props.initialRightTab === RIGHT_TAB_MAIN
-        ? RIGHT_TAB_MAIN
-        : RIGHT_TAB_ROWS
-    query.pageNum = 1
     if (props.mainFormDraft) {
       assignMainFormFromDraft(props.mainFormDraft)
-      if (props.mainFormDraft.id != null && props.mainFormDraft.id !== '') {
-        summaryFormId.value = String(props.mainFormDraft.id)
-      }
     } else {
       const formRow = await fetchSummaryFormRow()
       if (formRow) assignMainFormFromDraft(formRow)
       else resetMainFormEdit()
     }
     await fetchFileMeta()
-    const parallel = [fetchMarkdown(), fetchExcelPreview()]
-    if (SHOW_PARTY_SUMMARY_ROWS_AUDIT) parallel.push(fetchRows())
-    await Promise.all(parallel)
+    await Promise.all([fetchMarkdown(), fetchExcelPreview()])
   }
 )
 
@@ -989,25 +464,6 @@ watch(leftView, (v) => {
   background: #f3f6fa;
   border-radius: 10px;
   padding: 8px;
-}
-
-.party-audit-row-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.party-audit-op-btn {
-  width: 100%;
-  margin: 0 !important;
-}
-
-.party-audit-row-actions > :deep(.el-popconfirm) {
-  display: block;
-  width: 100%;
 }
 
 .left-panel,
@@ -1097,12 +553,6 @@ watch(leftView, (v) => {
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
 }
 
-.main-form-edit-header .row-count {
-  line-height: 1.5;
-  font-weight: 500;
-  color: #334155;
-}
-
 .main-form-edit-body {
   flex: 1;
   min-height: 0;
@@ -1168,31 +618,6 @@ watch(leftView, (v) => {
   border-radius: 8px;
 }
 
-.right-workspace-toolbar {
-  flex-shrink: 0;
-  margin-bottom: 10px;
-}
-
-.right-workspace-tabs {
-  width: 100%;
-  display: flex;
-}
-
-.right-workspace-tabs :deep(.el-radio-button) {
-  flex: 1;
-}
-
-.right-workspace-tabs :deep(.el-radio-button__inner) {
-  width: 100%;
-}
-
-.right-workspace-panes {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
 .right-pane {
   flex: 1;
   min-height: 0;
@@ -1201,138 +626,8 @@ watch(leftView, (v) => {
   overflow: hidden;
 }
 
-.query-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  gap: 10px;
-  padding: 8px 10px;
-  border: 1px solid #e4ebf4;
-  border-radius: 8px;
-  background: #f8fbff;
-}
-
-.query-left,
-.query-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.row-count {
-  font-size: 13px;
-  color: #475569;
-  font-weight: 600;
-}
-
-.table-wrap {
-  flex: 1;
-  min-height: 0;
-  border: 1px solid #e3eaf3;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #fff;
-}
-
-.summary-rows-table :deep(.el-table__header-wrapper) {
-  border-radius: 0;
-}
-
-.summary-rows-table :deep(.el-table__fixed-right-patch) {
-  background: #f1f5f9;
-}
-
-.summary-rows-table :deep(.party-summary-audit-op-col) {
-  vertical-align: middle;
-}
-
-.summary-rows-table :deep(.party-summary-audit-op-col .cell) {
-  padding: 10px 10px;
-  overflow: visible;
-}
-
-.pager-row {
-  margin-top: 10px;
-  display: flex;
-  justify-content: flex-end;
-}
-
 .w100 {
   width: 100%;
-}
-
-/* 编辑弹窗：分块表单 */
-:deep(.party-summary-row-edit-dialog) {
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-:deep(.party-summary-row-edit-dialog .el-dialog__header) {
-  padding: 16px 20px 12px;
-  margin: 0;
-  border-bottom: 1px solid #e8eef4;
-}
-
-:deep(.party-summary-row-edit-dialog .el-dialog__title) {
-  font-size: 17px;
-  font-weight: 600;
-  color: #1e293b;
-}
-
-:deep(.party-summary-row-edit-dialog .el-dialog__body) {
-  padding: 8px 20px 4px;
-  max-height: min(72vh, 720px);
-  overflow-y: auto;
-}
-
-.row-edit-form {
-  padding-bottom: 4px;
-}
-
-.edit-block {
-  margin-bottom: 16px;
-  padding: 14px 16px 6px;
-  border-radius: 10px;
-  background: #fafbfd;
-  border: 1px solid #e9eef4;
-}
-
-.edit-block:last-of-type {
-  margin-bottom: 0;
-}
-
-.edit-block-title {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: #475569;
-  margin: 0 0 12px;
-  padding-left: 10px;
-  border-left: 3px solid #3b82f6;
-  line-height: 1.2;
-}
-
-.row-edit-form :deep(.el-form-item) {
-  margin-bottom: 14px;
-}
-
-.row-edit-form :deep(.el-form-item__label) {
-  font-size: 13px;
-  font-weight: 500;
-  color: #334155;
-}
-
-.row-edit-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding-top: 4px;
-}
-
-:deep(.party-summary-row-edit-dialog .el-dialog__footer) {
-  padding: 12px 20px 18px;
-  border-top: 1px solid #eef2f7;
 }
 
 :deep(.party-summary-audit-dialog .el-button--primary) {
@@ -1351,16 +646,6 @@ watch(leftView, (v) => {
   border-bottom: 1px solid #e4ebf4;
   margin-right: 0;
   padding-bottom: 14px;
-}
-
-:deep(.el-pagination) {
-  --el-color-primary: #1f4e79;
-}
-
-:deep(.el-pagination.is-background .el-pager li.is-active) {
-  background: #e8f2fc !important;
-  color: #1f4e79;
-  border-color: #c8ddf1;
 }
 
 @media (max-width: 1280px) {

@@ -43,11 +43,25 @@ export function useFileUploadConstants() {
   }
 }
 
+function normalizeVerifiedFlag(value) {
+  if (value === 1 || value === '1' || value === true) return 1
+  if (value === 0 || value === '0' || value === false) return 0
+  return null
+}
+
 export function useAuditSummaryDisplay(auditSummaryData) {
-  const auditSummaryDisplay = computed(() => ({
-    isVerifiedText: auditSummaryData.isVerified === 1 ? '已验证' : '未验证',
-    hasUnknownUsageText: auditSummaryData.hasUnknownUsage === 1 ? '有' : '无'
-  }))
+  const auditSummaryDisplay = computed(() => {
+    const verifiedFlag = normalizeVerifiedFlag(auditSummaryData.isVerified)
+    let isVerifiedText = '未校验'
+    if (verifiedFlag === 1) isVerifiedText = '已通过'
+    else if (verifiedFlag === 0) isVerifiedText = '未通过'
+
+    return {
+      isVerifiedText,
+      isVerifiedTagType: verifiedFlag === 1 ? 'success' : verifiedFlag === 0 ? 'danger' : 'info',
+      hasUnknownUsageText: auditSummaryData.hasUnknownUsage === 1 ? '有' : '无'
+    }
+  })
 
   return { auditSummaryDisplay }
 }

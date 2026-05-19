@@ -36,7 +36,8 @@ const EXCEL_WIDTH_BY_ID = {
   calcOther: 11,
   nonCalcCommunity: 11,
   nonCalcOther: 11,
-  reportNo: 18,
+  areaConfirmationNoticeNo: 22,
+  reportNo: 24,
   remarks: 14
 }
 
@@ -75,9 +76,7 @@ function styleHeaderCell(cell) {
   cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
 }
 
-function excelHorizontalAlign(col) {
-  if (col.kind === 'area') return 'right'
-  if (col.kind === 'text' && col.id === 'projectName') return 'left'
+function excelHorizontalAlign() {
   return 'center'
 }
 
@@ -122,7 +121,7 @@ export function useProjectExport({
       row.eachCell((cell, colNumber) => {
         const col = defs[colNumber - 1]
         cell.alignment = {
-          horizontal: excelHorizontalAlign(col),
+          horizontal: excelHorizontalAlign(),
           vertical: 'middle'
         }
         cell.border = {

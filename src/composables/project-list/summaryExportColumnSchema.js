@@ -1,6 +1,6 @@
 /**
  * 房产实测汇总表：打印 / 导出共用列定义
- * 计容、不计容类列在打印/导出中使用双层表头（首行：计容建筑面积｜不计容建筑面积，次行：商业、住宅…）
+ * 计容、不计容类列在打印/导出中使用双层表头（首行：计容｜不计容，次行：商业(办公)面积、住宅面积…）
  */
 
 export const SUMMARY_LAYOUT_STORAGE_KEY = 'land.summary.printExportLayout.v1'
@@ -18,52 +18,59 @@ export const SUMMARY_COLUMN_SCHEMA = [
   {
     id: 'calcCommercial',
     prop: 'calcCommercial',
-    subLabel: '商业',
+    subLabel: '商业(办公)面积',
     headerGroup: 'calc',
-    groupLabel: '计容建筑面积',
+    groupLabel: '计容',
     kind: 'area'
   },
   {
     id: 'calcResidential',
     prop: 'calcResidential',
-    subLabel: '住宅',
+    subLabel: '住宅面积',
     headerGroup: 'calc',
-    groupLabel: '计容建筑面积',
+    groupLabel: '计容',
     kind: 'area'
   },
   {
     id: 'calcPropMgmt',
     prop: 'calcPropMgmt',
-    subLabel: '物管',
+    subLabel: '物管用房',
     headerGroup: 'calc',
-    groupLabel: '计容建筑面积',
+    groupLabel: '计容',
     kind: 'area'
   },
   {
     id: 'calcOther',
     prop: 'calcOther',
-    subLabel: '其他',
+    subLabel: '其他计容',
     headerGroup: 'calc',
-    groupLabel: '计容建筑面积',
+    groupLabel: '计容',
     kind: 'area'
   },
   {
     id: 'nonCalcCommunity',
     prop: 'nonCalcCommunity',
-    subLabel: '社区',
+    subLabel: '社区用房面积',
     headerGroup: 'nonCalc',
-    groupLabel: '不计容建筑面积',
+    groupLabel: '不计容',
     kind: 'area'
   },
   {
     id: 'nonCalcOther',
     prop: 'nonCalcOther',
-    subLabel: '公用',
+    subLabel: '其他公用面积',
     headerGroup: 'nonCalc',
-    groupLabel: '不计容建筑面积',
+    groupLabel: '不计容',
     kind: 'area'
   },
-  { id: 'reportNo', prop: 'reportNo', subLabel: '报告书编号', headerGroup: null, kind: 'text' },
+  {
+    id: 'areaConfirmationNoticeNo',
+    prop: 'areaConfirmationNoticeNo',
+    subLabel: '房产面积确认告知书编号',
+    headerGroup: null,
+    kind: 'text'
+  },
+  { id: 'reportNo', prop: 'reportNo', subLabel: '房地产勘测报告书编号', headerGroup: null, kind: 'text' },
   { id: 'remarks', prop: 'remarks', subLabel: '备注', headerGroup: null, kind: 'text' }
 ]
 

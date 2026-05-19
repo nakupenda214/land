@@ -39,7 +39,7 @@
         role="separator"
         aria-orientation="vertical"
         aria-label="拖动调节左右区域宽度"
-        @mousedown="onSplitterMouseDown"
+        @pointerdown="onSplitterMouseDown"
       />
 
       <section class="rows-panel audit-split-layout__right">

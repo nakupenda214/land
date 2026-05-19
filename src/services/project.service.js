@@ -74,20 +74,8 @@ export const createPlanningReviewRow = (payload) =>
 export const deletePlanningReviewRow = (rowId) =>
   axios.delete(`/api/project/planning-review-row/${rowId}`)
 
-export const queryProjectPartySummaryRows = (payload) =>
-  axios.post('/api/project/project-party-summary-rows/query', payload)
-
 export const queryProjectPartySummaryForms = (payload) =>
   axios.post('/api/project/project-party-summary-forms/query', payload)
 
 export const updateProjectPartySummaryForm = (payload) =>
   axios.put('/api/project/project-party-summary-form/update', payload)
-
-export const updateProjectPartySummaryRow = (payload) =>
-  axios.put('/api/project/project-party-summary-row/update', payload)
-
-export const createProjectPartySummaryRow = (payload) =>
-  axios.post('/api/project/project-party-summary-row/create', payload)
-
-export const deleteProjectPartySummaryRow = (rowId) =>
-  axios.delete(`/api/project/project-party-summary-row/${rowId}`)

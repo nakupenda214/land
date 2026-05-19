@@ -112,12 +112,18 @@ body {
 }
 
 @media print {
-  #app {
+  /*
+   * 仅打印 #print-target（Teleport 汇总表等）。勿只隐藏 #app：
+   * Element Plus 的弹窗遮罩、Message、Notification、部分 Popper 会挂到 body，
+   * 与 #app 同级，仍会进入「打印到 PDF」导致界面污染。
+   */
+  body > *:not(#print-target) {
     display: none !important;
   }
 
   #print-target {
     display: block !important;
+    position: static !important;
     height: auto !important;
     overflow: visible !important;
     margin: 0 !important;

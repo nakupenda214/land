@@ -21,6 +21,11 @@ export function parseStoredSummaryLayout(raw) {
     const valid = schemaIds()
     const vis = new Map()
     const order = []
+    const schemaOrder = SUMMARY_COLUMN_SCHEMA.map((c) => c.id)
+    const schemaIndex = (id) => {
+      const i = schemaOrder.indexOf(id)
+      return i === -1 ? Number.MAX_SAFE_INTEGER : i
+    }
 
     for (const r of rows) {
       if (!r || typeof r.id !== 'string' || !valid.has(r.id) || order.includes(r.id)) continue
@@ -28,8 +33,18 @@ export function parseStoredSummaryLayout(raw) {
       vis.set(r.id, r.visible !== false)
     }
 
+    /** 新版本增列：按 schema 顺序插入到相邻列之间，避免一直堆在末尾与主表不一致 */
     for (const c of SUMMARY_COLUMN_SCHEMA) {
-      if (!order.includes(c.id)) order.push(c.id)
+      if (order.includes(c.id)) continue
+      const p = schemaIndex(c.id)
+      let insertAt = order.length
+      for (let i = 0; i < order.length; i++) {
+        if (schemaIndex(order[i]) > p) {
+          insertAt = i
+          break
+        }
+      }
+      order.splice(insertAt, 0, c.id)
     }
 
     return order.map((id) => ({

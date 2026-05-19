@@ -126,7 +126,14 @@ export function useSurveySummary({ reportList: _reportList }) {
         archiveId: item.archiveId || item.archive_id || '',
         projectName: item.buildingName || '未知楼栋',
         certNo: item.propertyCertificateNumber || '-',
-        contractNo: item.propertyAreaConfirmationNoticeNumber || '-',
+        contractNo:
+          item.contractNo ||
+          item.contractNumber ||
+          item.contractApprovalNumber ||
+          item.approvalDocumentNumber ||
+          item.propertyAreaConfirmationNoticeNumber ||
+          '-',
+        areaConfirmationNoticeNo: item.propertyAreaConfirmationNoticeNumber || '-',
         phase: item.phase || '-',
         totalArea: (item.actualTotalBuildingArea || 0).toFixed(2),
         calcCommercial: (item.actualCommercialArea || 0).toFixed(2),

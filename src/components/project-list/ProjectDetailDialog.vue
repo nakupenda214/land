@@ -42,7 +42,7 @@
           <span class="audit-metric__label">校验状态</span>
           <div class="audit-metric__tag-wrap">
             <el-tag size="small" effect="light" round :type="reportAuditInfo.isVerified === 1 ? 'success' : 'danger'">
-              {{ reportAuditInfo.isVerified === 1 ? '通过' : '不通过' }}
+              {{ reportAuditInfo.isVerified === 1 ? '已通过' : '未通过' }}
             </el-tag>
           </div>
         </div>
@@ -133,13 +133,6 @@
           <el-table-column prop="innerArea" label="套内面积(㎡)" width="120" align="center" />
           <el-table-column prop="balconyArea" label="阳台面积(㎡)" width="120" align="center" />
           <el-table-column prop="sharedArea" label="公摊面积(㎡)" width="120" align="center" />
-          <el-table-column prop="isCalculate" label="是否计算" width="100" align="center">
-            <template #default="{ row }">
-              <span :class="row.isCalculate === 1 ? 'red-text' : ''">
-                {{ row.isCalculate === 1 ? '是' : '否' }}
-              </span>
-            </template>
-          </el-table-column>
           <el-table-column prop="usageCategory" label="用途类别" width="120" align="center" />
           <el-table-column prop="roomUsage" label="用途" min-width="120" show-overflow-tooltip align="center" />
           <el-table-column prop="floorAreaType" label="面积类型" width="100" align="center">
@@ -147,6 +140,13 @@
               <el-tag :type="row.floorAreaType === '计容' ? 'success' : 'info'" size="small">
                 {{ row.floorAreaType }}
               </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="isCalculate" label="是否计算" width="100" align="center">
+            <template #default="{ row }">
+              <span :class="row.isCalculate === 1 ? 'red-text' : ''">
+                {{ row.isCalculate === 1 ? '是' : '否' }}
+              </span>
             </template>
           </el-table-column>
         </el-table>

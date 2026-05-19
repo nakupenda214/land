@@ -281,19 +281,11 @@ export function useRoomEditWorkflow(options = {}) {
       return
     }
 
-    ElMessageBox.confirm('确定退出编辑模式吗？未保存的修改将丢失。', '提示', {
-      confirmButtonText: '确认退出',
-      cancelButtonText: '继续编辑',
-      type: 'warning'
-    })
-      .then(() => {
-        const idx = roomInfoData.value.findIndex((item) => String(item.id) === String(localEditingRowId.value))
-        if (idx >= 0 && originalEditingRow.value) {
-          roomInfoData.value[idx] = { ...originalEditingRow.value }
-        }
-        clearEditingState()
-      })
-      .catch(() => { })
+    const idx = roomInfoData.value.findIndex((item) => String(item.id) === String(localEditingRowId.value))
+    if (idx >= 0 && originalEditingRow.value) {
+      roomInfoData.value[idx] = { ...originalEditingRow.value }
+    }
+    clearEditingState()
   }
 
   const handleSaveData = async () => {
@@ -452,25 +444,11 @@ export function useRoomEditWorkflow(options = {}) {
     return ok
   }
 
-  const handleEditUsageCategoryChange = (row) => {
-    if (!row) return
-    const preset = resolveUsagePresetByCategory(row.usageCategory)
-    const displayType =
-      preset.floorAreaType === 'BUILDABLE'
-        ? '计容'
-        : preset.floorAreaType === 'NON_BUILDABLE'
-          ? '不计容'
-          : '未知'
-    row.floorAreaType = displayType
-    row.roomUsage = preset.roomUsage
-  }
-
   return {
     enterEditMode,
     exitEditMode,
     handleSaveData,
     clearEditingState,
-    handleEditUsageCategoryChange,
     handleRefreshSurveyReport,
     handleCreateRoom,
     handleDeleteRoom,

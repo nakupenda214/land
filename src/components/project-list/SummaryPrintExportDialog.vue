@@ -2,7 +2,7 @@
   <el-dialog
     v-model="visible"
     class="summary-print-export-dialog"
-    width="min(98vw, 1320px)"
+    fullscreen
     destroy-on-close
     append-to-body
     align-center
@@ -21,10 +21,7 @@
 
     <div class="spe-shell">
       <aside class="spe-panel spe-panel--config" aria-label="列与对比表设置">
-        <div class="spe-panel__head">
-          <span class="spe-panel__kicker">配置</span>
-          <span class="spe-panel__name">字段与对比范围</span>
-        </div>
+
 
         <el-form label-position="top" class="spe-form">
           <el-form-item>
@@ -75,7 +72,6 @@
           <el-form-item>
             <template #label>
               <span class="spe-label">附带面积对比表</span>
-              <span class="spe-label-hint">与页面「面积核算对比」联动</span>
             </template>
             <div class="spe-chip-group" role="group">
               <el-checkbox-group v-model="comparisonGroupsModel" class="spe-chip-group__inner">
@@ -842,5 +838,53 @@ function onExport() {
   padding: 12px 20px 16px;
   border-top: 1px solid rgba(30, 58, 95, 0.1);
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+/* 全屏：占满视口，正文区 flex 伸展，右侧预览主表尽量占满剩余高度并可横向完整滚动浏览 */
+.summary-print-export-dialog.el-dialog.is-fullscreen {
+  display: flex;
+  flex-direction: column;
+  width: 100% !important;
+  max-width: 100%;
+  height: 100%;
+  max-height: 100%;
+  margin: 0 !important;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+}
+
+.summary-print-export-dialog.is-fullscreen .el-dialog__header,
+.summary-print-export-dialog.is-fullscreen .el-dialog__footer {
+  flex-shrink: 0;
+}
+
+.summary-print-export-dialog.is-fullscreen .el-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-print-export-dialog.is-fullscreen .spe-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  max-height: none;
+  --spe-shell-h: 100%;
+  --spe-comparison-viewport-h: min(26vh, 320px);
+}
+
+@media (min-width: 1025px) {
+  .summary-print-export-dialog.is-fullscreen .spe-shell {
+    height: 100%;
+    max-height: none;
+    overflow: hidden;
+  }
+
+  .summary-print-export-dialog.is-fullscreen .spe-preview-scroll.spe-preview-scroll--main {
+    min-height: 120px;
+  }
 }
 </style>

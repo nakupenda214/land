@@ -80,7 +80,7 @@
     <div class="summary-table-wrap project-tab-panel__body project-tab-panel__body--flush">
       <el-table
         ref="tableRef"
-        class="project-tab-el-table summary-modern-table"
+        class="project-tab-el-table summary-modern-table summary-modern-table--cell-center"
         :data="displayTableData"
         border
         stripe
@@ -91,7 +91,7 @@
         :virtual-scroll="false"
       >
         <el-table-column label="序号" type="index" width="50" align="center" header-align="center" fixed="left" :index="(index) => index + 1" />
-        <el-table-column label="工程名称" width="160" fixed="left" header-align="center" class-name="summary-col-project-name">
+        <el-table-column label="工程名称" width="160" fixed="left" align="center" header-align="center" class-name="summary-col-project-name">
           <template #default="{ row }">
             <el-tooltip :content="String(row.projectName || '')" placement="top" :show-after="300">
               <span class="project-name-trigger">
@@ -103,38 +103,45 @@
             </el-tooltip>
           </template>
         </el-table-column>
-        <el-table-column label="不动产权证编号" prop="certNo" :width="colW.certNo" show-overflow-tooltip />
-        <el-table-column label="合同/批文编号" prop="contractNo" :width="colW.contractNo" show-overflow-tooltip />
-        <el-table-column label="期数" prop="phase" :width="colW.phase" align="center" />
-        <el-table-column label="实测报告总建筑面积" prop="totalArea" :width="colW.totalArea" align="right" />
+        <el-table-column label="不动产权证编号" prop="certNo" :width="colW.certNo" show-overflow-tooltip header-align="center" />
+        <el-table-column label="合同/批文编号" prop="contractNo" :width="colW.contractNo" show-overflow-tooltip header-align="center" />
+        <el-table-column label="期数" prop="phase" :width="colW.phase" align="center" header-align="center" />
+        <el-table-column label="实测报告总建筑面积" prop="totalArea" :width="colW.totalArea" header-align="center" />
 
-        <el-table-column label="计容建筑面积" align="center" header-align="center">
-          <el-table-column prop="calcCommercial" label="商业" :width="colW.calcCommercial" align="right" header-align="center">
+        <el-table-column label="计容" align="center" header-align="center">
+          <el-table-column prop="calcCommercial" label="商业(办公)面积" :width="colW.calcCommercial" header-align="center">
             <template #default="{ row }">{{ row.calcCommercial }}</template>
           </el-table-column>
-          <el-table-column prop="calcResidential" label="住宅" :width="colW.calcResidential" align="right" header-align="center">
+          <el-table-column prop="calcResidential" label="住宅面积" :width="colW.calcResidential" header-align="center">
             <template #default="{ row }">{{ row.calcResidential }}</template>
           </el-table-column>
-          <el-table-column prop="calcPropMgmt" label="物管" :width="colW.calcPropMgmt" align="right" header-align="center">
+          <el-table-column prop="calcPropMgmt" label="物管用房" :width="colW.calcPropMgmt" header-align="center">
             <template #default="{ row }">{{ row.calcPropMgmt }}</template>
           </el-table-column>
-          <el-table-column prop="calcOther" label="其他" :width="colW.calcOther" align="right" header-align="center">
+          <el-table-column prop="calcOther" label="其他计容" :width="colW.calcOther" header-align="center">
             <template #default="{ row }">{{ row.calcOther }}</template>
           </el-table-column>
         </el-table-column>
 
-        <el-table-column label="不计容建筑面积" align="center" header-align="center">
-          <el-table-column prop="nonCalcCommunity" label="社区" :width="colW.nonCalcCommunity" align="right" header-align="center">
+        <el-table-column label="不计容" align="center" header-align="center">
+          <el-table-column prop="nonCalcCommunity" label="社区用房面积" :width="colW.nonCalcCommunity" header-align="center">
             <template #default="{ row }">{{ row.nonCalcCommunity }}</template>
           </el-table-column>
-          <el-table-column prop="nonCalcOther" label="公用" :width="colW.nonCalcOther" align="right" header-align="center">
+          <el-table-column prop="nonCalcOther" label="其他公用面积" :width="colW.nonCalcOther" header-align="center">
             <template #default="{ row }">{{ row.nonCalcOther }}</template>
           </el-table-column>
         </el-table-column>
 
-        <el-table-column label="报告书编号" prop="reportNo" :width="colW.reportNo" show-overflow-tooltip />
-        <el-table-column label="备注" prop="remarks" v-bind="remarksColProps" show-overflow-tooltip />
-        <el-table-column label="文件原始名" prop="fileOriginalName" :width="colW.fileOriginalName" show-overflow-tooltip />
+        <el-table-column
+          label="房产面积确认告知书编号"
+          prop="areaConfirmationNoticeNo"
+          :width="colW.areaConfirmationNoticeNo"
+          show-overflow-tooltip
+          header-align="center"
+        />
+        <el-table-column label="房地产勘测报告书编号" prop="reportNo" :width="colW.reportNo" show-overflow-tooltip header-align="center" />
+        <el-table-column label="备注" prop="remarks" v-bind="remarksColProps" show-overflow-tooltip header-align="center" />
+        <el-table-column label="文件原始名" prop="fileOriginalName" :width="colW.fileOriginalName" show-overflow-tooltip header-align="center" />
         <el-table-column label="待确认面积" prop="pendingConfirmArea" :width="colW.pendingConfirmArea" align="center" />
         <el-table-column prop="hasUnknownUsage" label="是否有未知用途" :width="colW.hasUnknownUsage" align="center" header-align="center">
           <template #default="{ row }">
@@ -150,8 +157,8 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="未知用途详情" prop="unknownUsages" v-bind="unknownUsagesColProps" show-overflow-tooltip />
-        <el-table-column label="验证失败原因" prop="verificationErrorReason" v-bind="verificationErrorReasonColProps" show-overflow-tooltip />
+        <el-table-column label="未知用途详情" prop="unknownUsages" v-bind="unknownUsagesColProps" show-overflow-tooltip header-align="center" />
+        <el-table-column label="验证失败原因" prop="verificationErrorReason" v-bind="verificationErrorReasonColProps" show-overflow-tooltip header-align="center" />
       </el-table>
 
       <!-- 宽表：边缘渐变 + 悬浮翻页（不占用表头上方整行空间） -->
@@ -280,13 +287,19 @@ const colW = computed(() => {
     contractNo: colWidth(rows, 'contractNo', '合同/批文编号', 160),
     phase: colWidth(rows, 'phase', '期数', 88),
     totalArea: colWidth(rows, 'totalArea', '实测报告总建筑面积', 148),
-    calcCommercial: colWidth(rows, 'calcCommercial', '商业', 110),
-    calcResidential: colWidth(rows, 'calcResidential', '住宅', 110),
-    calcPropMgmt: colWidth(rows, 'calcPropMgmt', '物管', 110),
-    calcOther: colWidth(rows, 'calcOther', '其他', 110),
-    nonCalcCommunity: colWidth(rows, 'nonCalcCommunity', '社区', 110),
-    nonCalcOther: colWidth(rows, 'nonCalcOther', '公用', 110),
-    reportNo: colWidth(rows, 'reportNo', '报告书编号', 120),
+    calcCommercial: colWidth(rows, 'calcCommercial', '商业(办公)面积', 158),
+    calcResidential: colWidth(rows, 'calcResidential', '住宅面积', 120),
+    calcPropMgmt: colWidth(rows, 'calcPropMgmt', '物管用房', 120),
+    calcOther: colWidth(rows, 'calcOther', '其他计容', 120),
+    nonCalcCommunity: colWidth(rows, 'nonCalcCommunity', '社区用房面积', 148),
+    nonCalcOther: colWidth(rows, 'nonCalcOther', '其他公用面积', 148),
+    areaConfirmationNoticeNo: colWidth(
+      rows,
+      'areaConfirmationNoticeNo',
+      '房产面积确认告知书编号',
+      200
+    ),
+    reportNo: colWidth(rows, 'reportNo', '房地产勘测报告书编号', 210),
     pendingConfirmArea: colWidth(rows, 'pendingConfirmArea', '待确认面积', 108),
     hasUnknownUsage: colWidth(rows, 'hasUnknownUsage', '是否有未知用途', 112),
     isVerified: colWidth(rows, 'isVerified', '验证状态', 96)
@@ -333,9 +346,9 @@ const normalizeVerifiedFlag = (value) => {
 
 const getVerifiedText = (value) => {
   const normalized = normalizeVerifiedFlag(value)
-  if (normalized === 1) return '验证通过'
-  if (normalized === 0) return '验证不通过'
-  return '未知'
+  if (normalized === 1) return '已通过'
+  if (normalized === 0) return '未通过'
+  return '未校验'
 }
 
 const getVerifiedTagType = (value) => {
@@ -605,6 +618,7 @@ const tableRowClassName = ({ row }) => (normalizeVerifiedFlag(row?.isVerified) =
   font-weight: 600;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   max-width: 100%;
   vertical-align: middle;
 }
@@ -630,6 +644,7 @@ const tableRowClassName = ({ row }) => (normalizeVerifiedFlag(row?.isVerified) =
 :deep(.summary-modern-table .summary-col-project-name .project-name-link .el-link__inner) {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   max-width: 100%;
   min-width: 0;
 }
@@ -701,6 +716,15 @@ const tableRowClassName = ({ row }) => (normalizeVerifiedFlag(row?.isVerified) =
   line-height: 1.35;
   white-space: normal;
   word-break: break-word;
+}
+
+/* 表体与未单独指定对齐的列：内容居中（覆盖面积列默认右对齐） */
+:deep(.summary-modern-table--cell-center td.el-table__cell > .cell) {
+  text-align: center !important;
+}
+
+:deep(.summary-modern-table--cell-center td.el-table__cell.is-right > .cell) {
+  text-align: center !important;
 }
 
 :deep(.summary-modern-table .el-table__body tr.summary-row-unverified > td.el-table__cell) {

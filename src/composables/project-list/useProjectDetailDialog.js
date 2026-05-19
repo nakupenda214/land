@@ -61,7 +61,11 @@ export function useProjectDetailDialog({ currentProjectInfo, rawTableData, fetch
     reportBasicInfoForm.id = String(row.id || '')
     reportBasicInfoForm.propertyCertificateNumber = row?.certNo && row.certNo !== '-' ? row.certNo : ''
     reportBasicInfoForm.propertyAreaConfirmationNoticeNumber =
-      row?.contractNo && row.contractNo !== '-' ? row.contractNo : ''
+      row?.areaConfirmationNoticeNo && row.areaConfirmationNoticeNo !== '-'
+        ? row.areaConfirmationNoticeNo
+        : row?.contractNo && row.contractNo !== '-'
+          ? row.contractNo
+          : ''
 
     try {
       resetAuditInfo()
@@ -146,12 +150,14 @@ export function useProjectDetailDialog({ currentProjectInfo, rawTableData, fetch
       if (target) {
         target.certNo = payload.propertyCertificateNumber || '-'
         target.contractNo = payload.propertyAreaConfirmationNoticeNumber || '-'
+        target.areaConfirmationNoticeNo = payload.propertyAreaConfirmationNoticeNumber || '-'
       }
       if (currentDetailRow.value) {
         currentDetailRow.value = {
           ...currentDetailRow.value,
           certNo: payload.propertyCertificateNumber || '-',
-          contractNo: payload.propertyAreaConfirmationNoticeNumber || '-'
+          contractNo: payload.propertyAreaConfirmationNoticeNumber || '-',
+          areaConfirmationNoticeNo: payload.propertyAreaConfirmationNoticeNumber || '-'
         }
       }
 

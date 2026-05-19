@@ -6,7 +6,7 @@
   custom-class="calibration-dialog"
   modal-class="calibration-modal"
   :show-close="false"
-  @closed="emit('closed')"
+  @closed="handleDialogClosed"
 >
     <template #header>
       <CalibrationHeader
@@ -72,160 +72,122 @@
         role="separator"
         aria-orientation="vertical"
         aria-label="拖动调节左右区域宽度"
-        @mousedown="onSplitterMouseDown"
+        @pointerdown="onSplitterMouseDown"
       />
 
       <div class="right-panel audit-split-layout__right">
         <div class="cali-right-panel">
           <section class="sum-info-section">
-            <div class="sum-layout">
-              <div class="sum-grid">
-                <article
-                  v-for="item in summaryMetrics"
-                  :key="item.key"
-                  class="summary-card summary-card--ocr"
-                >
-                  <header class="summary-card__head">
-                    <div class="summary-card__head-text">
-                      <h3 class="summary-card__title">{{ item.title }}</h3>
-                      <p class="summary-card__subtitle">列表汇总与 OCR 对比</p>
-                    </div>
-                  </header>
-                  <div class="summary-card__body">
-                    <div class="stat-row">
-                      <span class="stat-row__label">列表汇总</span>
-                      <span class="stat-row__value">{{ item.manual }}</span>
-                      <span class="stat-row__unit">㎡</span>
-                    </div>
-                    <div class="stat-row">
-                      <span class="stat-row__label">OCR</span>
-                      <span class="stat-row__value stat-row__value--ocr">{{ item.ocr }}</span>
-                      <span class="stat-row__unit">㎡</span>
-                    </div>
-                    <div class="stat-row">
-                      <span class="stat-row__label">差值</span>
-                      <span
-                        :class="[
-                          'stat-row__value',
-                          Math.abs(item.delta) > 0.01 ? 'stat-row__value--warn' : 'stat-row__value--ok'
-                        ]"
-                      >{{ formatDelta(item.delta) }}</span>
-                      <span class="stat-row__unit">㎡</span>
-                    </div>
-                  </div>
-                </article>
+            <div
+              class="cali-audit-strip"
+              :class="isAuditPassed ? 'cali-audit-strip--passed' : 'cali-audit-strip--failed'"
+            >
+              <div class="cali-audit-strip__brand">
+                <el-icon class="cali-audit-strip__icon" aria-hidden="true">
+                  <component :is="isAuditPassed ? CircleCheck : WarningFilled" />
+                </el-icon>
+                <span class="cali-audit-strip__title">校验信息</span>
               </div>
 
-              <article class="summary-card summary-card--audit cali-audit-card">
-                <header class="summary-card__head">
-                  <div class="summary-card__icon" aria-hidden="true">
-                    <el-icon><CircleCheck /></el-icon>
-                  </div>
-                  <div class="summary-card__head-text">
-                    <h3 class="summary-card__title">校验信息</h3>
-                    <p class="summary-card__subtitle">用途与面积校验结果</p>
-                  </div>
-                </header>
-                <div class="summary-card__body">
-                  <div class="stat-row">
-                    <span class="stat-row__label">待确认面积</span>
-                    <span class="stat-row__value stat-row__value--warn">{{ auditSummaryData.pendingConfirmArea }}</span>
-                    <span class="stat-row__unit">㎡</span>
-                  </div>
-                  <div class="stat-row">
-                    <span class="stat-row__label">未知用途数量</span>
-                    <span class="stat-row__value">{{ auditSummaryData.unknownUsageCount }}</span>
-                    <span class="stat-row__unit">条</span>
-                  </div>
-                  <div class="stat-row stat-row--tags">
-                    <span class="stat-row__label">未知用途</span>
-                    <span class="stat-row__tags">
-                      <el-tag
-                        size="small"
-                        effect="light"
-                        round
-                        :type="auditSummaryDisplay.hasUnknownUsageText === '有' ? 'warning' : 'success'"
-                      >
-                        {{ auditSummaryDisplay.hasUnknownUsageText }}
-                      </el-tag>
-                    </span>
-                  </div>
-                  <div class="stat-row stat-row--tags">
-                    <span class="stat-row__label">验证状态</span>
-                    <span class="stat-row__tags">
-                      <el-tag
-                        size="small"
-                        effect="light"
-                        round
-                        :type="auditSummaryDisplay.isVerifiedText === '已验证' ? 'success' : 'danger'"
-                      >
-                        {{ auditSummaryDisplay.isVerifiedText }}
-                      </el-tag>
-                    </span>
-                  </div>
+              <div class="cali-audit-strip__metrics">
+                <span class="cali-audit-metric">
+                  <span class="cali-audit-metric__label">待确认</span>
+                  <span
+                    class="cali-audit-metric__value"
+                    :class="{ 'cali-audit-metric__value--warn': hasPendingConfirmArea }"
+                  >
+                    {{ auditSummaryData.pendingConfirmArea }}㎡
+                  </span>
+                </span>
+                <span class="cali-audit-metric__sep" aria-hidden="true" />
+                <span class="cali-audit-metric">
+                  <span class="cali-audit-metric__label">未知用途</span>
+                  <span class="cali-audit-metric__value">{{ auditSummaryData.unknownUsageCount }}条</span>
+                  <el-tag
+                    size="small"
+                    effect="light"
+                    round
+                    :type="auditSummaryDisplay.hasUnknownUsageText === '有' ? 'warning' : 'success'"
+                  >
+                    {{ auditSummaryDisplay.hasUnknownUsageText }}
+                  </el-tag>
+                </span>
+              </div>
+
+              <div class="cali-audit-strip__actions">
+                <el-tag
+                  size="small"
+                  effect="light"
+                  round
+                  :type="auditSummaryDisplay.isVerifiedTagType"
+                >
+                  {{ auditSummaryDisplay.isVerifiedText }}
+                </el-tag>
+              </div>
+            </div>
+
+            <div
+              v-if="!isAuditPassed && hasAuditAppendContent"
+              class="cali-audit-detail-panel"
+            >
+              <div class="cali-audit-detail-panel__body">
+                <div v-if="hasUnknownUsagesDetail" class="audit-append-block">
+                  <div class="audit-append-label">未知用途详情</div>
+                  <div class="unknown-list unknown-list--panel">{{ auditSummaryData.unknownUsages }}</div>
                 </div>
-                <div class="summary-card__audit-append">
-                  <div class="audit-append-block">
-                    <div class="audit-append-label">未知用途详情</div>
-                    <div class="unknown-list">{{ auditSummaryData.unknownUsages }}</div>
-                  </div>
-                  <div v-if="calibrationUnknownPolicyVisible" class="audit-append-block calibration-unknown-policy">
-                    <div class="audit-append-label">将未知用途归为已知</div>
-                    <div v-loading="calibrationUnknownLoading" class="calibration-unknown-policy__body">
-                      <div
-                        v-if="!calibrationUnknownLoading && calibrationUnknownRows.length === 0"
-                        class="calibration-unknown-policy__hint"
+                <div v-if="calibrationUnknownPolicyVisible" class="audit-append-block calibration-unknown-policy">
+                  <div class="audit-append-label">将未知用途归为已知</div>
+                  <div v-loading="calibrationUnknownLoading" class="calibration-unknown-policy__body">
+                    <div
+                      v-if="!calibrationUnknownLoading && calibrationUnknownRows.length === 0"
+                      class="calibration-unknown-policy__hint"
+                    >
+                      未找到待处理的未知用途记录（可能已在土地类型管理中处理）。
+                    </div>
+                    <div
+                      v-for="row in calibrationUnknownRows"
+                      :key="row.id"
+                      class="calibration-unknown-policy__row"
+                    >
+                      <span class="calibration-unknown-policy__name" :title="row.usageName">{{ row.usageName }}</span>
+                      <el-select
+                        v-model="row.selectedTarget"
+                        size="small"
+                        placeholder="归属分类"
+                        class="calibration-unknown-policy__select"
                       >
-                        未找到待处理的未知用途记录（可能已在土地类型管理中处理）。
-                      </div>
-                      <div
-                        v-for="row in calibrationUnknownRows"
-                        :key="row.id"
-                        class="calibration-unknown-policy__row"
+                        <el-option-group label="计容面积">
+                          <el-option label="商业" value="calcCommercial" />
+                          <el-option label="住宅" value="calcResidential" />
+                          <el-option label="物管" value="calcPropMgmt" />
+                          <el-option label="其他计容" value="calcOther" />
+                        </el-option-group>
+                        <el-option-group label="不计容面积">
+                          <el-option label="社区用房" value="nonCalcCommunity" />
+                          <el-option label="其他公用" value="nonCalcOther" />
+                        </el-option-group>
+                      </el-select>
+                      <el-button
+                        type="primary"
+                        size="small"
+                        :loading="savingCalibrationUnknownId === row.id"
+                        @click="saveCalibrationUnknownRule(row)"
                       >
-                        <span class="calibration-unknown-policy__name" :title="row.usageName">{{ row.usageName }}</span>
-                        <el-select
-                          v-model="row.selectedTarget"
-                          size="small"
-                          placeholder="归属分类"
-                          class="calibration-unknown-policy__select"
-                        >
-                          <el-option-group label="计容面积">
-                            <el-option label="商业" value="calcCommercial" />
-                            <el-option label="住宅" value="calcResidential" />
-                            <el-option label="物管" value="calcPropMgmt" />
-                            <el-option label="其他计容" value="calcOther" />
-                          </el-option-group>
-                          <el-option-group label="不计容面积">
-                            <el-option label="社区用房" value="nonCalcCommunity" />
-                            <el-option label="其他公用" value="nonCalcOther" />
-                          </el-option-group>
-                        </el-select>
-                        <el-button
-                          type="primary"
-                          size="small"
-                          :loading="savingCalibrationUnknownId === row.id"
-                          @click="saveCalibrationUnknownRule(row)"
-                        >
-                          保存
-                        </el-button>
-                      </div>
+                        保存
+                      </el-button>
                     </div>
                   </div>
-                  <div class="audit-append-block">
-                    <div class="audit-append-label">验证失败原因</div>
-                    <div class="reason-text">{{ auditSummaryData.verificationErrorReason }}</div>
-                  </div>
-                  <div
-                    v-if="hasVerificationErrorReason"
-                    class="audit-append-block verify-tip-block"
-                  >
-                    <div class="verify-tip-title">排查建议：</div>
-                    <div class="verify-tip-line">1. 请检查解析文件方向。</div>
-                    <div class="verify-tip-line">2. 请审查户室面积对照表的部分数据是否被印章遮盖。</div>
-                  </div>
                 </div>
-              </article>
+                <div v-if="hasVerificationErrorReason" class="audit-append-block">
+                  <div class="audit-append-label">验证失败原因</div>
+                  <div class="reason-text reason-text--panel">{{ auditSummaryData.verificationErrorReason }}</div>
+                </div>
+                <div v-if="hasVerificationErrorReason" class="audit-append-block verify-tip-block">
+                  <div class="verify-tip-title">排查建议</div>
+                  <div class="verify-tip-line">1. 请检查解析文件方向。</div>
+                  <div class="verify-tip-line">2. 请审查户室面积对照表的部分数据是否被印章遮盖。</div>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -236,7 +198,26 @@
                 <el-tag size="small" effect="plain" :type="isEditing ? 'warning' : 'info'">
                   {{ isEditing ? '编辑模式' : '查看模式' }}
                 </el-tag>
-                <span class="toolbar-count">共 {{ roomInfoTotal > 0 ? roomInfoTotal : roomInfoData.length }} 条</span>
+                <span class="toolbar-count">{{ roomTableCountText }}</span>
+              </div>
+              <div class="table-toolbar__search">
+                <el-input
+                  v-model="roomTableKeyword"
+                  size="small"
+                  clearable
+                  placeholder="搜索用途类别、用途、面积类型、备注…"
+                  class="room-table-search-input"
+                >
+                  <template #prefix>
+                    <el-icon><Search /></el-icon>
+                  </template>
+                </el-input>
+                <span
+                  v-if="roomTableIsFiltering && showRoomInfoPagination"
+                  class="room-table-search-hint"
+                >
+                  仅筛选当前页
+                </span>
               </div>
               <div class="right">
                 <el-button
@@ -261,8 +242,8 @@
             </div>
 
             <el-table
-              class="room-table"
-              :data="roomInfoData"
+              class="room-table room-table--compact"
+              :data="filteredRoomInfoData"
               :row-class-name="getRoomRowClassName"
               border
               stripe
@@ -271,64 +252,62 @@
               element-loading-text="加载户室数据中..."
               row-key="id"
               style="width: 100%;"
-              :header-cell-style="AUDIT_TABLE_HEADER_STYLE"
-              :cell-style="AUDIT_TABLE_CELL_STYLE"
+              :header-cell-style="ROOM_TABLE_HEADER_STYLE"
+              :cell-style="ROOM_TABLE_CELL_STYLE"
             >
-              <el-table-column label="序号" type="index" width="60" align="center" :index="roomTableRowIndex" />
-
-              <el-table-column prop="roomLevel" label="楼层" width="80" align="center">
+              <el-table-column prop="roomLevel" label="楼层" min-width="58" align="center" show-overflow-tooltip>
                 <template #default="{ row }">
                   <template v-if="!isRowEditing(row)">{{ row.roomLevel || '-' }}</template>
-                  <el-input v-else v-model="row.roomLevel" size="small" style="width: 70px" placeholder="请输入楼层" />
+                  <el-input v-else v-model="row.roomLevel" size="small" class="room-table-field" placeholder="楼层" />
                 </template>
               </el-table-column>
 
-              <el-table-column prop="roomNumber" label="房号" width="100" align="center">
+              <el-table-column prop="roomNumber" label="房号" min-width="56" align="center" show-overflow-tooltip>
                 <template #default="{ row }">
                   <template v-if="!isRowEditing(row)">{{ row.roomNumber || '-' }}</template>
-                  <el-input v-else v-model="row.roomNumber" size="small" style="width: 90px" placeholder="请输入房号" />
+                  <el-input v-else v-model="row.roomNumber" size="small" class="room-table-field" placeholder="房号" />
                 </template>
               </el-table-column>
 
-              <el-table-column prop="buildingArea" label="建筑面积(㎡)" width="120" align="center">
+              <el-table-column prop="buildingArea" label="建㎡" min-width="68" align="center" show-overflow-tooltip>
                 <template #default="{ row }">
                   <template v-if="!isRowEditing(row)">{{ row.buildingArea || '0.00' }}</template>
-                  <el-input v-else v-model="row.buildingArea" size="small" style="width: 110px" type="number" placeholder="0.00" />
+                  <el-input v-else v-model="row.buildingArea" size="small" class="room-table-field" type="number" />
                 </template>
               </el-table-column>
 
-              <el-table-column prop="innerArea" label="套内面积(㎡)" width="120" align="center">
+              <el-table-column prop="innerArea" label="套㎡" min-width="68" align="center" show-overflow-tooltip>
                 <template #default="{ row }">
                   <template v-if="!isRowEditing(row)">{{ row.innerArea || '0.00' }}</template>
-                  <el-input v-else v-model="row.innerArea" size="small" style="width: 110px" type="number" placeholder="0.00" />
+                  <el-input v-else v-model="row.innerArea" size="small" class="room-table-field" type="number" />
                 </template>
               </el-table-column>
 
-              <el-table-column prop="balconyArea" label="阳台面积(㎡)" width="120" align="center">
+              <el-table-column prop="balconyArea" label="阳㎡" min-width="60" align="center" show-overflow-tooltip>
                 <template #default="{ row }">
                   <template v-if="!isRowEditing(row)">{{ row.balconyArea || '0.00' }}</template>
-                  <el-input v-else v-model="row.balconyArea" size="small" style="width: 110px" type="number" placeholder="0.00" />
+                  <el-input v-else v-model="row.balconyArea" size="small" class="room-table-field" type="number" />
                 </template>
               </el-table-column>
 
-              <el-table-column prop="sharedArea" label="分摊面积(㎡)" width="120" align="center">
+              <el-table-column prop="sharedArea" label="摊㎡" min-width="68" align="center" show-overflow-tooltip>
                 <template #default="{ row }">
                   <template v-if="!isRowEditing(row)">{{ row.sharedArea || '0.00' }}</template>
-                  <el-input v-else v-model="row.sharedArea" size="small" style="width: 110px" type="number" placeholder="0.00" />
+                  <el-input v-else v-model="row.sharedArea" size="small" class="room-table-field" type="number" />
                 </template>
               </el-table-column>
 
-              <el-table-column prop="usageCategory" label="用途类别" width="130" align="center">
+              <el-table-column prop="usageCategory" label="类别" min-width="64" align="center" show-overflow-tooltip>
                 <template #default="{ row }">
                   <template v-if="!isRowEditing(row)">{{ row.usageCategory || '未知' }}</template>
-                  <el-tag v-else size="small" effect="plain" type="info">{{ row.usageCategory || '未选择' }}</el-tag>
+                  <span v-else class="room-table-editing-tag">{{ row.usageCategory || '未选' }}</span>
                 </template>
               </el-table-column>
 
-              <el-table-column prop="roomUsage" label="用途" min-width="120" show-overflow-tooltip align="center">
+              <el-table-column prop="roomUsage" label="用途" width="76" show-overflow-tooltip align="center">
                 <template #default="{ row }">
                   <template v-if="!isRowEditing(row)">
-                    <span>{{ row.roomUsage || '-' }}</span>
+                    <span class="room-table-cell-ellipsis">{{ row.roomUsage || '-' }}</span>
                   </template>
                   <div v-else class="usage-edit-inline">
                     <el-popover
@@ -366,8 +345,8 @@
                         </div>
                       </div>
                       <template #reference>
-                        <el-button size="small" type="primary" plain @click.stop="openUsageEditor(row)">
-                          {{ row.roomUsage ? '修改用途' : '选择类别与用途' }}
+                        <el-button size="small" type="primary" link class="room-table-usage-btn" @click.stop="openUsageEditor(row)">
+                          {{ row.roomUsage ? '改用途' : '选用途' }}
                         </el-button>
                       </template>
                     </el-popover>
@@ -375,49 +354,90 @@
                 </template>
               </el-table-column>
 
-              <el-table-column prop="floorAreaType" label="面积类型" width="90" align="center">
+              <el-table-column prop="floorAreaType" label="类型" min-width="52" align="center" show-overflow-tooltip>
                 <template #default="{ row }">
-                  <el-tag :type="row.floorAreaType === '计容' ? 'success' : row.floorAreaType === '不计容' ? 'warning' : 'info'" size="small">
+                  <span
+                    class="room-area-type"
+                    :class="{
+                      'room-area-type--buildable': row.floorAreaType === '计容',
+                      'room-area-type--non-buildable': row.floorAreaType === '不计容'
+                    }"
+                  >
                     {{ row.floorAreaType }}
-                  </el-tag>
+                  </span>
                 </template>
               </el-table-column>
-              <el-table-column prop="isCalculate" label="是否计算" width="90" align="center">
+              <el-table-column prop="remark" label="备注" width="52" align="center" show-overflow-tooltip>
                 <template #default="{ row }">
-                  <template>{{ row.isCalculate === 1 ? '是' : '否' }}</template>
+                  <template v-if="!isRowEditing(row)">
+                    <span class="room-table-cell-ellipsis">{{ row.remark || '-' }}</span>
+                  </template>
+                  <el-input v-else v-model="row.remark" size="small" class="room-table-field" placeholder="备注" />
                 </template>
               </el-table-column>
-              <el-table-column prop="remark" label="备注" min-width="140" align="center" show-overflow-tooltip>
+              <el-table-column label="操作" min-width="72" align="center">
                 <template #default="{ row }">
-                  <template v-if="!isRowEditing(row)">{{ row.remark || '-' }}</template>
-                  <el-input v-else v-model="row.remark" size="small" style="width: 100%" placeholder="请输入备注" />
-                </template>
-              </el-table-column>
-              <el-table-column label="编辑" width="130" align="center" fixed="right">
-                <template #default="{ row }">
-                  <div class="row-op-group">
+                  <div class="row-op-group row-op-group--compact">
                     <el-button
                       size="small"
-                      text
+                      link
                       type="primary"
                       :disabled="isEditing && !isRowEditing(row)"
                       @click="startRowEdit(row)"
                     >
-                      {{ isRowEditing(row) ? '编辑中' : '编辑' }}
+                      {{ isRowEditing(row) ? '…' : '编' }}
                     </el-button>
                     <el-button
                       size="small"
-                      text
+                      link
                       type="danger"
                       :disabled="roomDeleteLoading"
                       @click="handleDeleteRoomRow(row)"
                     >
-                      删除
+                      删
                     </el-button>
                   </div>
                 </template>
               </el-table-column>
             </el-table>
+
+            <div v-if="roomInfoData.length" class="room-table-compare">
+              <div class="room-table-compare__table">
+                <div class="room-table-compare__row room-table-compare__row--head">
+                  <span class="room-table-compare__label" />
+                  <span
+                    v-for="item in summaryMetrics"
+                    :key="`head-${item.key}`"
+                    class="room-table-compare__cell room-table-compare__cell--head"
+                    :class="{ 'room-table-compare__cell--mismatch': item.key === 'building' && buildingAreaMismatch }"
+                  >
+                    {{ item.title }}
+                  </span>
+                </div>
+                <div class="room-table-compare__row">
+                  <span class="room-table-compare__label">列表汇总</span>
+                  <span
+                    v-for="item in summaryMetrics"
+                    :key="`manual-${item.key}`"
+                    class="room-table-compare__cell"
+                    :class="{ 'room-table-compare__cell--mismatch': item.key === 'building' && buildingAreaMismatch }"
+                  >
+                    {{ item.manual }}
+                  </span>
+                </div>
+                <div class="room-table-compare__row">
+                  <span class="room-table-compare__label">OCR</span>
+                  <span
+                    v-for="item in summaryMetrics"
+                    :key="`ocr-${item.key}`"
+                    class="room-table-compare__cell room-table-compare__cell--ocr"
+                    :class="{ 'room-table-compare__cell--mismatch': item.key === 'building' && buildingAreaMismatch }"
+                  >
+                    {{ item.ocr }}
+                  </span>
+                </div>
+              </div>
+            </div>
 
             <div
               v-if="showRoomInfoPagination"
@@ -436,7 +456,10 @@
               />
             </div>
 
-            <el-empty v-if="!roomInfoLoading && roomInfoData.length === 0" description="暂无户室面积数据" />
+            <el-empty
+              v-if="!roomInfoLoading && filteredRoomInfoData.length === 0"
+              :description="roomTableIsFiltering ? '未找到匹配的户室' : '暂无户室面积数据'"
+            />
           </section>
         </div>
       </div>
@@ -598,15 +621,27 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useCalibrationUnknownUsagePolicy, parseUnknownUsageNames } from '@/composables/file-upload/useCalibrationUnknownUsagePolicy'
-import { Loading, CircleCheck } from '@element-plus/icons-vue'
+import { useCalibrationRoomTableFilter } from '@/composables/file-upload/useCalibrationRoomTableFilter'
+import { Loading, CircleCheck, WarningFilled, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import CalibrationHeader from '@/components/file-upload/CalibrationHeader.vue'
 import CalibrationPdfToolbar from '@/components/file-upload/CalibrationPdfToolbar.vue'
 import { useAuditSplitPanel } from '@/composables/audit/useAuditSplitPanel'
-import { AUDIT_TABLE_HEADER_STYLE, AUDIT_TABLE_CELL_STYLE } from '@/constants/auditTableStyles'
+const ROOM_TABLE_HEADER_STYLE = {
+  background: '#f1f5f9',
+  color: '#334155',
+  fontWeight: '600',
+  fontSize: '10px',
+  padding: '3px 1px'
+}
+
+const ROOM_TABLE_CELL_STYLE = {
+  fontSize: '11px',
+  padding: '2px 1px'
+}
 
 const props = defineProps({
   modelValue: { type: Boolean, required: true },
@@ -614,7 +649,6 @@ const props = defineProps({
   isEditing: { type: Boolean, default: false },
   editingRowId: { type: [String, Number], default: '' },
   startRowEdit: { type: Function, required: true },
-  handleUsageCategoryChange: { type: Function, default: null },
   exitEditMode: { type: Function, required: true },
   handleSaveData: { type: Function, required: true },
   handleRefreshSurveyReport: { type: Function, default: null },
@@ -653,6 +687,31 @@ const dialogVisible = computed({
   set: (val) => emit('update:modelValue', val)
 })
 
+const handleDialogClosed = () => {
+  clearRoomTableKeyword()
+  emit('closed')
+}
+
+const {
+  keyword: roomTableKeyword,
+  isFiltering: roomTableIsFiltering,
+  filteredRoomInfoData,
+  filteredCount: roomTableFilteredCount,
+  clearKeyword: clearRoomTableKeyword
+} = useCalibrationRoomTableFilter(() => props.roomInfoData)
+
+const roomTableCountText = computed(() => {
+  const total = props.roomInfoTotal > 0 ? props.roomInfoTotal : props.roomInfoData.length
+  if (roomTableIsFiltering.value) {
+    return `匹配 ${roomTableFilteredCount.value} / 本页 ${props.roomInfoData.length} 条`
+  }
+  return `共 ${total} 条`
+})
+
+watch(dialogVisible, (open) => {
+  if (!open) clearRoomTableKeyword()
+})
+
 const auditSummaryDataRef = computed(() => props.auditSummaryData)
 const projectIdRef = computed(() => props.projectId)
 const handleRefreshSurveyReportRef = computed(() => props.handleRefreshSurveyReport)
@@ -679,9 +738,6 @@ const showRoomInfoPagination = computed(
   () => typeof props.goRoomInfoPage === 'function' && Number(props.roomInfoTotal || 0) > 0
 )
 
-const roomTableRowIndex = (index) =>
-  (Number(props.roomInfoPageNum) - 1) * Number(props.roomInfoPageSize) + index + 1
-
 const handleRoomInfoPageChange = (page) => {
   props.goRoomInfoPage?.(page)
 }
@@ -697,53 +753,78 @@ const { auditLayoutRef, leftPanelStyle, onSplitterMouseDown } = useAuditSplitPan
   }
 })
 
+const isAuditPassed = computed(() => Number(props.auditSummaryData?.isVerified) === 1)
+
 const hasVerificationErrorReason = computed(() => {
   const reason = String(props.auditSummaryData?.verificationErrorReason || '').trim()
   return !!reason && reason !== '-' && reason.toLowerCase() !== 'null'
 })
+
+const hasUnknownUsagesDetail = computed(() => {
+  const text = String(props.auditSummaryData?.unknownUsages || '').trim()
+  return !!text && text !== '-' && text !== '{}' && text.toLowerCase() !== 'null'
+})
+
+const hasAuditAppendContent = computed(
+  () =>
+    hasUnknownUsagesDetail.value ||
+    calibrationUnknownPolicyVisible.value ||
+    hasVerificationErrorReason.value
+)
+
 const getRoomRowClassName = ({ row }) => {
-  return row?.usageCategory === '未知' ? 'unknown-usage-row' : ''
+  const classes = []
+  if (row?.usageCategory === '未知') classes.push('unknown-usage-row')
+  if (Number(row?.isCalculate ?? 0) !== 1) classes.push('non-calculate-row')
+  return classes.join(' ')
 }
 const isRowEditing = (row) => {
   if (!props.isEditing || !props.editingRowId || !row?.id) return false
   return String(row.id) === String(props.editingRowId)
 }
 const toNumber = (value) => Number(value || 0)
+const AREA_COMPARE_TOLERANCE = 0.01
+
 const summaryMetrics = computed(() => [
   {
     key: 'building',
-    title: '建筑面积',
+    title: '建筑面积(㎡)',
     manual: toNumber(props.auditSummaryData.roomInfoBuildingAreaSum).toFixed(2),
     ocr: toNumber(props.auditSummaryData.roomInfoBuildingAreaSumFromOcr).toFixed(2),
     delta: toNumber(props.auditSummaryData.roomInfoBuildingAreaSum) - toNumber(props.auditSummaryData.roomInfoBuildingAreaSumFromOcr)
   },
   {
     key: 'inner',
-    title: '套内面积',
+    title: '套内面积(㎡)',
     manual: toNumber(props.auditSummaryData.roomInfoInnerAreaSum).toFixed(2),
     ocr: toNumber(props.auditSummaryData.roomInfoInnerAreaSumFromOcr).toFixed(2),
     delta: toNumber(props.auditSummaryData.roomInfoInnerAreaSum) - toNumber(props.auditSummaryData.roomInfoInnerAreaSumFromOcr)
   },
   {
     key: 'balcony',
-    title: '阳台面积',
+    title: '阳台面积(㎡)',
     manual: toNumber(props.auditSummaryData.roomInfoBalconyAreaSum).toFixed(2),
     ocr: toNumber(props.auditSummaryData.roomInfoBalconyAreaSumFromOcr).toFixed(2),
     delta: toNumber(props.auditSummaryData.roomInfoBalconyAreaSum) - toNumber(props.auditSummaryData.roomInfoBalconyAreaSumFromOcr)
   },
   {
     key: 'shared',
-    title: '分摊面积',
+    title: '分摊面积(㎡)',
     manual: toNumber(props.auditSummaryData.roomInfoSharedAreaSum).toFixed(2),
     ocr: toNumber(props.auditSummaryData.roomInfoSharedAreaSumFromOcr).toFixed(2),
     delta: toNumber(props.auditSummaryData.roomInfoSharedAreaSum) - toNumber(props.auditSummaryData.roomInfoSharedAreaSumFromOcr)
   }
 ])
-const formatDelta = (value) => {
-  const num = Number(value || 0)
-  if (num > 0) return `+${num.toFixed(2)}`
-  return num.toFixed(2)
-}
+
+const buildingAreaMismatch = computed(() => {
+  const building = summaryMetrics.value.find((item) => item.key === 'building')
+  if (!building) return false
+  return Math.abs(building.delta) > AREA_COMPARE_TOLERANCE
+})
+
+const hasPendingConfirmArea = computed(
+  () => toNumber(props.auditSummaryData?.pendingConfirmArea) > AREA_COMPARE_TOLERANCE
+)
 
 const createRoomDialogVisible = ref(false)
 const createRoomFormRef = ref(null)
@@ -920,9 +1001,6 @@ const applyUsageEditor = (row) => {
   row.usageCategory = matched.usageCategoryText
   row.roomUsage = matched.usagePattern || usageEditorDraft.roomUsage
   row.floorAreaType = matched.floorAreaTypeText || row.floorAreaType
-  if (typeof props.handleUsageCategoryChange === 'function') {
-    props.handleUsageCategoryChange(row)
-  }
   closeUsageEditor()
 }
 
@@ -1161,11 +1239,9 @@ const handleSubmitCreateUsage = async () => {
   flex-direction: column;
 }
 
-/* summary 固定在上面 */
+/* summary 固定高度，不参与滚动，避免展开详情时挤压下方表格 */
 .sum-info-section{
   flex: 0 0 auto;
-  max-height: min(560px, 52vh);
-  overflow: auto;
   padding-right: 2px;
 }
 
@@ -1183,6 +1259,15 @@ const handleSubmitCreateUsage = async () => {
   flex: 1 1 auto;
   min-height: 0;
   height: 0;          /* ✅关键：让它吃剩余高度 */
+}
+
+:deep(.room-table--compact.el-table) {
+  width: 100% !important;
+}
+
+:deep(.room-table--compact .el-table__header),
+:deep(.room-table--compact .el-table__body) {
+  width: 100% !important;
 }
 
 :deep(.room-table .el-table__inner-wrapper){
@@ -1203,190 +1288,130 @@ const handleSubmitCreateUsage = async () => {
 
 
 
-.sum-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  align-content: start;
-}
-
-.sum-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
-  gap: 14px;
-  align-items: start;
-}
-
-.cali-audit-card {
-  min-height: 0;
-  align-self: stretch;
-}
-
-.summary-card {
-  position: relative;
-  overflow: hidden;
-  border-radius: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 100%);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.9) inset,
-    0 10px 28px -16px rgba(15, 23, 42, 0.12);
-}
-
-.summary-card::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  border-radius: 14px 0 0 14px;
-}
-
-.summary-card--manual::before {
-  background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
-}
-
-.summary-card--audit::before {
-  background: linear-gradient(180deg, #10b981 0%, #047857 100%);
-}
-
-.summary-card--ocr::before {
-  background: linear-gradient(180deg, #8b5cf6 0%, #6d28d9 100%);
-}
-
-.summary-card__head {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 14px 14px 10px 16px;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.85);
-}
-
-.summary-card__icon {
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+.cali-audit-strip {
   display: flex;
   align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  background: #fff;
+  box-shadow: 0 8px 22px -18px rgba(15, 23, 42, 0.18);
+}
+
+.cali-audit-strip--passed {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: linear-gradient(90deg, rgba(240, 253, 244, 0.95) 0%, #fff 42%);
+}
+
+.cali-audit-strip--failed {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: linear-gradient(90deg, rgba(254, 242, 242, 0.92) 0%, #fff 42%);
+}
+
+.cali-audit-strip__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.cali-audit-strip__icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 16px;
   color: #fff;
 }
 
-.summary-card--manual .summary-card__icon {
-  background: linear-gradient(145deg, #3b82f6 0%, #1d4ed8 100%);
-  box-shadow: 0 6px 14px -6px rgba(29, 78, 216, 0.55);
+.cali-audit-strip--passed .cali-audit-strip__icon {
+  background: linear-gradient(145deg, #22c55e 0%, #16a34a 100%);
 }
 
-.summary-card--audit .summary-card__icon {
-  background: linear-gradient(145deg, #10b981 0%, #059669 100%);
-  box-shadow: 0 6px 14px -6px rgba(5, 150, 105, 0.45);
+.cali-audit-strip--failed .cali-audit-strip__icon {
+  background: linear-gradient(145deg, #f97316 0%, #dc2626 100%);
 }
 
-.summary-card--ocr .summary-card__icon {
-  background: linear-gradient(145deg, #a78bfa 0%, #7c3aed 100%);
-  box-shadow: 0 6px 14px -6px rgba(124, 58, 237, 0.45);
+.cali-audit-strip__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
 }
 
-.summary-card__head-text {
+.cali-audit-strip__metrics {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.cali-audit-metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
 }
 
-.summary-card__title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--biz-text, #1f2d3d);
-  line-height: 1.3;
-}
-
-.summary-card__subtitle {
-  margin: 4px 0 0;
-  font-size: 11.5px;
-  line-height: 1.4;
-  color: var(--biz-subtext, #64748b);
-}
-
-.summary-card__body {
-  padding: 10px 12px 12px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.stat-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: baseline;
-  gap: 8px;
-  padding: 7px 10px;
-  border-radius: 8px;
-  font-size: 13px;
-  background: rgba(248, 250, 252, 0.65);
-}
-
-.stat-row:nth-child(even) {
-  background: rgba(241, 245, 249, 0.75);
-}
-
-.stat-row--tags {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.stat-row__label {
+.cali-audit-metric__label {
+  font-size: 12px;
   color: #64748b;
-  font-weight: 500;
+  white-space: nowrap;
 }
 
-.stat-row__value {
+.cali-audit-metric__value {
+  font-size: 13px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: #0f172a;
-  font-size: 14px;
-  text-align: right;
+  white-space: nowrap;
 }
 
-.stat-row__value--warn {
+.cali-audit-metric__value--warn {
   color: #c2410c;
 }
 
-.stat-row__value--ok {
-  color: #15803d;
+.cali-audit-metric__sep {
+  width: 1px;
+  height: 14px;
+  background: rgba(148, 163, 184, 0.45);
+  flex-shrink: 0;
 }
 
-.stat-row__value--ocr {
-  color: #2563eb;
+.cali-audit-strip__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
-.stat-row__unit {
-  font-size: 12px;
-  font-weight: 600;
-  color: #94a3b8;
-  min-width: 1.5em;
-  text-align: right;
-}
-
-.stat-row__tags {
-  display: flex;
-  justify-content: flex-end;
-  grid-column: 2 / -1;
-}
-
-.stat-row--tags .stat-row__label {
-  align-self: center;
-}
-
-.summary-card__audit-append {
-  padding: 0 12px 12px 16px;
+.cali-audit-detail-panel {
+  margin-top: 8px;
+  border: 1px solid rgba(248, 113, 113, 0.28);
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+  max-height: min(220px, 28vh);
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  border-top: 1px solid rgba(226, 232, 240, 0.55);
-  margin-top: 2px;
-  padding-top: 10px;
+  box-shadow: 0 10px 24px -20px rgba(15, 23, 42, 0.2);
+}
+
+.cali-audit-detail-panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .audit-append-label {
@@ -1408,6 +1433,11 @@ const handleSubmitCreateUsage = async () => {
   color: #2563eb;
   white-space: pre-wrap;
   line-height: 1.5;
+}
+
+.unknown-list--panel,
+.reason-text--panel {
+  max-height: none;
 }
 
 .calibration-unknown-policy__body {
@@ -1450,6 +1480,84 @@ const handleSubmitCreateUsage = async () => {
   min-width: 140px;
 }
 
+.room-table-compare {
+  flex: 0 0 auto;
+  margin-top: 8px;
+  border: 1px solid #e6ebf2;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.room-table-compare__title {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  border-bottom: 1px solid #eef2f7;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.room-table-compare__table {
+  display: flex;
+  flex-direction: column;
+  overflow-x: auto;
+}
+
+.room-table-compare__row {
+  display: grid;
+  grid-template-columns: 96px repeat(4, minmax(108px, 1fr));
+  align-items: center;
+  min-height: 36px;
+  min-width: 560px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.room-table-compare__row:first-child {
+  border-top: none;
+}
+
+.room-table-compare__row--head {
+  background: #fafbfd;
+}
+
+.room-table-compare__label {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  border-right: 1px solid #f1f5f9;
+}
+
+.room-table-compare__cell {
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+  text-align: center;
+  border-right: 1px solid #f1f5f9;
+}
+
+.room-table-compare__cell:last-child {
+  border-right: none;
+}
+
+.room-table-compare__cell--head {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.room-table-compare__cell--ocr {
+  color: #2563eb;
+}
+
+.room-table-compare__cell--mismatch {
+  color: #dc2626 !important;
+  background: #fef2f2;
+}
+
 .room-table-pagination {
   display: flex;
   justify-content: flex-end;
@@ -1471,6 +1579,7 @@ const handleSubmitCreateUsage = async () => {
   line-height: 1.5;
   word-break: break-all;
 }
+
 
 .verify-tip-block {
   display: block;
@@ -1498,6 +1607,7 @@ const handleSubmitCreateUsage = async () => {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  flex-wrap: wrap;
   margin: 10px 0 8px;
   padding: 8px 10px;
   background: #fff;
@@ -1509,6 +1619,29 @@ const handleSubmitCreateUsage = async () => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.table-toolbar__search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 220px;
+  min-width: 180px;
+  max-width: 360px;
+}
+
+.room-table-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.room-table-search-hint {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
 }
 
 .toolbar-title {
@@ -1608,13 +1741,79 @@ const handleSubmitCreateUsage = async () => {
   color: #912018;
 }
 
-:deep(.room-table td.el-table__cell),
-:deep(.room-table th.el-table__cell) {
-  padding-top: 8px;
-  padding-bottom: 8px;
+:deep(.room-table--compact .el-table__cell .cell) {
+  padding-left: 2px;
+  padding-right: 2px;
+  line-height: 1.25;
 }
 
-:deep(.room-table .unknown-usage-row > td.el-table__cell) {
+:deep(.room-table--compact .el-table__body td.el-table__cell) {
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+:deep(.room-table--compact .el-table__header th.el-table__cell) {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+:deep(.room-table--compact .el-table__body tr) {
+  font-variant-numeric: tabular-nums;
+}
+
+.room-table-cell-ellipsis {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.room-table-field {
+  width: 100%;
+}
+
+.room-table-field :deep(.el-input__wrapper) {
+  padding: 0 4px;
+}
+
+.room-table-editing-tag {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.room-area-type {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.room-area-type--buildable {
+  color: #15803d;
+}
+
+.room-area-type--non-buildable {
+  color: #b45309;
+}
+
+.room-table-usage-btn {
+  padding: 0;
+  font-size: 11px;
+}
+
+.row-op-group--compact {
+  gap: 0;
+}
+
+.row-op-group--compact :deep(.el-button) {
+  padding: 0 2px;
+  font-size: 11px;
+  min-height: 20px;
+}
+
+:deep(.room-table .unknown-usage-row > td.el-table__cell),
+:deep(.room-table .non-calculate-row > td.el-table__cell) {
   background: #fff1f0 !important;
 }
 
@@ -1653,17 +1852,10 @@ const handleSubmitCreateUsage = async () => {
     padding: 12px;
   }
 
-  .sum-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .sum-grid {
-    grid-template-columns: 1fr;
-  }
-
   .table-toolbar {
     flex-wrap: wrap;
     align-items: flex-start;
   }
 }
+
 </style>
